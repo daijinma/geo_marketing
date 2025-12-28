@@ -1,0 +1,23 @@
+[project]
+name = "llm-sentry-monitor"
+version = "0.1.0"
+description = "LLM Sentry 监控抓取服务 - Web 自动化与数据采集"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "playwright>=1.40.0",
+    "psycopg2-binary>=2.9.9",
+    "tldextract>=5.1.0",
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0.1",
+    "tabulate>=0.9.0",
+    "jieba>=0.42.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = []
+

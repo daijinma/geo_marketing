@@ -1,0 +1,15 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: geo_db
+    restart: always
+    environment:
+      POSTGRES_USER: geo_admin
+      POSTGRES_PASSWORD: geo_password123
+      POSTGRES_DB: geo_monitor
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql

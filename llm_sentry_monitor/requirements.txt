@@ -1,0 +1,7 @@
+playwright
+psycopg2-binary
+tldextract
+python-dotenv
+pyyaml
+tabulate
+jieba

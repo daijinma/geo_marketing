@@ -1,0 +1,13 @@
+# LLM Sentry Monitor 配置文件
+
+# 监控任务列表
+tasks:
+  - keyword: "土巴兔装修靠谱嘛"
+  - keyword: "装修公司推荐"
+  - keyword: "北京本地装修公司推荐"
+
+# 全局设置
+settings:
+  headless: false  # 是否隐藏浏览器窗口
+  timeout: 60000   # 超时时间 (ms)
+  delay_between_tasks: 5  # 任务之间的间隔时间 (秒)

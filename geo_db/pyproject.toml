@@ -1,0 +1,11 @@
+[project]
+name = "geo-db"
+version = "0.1.0"
+description = "LLM Sentry 数据库服务模块 - PostgreSQL 容器化部署"
+readme = "README.md"
+requires-python = ">=3.12"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+

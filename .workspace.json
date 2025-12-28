@@ -1,0 +1,19 @@
+{
+  "name": "llm-sentry-geo",
+  "version": "0.1.0",
+  "description": "LLM Sentry: GEO (生成式引擎优化) 实时监测平台 - Monorepo",
+  "workspaces": [
+    "geo_db",
+    "llm_sentry_monitor"
+  ],
+  "scripts": {
+    "setup": "make setup",
+    "db:up": "make db-up",
+    "db:down": "make db-down",
+    "db:reset": "make db-reset",
+    "run": "make run",
+    "stats": "make stats",
+    "stats:full": "make stats-full"
+  }
+}
+
