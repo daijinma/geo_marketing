@@ -16,6 +16,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# 平台名称映射（用于向后兼容）
+platform_name_map = {}
+
 def load_config():
     config_path = os.path.join(os.path.dirname(__file__), "config.yaml")
     if not os.path.exists(config_path):
@@ -195,4 +198,14 @@ def run_tasks():
     logger.info("="*60)
 
 if __name__ == "__main__":
-    run_tasks()
+    import sys
+    
+    # 支持通过命令行参数启动 API 服务器
+    if len(sys.argv) > 1 and sys.argv[1] == "api":
+        import uvicorn
+        port = int(os.getenv("API_PORT", "8000"))
+        logger.info(f"启动 API 服务器，端口: {port}")
+        uvicorn.run("api:app", host="0.0.0.0", port=port, reload=False)
+    else:
+        # 默认行为：运行配置文件中的任务
+        run_tasks()

@@ -1,18 +1,13 @@
 import logging
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any
-
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+from core.logger_config import setup_logger
 
 class BaseProvider(ABC):
     def __init__(self, headless: bool = False, timeout: int = 30000):
         self.headless = headless
         self.timeout = timeout
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = setup_logger(self.__class__.__name__)
 
     @abstractmethod
     def search(self, keyword: str, prompt: str) -> Dict[str, Any]:

@@ -1,10 +1,10 @@
 #!/bin/bash
 # 文件：geo_db/upgrade_db.sh
-# 用途：升级数据库到 v2.0
+# 用途：升级数据库到最新版本
 
 set -e
 
-echo "🔄 开始升级数据库到 v2.0..."
+echo "🔄 开始升级数据库..."
 
 # 进入数据库目录
 cd "$(dirname "$0")"
@@ -23,10 +23,22 @@ if [ -z "$CONTAINER_NAME" ]; then
     exit 1
 fi
 
+# 执行所有迁移脚本（按顺序）
 echo "📝 执行迁移脚本..."
-docker exec -i "$CONTAINER_NAME" psql -U geo_admin -d geo_monitor < migrations/001_upgrade_to_v2.sql
+
+# 检查并执行 v2.0 迁移
+if [ -f "migrations/001_upgrade_to_v2.sql" ]; then
+    echo "  → 执行 v2.0 迁移..."
+    docker exec -i "$CONTAINER_NAME" psql -U geo_admin -d geo_monitor < migrations/001_upgrade_to_v2.sql
+fi
+
+# 检查并执行 v2.1 迁移
+if [ -f "migrations/002_add_task_jobs.sql" ]; then
+    echo "  → 执行 v2.1 迁移（添加 task_jobs 表）..."
+    docker exec -i "$CONTAINER_NAME" psql -U geo_admin -d geo_monitor < migrations/002_add_task_jobs.sql
+fi
 
 echo "✅ 数据库升级完成！"
 echo ""
 echo "📊 当前数据库版本："
-docker exec -i "$CONTAINER_NAME" psql -U geo_admin -d geo_monitor -c "SELECT * FROM schema_version ORDER BY applied_at DESC LIMIT 1;"
+docker exec -i "$CONTAINER_NAME" psql -U geo_admin -d geo_monitor -c "SELECT * FROM schema_version ORDER BY applied_at DESC LIMIT 5;"

@@ -6,7 +6,6 @@ readme = "README.md"
 requires-python = ">=3.12"
 
 [tool.uv]
-workspace = true
 dev-dependencies = []
 
 [tool.uv.workspace]

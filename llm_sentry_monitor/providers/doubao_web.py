@@ -77,8 +77,21 @@ class DoubaoWebProvider(BaseProvider):
                                                                 block_type = block.get('block_type')
                                                                 self.logger.info(f"      🔸 Block #{block_idx}: type={block_type}")
                                                                 
+                                                                # block_type: 10000 表示文本块
+                                                                if block_type == 10000:
+                                                                    self.logger.info(f"         ✅ 文本块 (block_type=10000)")
+                                                                    content = block.get('content', {})
+                                                                    text_block = content.get('text_block', {})
+                                                                    
+                                                                    # 提取文本内容
+                                                                    if 'text' in text_block:
+                                                                        text_content = text_block.get('text', '')
+                                                                        if isinstance(text_content, str) and text_content:
+                                                                            full_response_text += text_content
+                                                                            self.logger.debug(f"         📝 提取文本: {text_content[:50]}...")
+                                                                
                                                                 # block_type: 10025 表示搜索查询结果块
-                                                                if block_type == 10025:
+                                                                elif block_type == 10025:
                                                                     self.logger.info(f"         ✅ 搜索查询结果块 (block_type=10025)")
                                                                     content = block.get('content', {})
                                                                     search_block = content.get('search_query_result_block', {})
@@ -593,9 +606,19 @@ class DoubaoWebProvider(BaseProvider):
                     self.logger.info(f"💡 提示：查看日志中的 '⚠️' 标记，这些是未识别的数据结构")
                     self.logger.info(f"   请将这些数据结构信息提供给我，以便进一步优化解析逻辑")
                 
-                # 准备返回数据
+                # 准备返回数据，确保文本编码正确
+                final_full_text = full_response_text or last_content
+                # 确保文本是UTF-8编码的字符串
+                if isinstance(final_full_text, bytes):
+                    try:
+                        final_full_text = final_full_text.decode('utf-8')
+                    except UnicodeDecodeError:
+                        final_full_text = final_full_text.decode('utf-8', errors='replace')
+                elif not isinstance(final_full_text, str):
+                    final_full_text = str(final_full_text)
+                
                 result_data = {
-                    "full_text": full_response_text or last_content,
+                    "full_text": final_full_text,
                     "queries": captured_queries,  # 拓展词
                     "citations": unique_citations  # 参考网页
                 }
@@ -606,20 +629,48 @@ class DoubaoWebProvider(BaseProvider):
                 self.logger.info(f"{'='*60}")
                 try:
                     # 创建可打印的数据副本（截断过长的文本）
+                    # 确保文本是字符串类型，并正确处理编码
+                    full_text = result_data["full_text"]
+                    if isinstance(full_text, bytes):
+                        # 如果是字节，尝试UTF-8解码
+                        try:
+                            full_text = full_text.decode('utf-8')
+                        except UnicodeDecodeError:
+                            # 如果UTF-8解码失败，尝试其他编码
+                            try:
+                                full_text = full_text.decode('utf-8', errors='replace')
+                            except:
+                                full_text = str(full_text)
+                    elif not isinstance(full_text, str):
+                        full_text = str(full_text)
+                    
                     print_data = {
-                        "full_text_length": len(result_data["full_text"]),
-                        "full_text_preview": result_data["full_text"][:200] + "..." if len(result_data["full_text"]) > 200 else result_data["full_text"],
+                        "full_text_length": len(full_text),
+                        "full_text_preview": (full_text[:200] + "...") if len(full_text) > 200 else full_text,
                         "queries": result_data["queries"],
                         "citations": result_data["citations"]
                     }
-                    self.logger.info(json.dumps(print_data, ensure_ascii=False, indent=2))
+                    # 使用 ensure_ascii=False 确保中文正确显示，并确保所有字符串都是UTF-8编码
+                    json_str = json.dumps(print_data, ensure_ascii=False, indent=2)
+                    self.logger.info(json_str)
                 except Exception as e:
                     self.logger.warning(f"打印JSON数据失败: {e}")
+                    import traceback
+                    self.logger.debug(traceback.format_exc())
                 
                 # 打印完整文本长度信息
-                self.logger.info(f"\n📝 完整回答文本长度: {len(result_data['full_text'])} 字符")
-                if len(result_data['full_text']) > 0:
-                    self.logger.info(f"   文本预览: {result_data['full_text'][:100]}...")
+                full_text = result_data['full_text']
+                if isinstance(full_text, bytes):
+                    try:
+                        full_text = full_text.decode('utf-8')
+                    except UnicodeDecodeError:
+                        full_text = full_text.decode('utf-8', errors='replace')
+                elif not isinstance(full_text, str):
+                    full_text = str(full_text)
+                
+                self.logger.info(f"\n📝 完整回答文本长度: {len(full_text)} 字符")
+                if len(full_text) > 0:
+                    self.logger.info(f"   文本预览: {full_text[:100]}...")
                 
                 self.logger.info(f"{'='*60}\n")
                 

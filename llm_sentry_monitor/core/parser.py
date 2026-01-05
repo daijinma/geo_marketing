@@ -1,6 +1,5 @@
 import tldextract
 import logging
-from urllib.parse import urlparse, urlunparse
 
 logger = logging.getLogger(__name__)
 
@@ -20,21 +19,6 @@ def extract_domain(url):
         logger.warning(f"提取域名失败: {url}, 错误: {e}")
         return "unknown"
 
-def clean_url(url):
-    """
-    清理 URL，去除多余参数，规范化格式
-    """
-    if not url or not isinstance(url, str):
-        return ""
-        
-    try:
-        parsed = urlparse(url)
-        # 移除常见的追踪参数
-        # 这里可以根据需要扩展
-        return urlunparse((parsed.scheme, parsed.netloc, parsed.path, '', '', ''))
-    except Exception:
-        return url
-
 def classify_domain_type(url):
     """
     根据 URL 识别网站类型
@@ -43,7 +27,6 @@ def classify_domain_type(url):
     if not url or not isinstance(url, str):
         return "其他"
     
-    url_lower = url.lower()
     domain = extract_domain(url)
     domain_lower = domain.lower()
     

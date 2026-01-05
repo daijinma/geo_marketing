@@ -24,6 +24,7 @@ GEO/ (Root Monorepo)
 │   └── README.md
 │
 ├── scripts/                 # 共享脚本工具
+│   ├── curl_examples.sh    # API 测试脚本（cURL 示例）
 ├── pyproject.toml           # 工作区配置
 ├── .workspace.json          # 工作区元数据
 ├── Makefile                 # 统一构建与运行指令
@@ -97,6 +98,84 @@ make clean  # 停止数据库并清理缓存
 ```
 
 > **提示**：首次运行 `make run` 时建议在非无头模式下手动完成登录。
+
+## 5. API 服务（新增）
+
+项目现已支持 REST API 接口，可以通过 HTTP 请求提交任务并查询状态。
+
+### 启动 API 服务器
+```bash
+make dev
+```
+
+### API 接口
+
+#### 创建任务 (POST /mock)
+```bash
+curl -X POST "http://localhost:8000/mock" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "keywords": ["土巴兔装修靠谱嘛", "装修公司推荐"],
+    "platforms": ["deepseek"]
+  }'
+```
+
+#### 查询任务状态 (GET /status)
+```bash
+curl -X GET "http://localhost:8000/status?id=1"
+```
+
+更多 API 示例请参考：`scripts/curl_examples.sh`
+
+### API 文档
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+## 6. 更新日志
+
+### 2024-01-XX - API 化改造与任务管理系统
+
+#### 新增功能
+- ✅ **REST API 接口**：提供 `/mock` 和 `/status` 接口，支持通过 HTTP 请求管理任务
+- ✅ **异步任务管理**：任务在后台异步执行，支持状态查询
+- ✅ **数据库迁移 v2.1**：新增 `task_jobs` 表，用于存储任务状态和结果
+- ✅ **FastAPI 集成**：使用 FastAPI 构建现代化 API 服务
+- ✅ **Makefile 增强**：新增 `make dev` 命令启动 API 服务器
+- ✅ **cURL 测试脚本**：提供完整的 API 测试示例
+
+#### 技术改进
+- 将基于配置文件的批量任务执行改为基于 API 的异步任务管理
+- 支持自定义关键词和平台配置
+- 任务状态实时追踪（none, pending, done）
+- 保留原有 `run_tasks()` 函数，保持向后兼容
+
+#### 文件变更
+- **新增文件**：
+  - `llm_sentry_monitor/api.py` - FastAPI 应用，提供 REST API 接口
+  - `llm_sentry_monitor/core/task_executor.py` - 任务执行器，封装异步任务逻辑
+  - `geo_db/migrations/002_add_task_jobs.sql` - 数据库迁移脚本 v2.1
+  - `scripts/curl_examples.sh` - API 测试脚本（cURL 示例）
+  - `llm_sentry_monitor/CURL_EXAMPLES.md` - API 使用文档
+- **更新文件**：
+  - `Makefile` - 添加 `install`, `sync`, `dev` 命令
+  - `llm_sentry_monitor/pyproject.toml` - 添加 FastAPI 和 uvicorn 依赖
+  - `llm_sentry_monitor/main.py` - 添加 API 服务器启动选项，修复 platform_name_map
+  - `geo_db/upgrade_db.sh` - 支持执行多个迁移脚本
+  - `README.md` - 添加 API 服务说明和更新日志
+
+#### 使用方式
+```bash
+# 1. 启动 API 服务器
+make dev
+
+# 2. 运行 API 测试脚本
+./scripts/curl_examples.sh
+
+# 3. 或使用 curl 直接调用
+curl -X POST "http://localhost:8000/mock" \
+  -H "Content-Type: application/json" \
+  -d '{"keywords": ["关键词"], "platforms": ["deepseek"]}'
+```
 
 ---
 *LLM Sentry - 助力品牌在生成式搜索时代赢得先机*
