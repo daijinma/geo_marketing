@@ -19,8 +19,13 @@ GEO/ (Root Monorepo)
 ├── llm_sentry_monitor/      # 【监控抓取服务】Web 自动化与数据采集
 │   ├── pyproject.toml       # 项目配置
 │   ├── main.py
-│   ├── providers/           # 多模型适配器 (DeepSeek, 豆包)
+│   ├── api.py              # FastAPI 应用（包含前端页面服务）
+│   ├── providers/           # 多模型适配器 (DeepSeek, 豆包, 博查)
 │   ├── core/                # 域名清洗与引用解析引擎
+│   ├── static/              # 前端静态文件
+│   │   ├── index.html      # 前端主页面
+│   │   ├── js/             # JavaScript 模块
+│   │   └── css/            # 样式文件
 │   └── README.md
 │
 ├── scripts/                 # 共享脚本工具
@@ -131,7 +136,130 @@ curl -X GET "http://localhost:8000/status?id=1"
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
 
-## 6. 更新日志
+#### 博查实时搜索 (POST /bocha/search)
+```bash
+curl -X POST "http://localhost:8000/bocha/search?token=装修公司"
+```
+
+## 6. 前端 Web 界面
+
+项目现已提供完整的 Web 前端界面，支持可视化任务管理和结果展示。
+
+### 访问前端页面
+
+启动 API 服务器后，在浏览器中访问：
+```
+http://localhost:8000/
+```
+
+### 前端功能
+
+1. **任务创建**
+   - 输入关键词（支持单个关键词）
+   - 选择搜索平台（DeepSeek、豆包、博查API）
+   - 一键创建查询任务
+
+2. **任务状态监控**
+   - 实时显示任务执行状态（等待中、执行中、已完成）
+   - 进度条动画展示
+   - 自动轮询任务状态直到完成
+
+3. **结果展示**
+   - **竖列排版**：每个查询词独立展示
+   - **分词展示**：显示查询词的自动分词结果
+   - **关联链接卡片**：展示每个查询词对应的完整链接信息
+     - 链接标题
+     - 域名和站点名称
+     - 内容摘要
+     - 完整URL
+
+4. **博查搜索结果抽屉**
+   - 点击任意分词标签，右侧抽屉展开
+   - 实时调用博查API搜索该词条
+   - 展示博查返回的搜索结果、摘要和拓展查询词
+   - 支持ESC键或点击遮罩层关闭
+
+### 前端技术栈
+
+- **ES6 模块化**：使用原生 ES6 modules 组织代码
+- **模块结构**：
+  - `main.js` - 应用入口，事件绑定
+  - `api.js` - API调用封装
+  - `task.js` - 任务管理逻辑
+  - `ui.js` - UI组件渲染
+  - `drawer.js` - 抽屉组件
+- **响应式设计**：适配桌面和移动设备
+- **现代化UI**：卡片式布局、动画效果、Toast提示
+
+## 7. 环境变量配置
+
+### 数据库配置
+
+在项目根目录或 `llm_sentry_monitor/` 目录下创建 `.env` 文件：
+
+```env
+# 数据库配置
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=geo_monitor
+DB_USER=geo_admin
+DB_PASSWORD=geo_password123
+
+# API 服务端口
+API_PORT=8000
+
+# 浏览器数据目录（可选）
+BROWSER_DATA_DIR=./browser_data
+
+# 博查API配置（必需，用于博查搜索功能）
+BOCHA_API_KEY=sk-1d36c7e0e8f04f46bc10ddcb5a18a8f4
+```
+
+### 博查API配置说明
+
+1. **获取API Key**：访问 [博查API文档](https://bocha-ai.feishu.cn/wiki/RXEOw02rFiwzGSkd9mUcqoeAnNK) 获取API密钥
+2. **配置环境变量**：在 `.env` 文件中设置 `BOCHA_API_KEY`
+3. **API特性**：
+   - 直接API调用，无需浏览器自动化
+   - 支持实时搜索和结果展示
+   - 返回搜索结果、摘要和拓展查询词
+
+> **注意**：如果未配置 `BOCHA_API_KEY`，博查平台的任务执行将失败，但不会影响其他平台（DeepSeek、豆包）的正常使用。
+
+## 8. 更新日志
+
+### 2024-01-XX - 前端页面与博查API集成
+
+#### 新增功能
+- ✅ **Web前端界面**：提供完整的可视化任务管理和结果展示界面
+- ✅ **博查API集成**：新增博查作为第三个搜索平台，支持直接API调用
+- ✅ **分词展示**：自动分词并支持点击查看博查搜索结果
+- ✅ **抽屉组件**：右侧抽屉展示博查实时搜索结果
+- ✅ **完整链接信息**：/status接口返回每个查询词对应的完整链接信息（URL、标题、摘要、域名等）
+- ✅ **实时博查搜索**：新增 `/bocha/search` 接口，支持实时搜索任意词条
+
+#### 技术改进
+- 前端采用ES6模块化架构，代码结构清晰
+- 响应式设计，适配多种设备
+- 异常处理完善，前端友好错误提示
+- 静态文件服务集成到FastAPI
+
+#### 文件变更
+- **新增文件**：
+  - `llm_sentry_monitor/providers/bocha_api.py` - 博查API Provider
+  - `llm_sentry_monitor/static/index.html` - 前端主页面
+  - `llm_sentry_monitor/static/js/main.js` - 应用入口模块
+  - `llm_sentry_monitor/static/js/api.js` - API调用封装
+  - `llm_sentry_monitor/static/js/task.js` - 任务管理逻辑
+  - `llm_sentry_monitor/static/js/ui.js` - UI组件渲染
+  - `llm_sentry_monitor/static/js/drawer.js` - 抽屉组件
+  - `llm_sentry_monitor/static/css/style.css` - 样式文件
+- **更新文件**：
+  - `llm_sentry_monitor/core/task_executor.py` - 集成博查Provider支持
+  - `llm_sentry_monitor/api.py` - 扩展/status接口，新增/bocha/search接口，添加静态文件服务
+  - `README.md` - 添加前端页面和博查API使用说明
+
+### 2024-01-XX - API 化改造与任务管理系统
 
 ### 2024-01-XX - API 化改造与任务管理系统
 

@@ -8,8 +8,12 @@ if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
     exit 0
 fi
 
+# 切换到 geo_db 目录
+GEO_DB_DIR="$(dirname "$0")/../geo_db"
+cd "$GEO_DB_DIR"
+
 echo "正在停止数据库容器..."
-cd "$(dirname "$0")/../geo_db" && docker-compose down
+docker-compose down
 
 echo "正在删除旧数据..."
 rm -rf postgres_data
@@ -20,4 +24,8 @@ docker-compose up -d
 echo "等待数据库初始化完成..."
 sleep 5
 
-echo "✅ 数据库已重新初始化完成！"
+echo "🔄 执行数据库升级（应用所有迁移脚本）..."
+# 执行升级脚本
+chmod +x upgrade_db.sh && ./upgrade_db.sh
+
+echo "✅ 数据库已重新初始化并升级完成！"

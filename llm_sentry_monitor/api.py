@@ -9,9 +9,12 @@ import jieba
 import jieba.analyse
 from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from core.db import get_db_connection
 from core.task_executor import execute_task_job
+from providers.bocha_api import BochaApiProvider
 
 # 初始化 jieba 自定义词典（与 stats.py 保持一致）
 CUSTOM_WORDS = [
@@ -181,28 +184,55 @@ async def get_task_status(id: int = Query(..., description="任务ID")):
                         params.extend([keyword, platform.lower()])
                 
                 if placeholders:
-                    # 查询所有相关的 search_queries
+                    # 查询所有相关的 search_queries 及其对应的 citations
+                    # 注意：使用 DISTINCT 时，ORDER BY 的列必须出现在 SELECT 列表中
                     query_sql = f"""
-                        SELECT DISTINCT sq.query
+                        SELECT DISTINCT sq.query, sq.record_id, sq.query_order, sq.id
                         FROM search_queries sq
                         INNER JOIN search_records sr ON sq.record_id = sr.id
                         WHERE {' OR '.join(placeholders)}
                         ORDER BY sq.query_order, sq.id
                     """
                     cur.execute(query_sql, params)
-                    queries = [row[0] for row in cur.fetchall() if row[0]]
+                    query_rows = cur.fetchall()
                     
-                    # 对每个查询进行分词
-                    for query in queries:
+                    # 对每个查询进行分词并获取关联的链接
+                    # query_rows 包含: (query, record_id, query_order, id)
+                    for row in query_rows:
+                        query = row[0]
+                        record_id = row[1]
                         if query:
                             # 使用 jieba 进行分词
                             tokens = jieba.lcut(query)
                             # 过滤掉单字符和空白
                             tokens = [t for t in tokens if len(t.strip()) > 1]
+                            
+                            # 查询该record_id对应的所有citations
+                            cur.execute("""
+                                SELECT url, title, snippet, site_name, cite_index, domain
+                                FROM citations
+                                WHERE record_id = %s
+                                ORDER BY cite_index, id
+                            """, (record_id,))
+                            citation_rows = cur.fetchall()
+                            
+                            # 构建citations列表
+                            citations = []
+                            for cite_row in citation_rows:
+                                citations.append({
+                                    "url": cite_row[0],
+                                    "title": cite_row[1] or "",
+                                    "snippet": cite_row[2] or "",
+                                    "site_name": cite_row[3] or "",
+                                    "cite_index": cite_row[4] or 0,
+                                    "domain": cite_row[5] or ""
+                                })
+                            
                             if tokens:
                                 query_tokens.append({
                                     "query": query,
-                                    "tokens": tokens
+                                    "tokens": tokens,
+                                    "citations": citations
                                 })
             
             # 添加分词结果到响应
@@ -216,15 +246,27 @@ async def get_task_status(id: int = Query(..., description="任务ID")):
         raise HTTPException(status_code=500, detail=f"查询任务状态失败: {str(e)}")
 
 
+# 静态文件服务
+import os
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
 @app.get("/")
 async def root():
-    """API 根路径"""
+    """前端页面入口"""
+    static_dir_path = os.path.join(os.path.dirname(__file__), "static")
+    index_path = os.path.join(static_dir_path, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    # 如果没有前端页面，返回API信息
     return {
         "message": "LLM Sentry Monitor API",
         "version": "1.0.0",
         "endpoints": {
             "POST /mock": "创建新的搜索任务",
-            "GET /status?id=<task_id>": "查询任务状态"
+            "GET /status?id=<task_id>": "查询任务状态",
+            "POST /bocha/search?token=<token>": "博查实时搜索"
         }
     }
 
@@ -242,6 +284,53 @@ async def health():
     except Exception as e:
         logger.error(f"健康检查失败: {e}")
         return {"status": "unhealthy", "error": str(e)}
+
+
+@app.post("/bocha/search")
+async def bocha_search(token: str = Query(..., description="搜索词条")):
+    """
+    使用博查API进行实时搜索
+    
+    - **token**: 要搜索的词条（分词）
+    
+    返回博查API的搜索结果，用于前端抽屉展示
+    """
+    try:
+        if not token or not token.strip():
+            raise HTTPException(status_code=400, detail="token 不能为空")
+        
+        # 创建博查Provider实例
+        provider = BochaApiProvider(headless=True, timeout=30000)
+        
+        # 调用搜索
+        result = provider.search(token, token)
+        
+        # 检查是否有错误
+        if not result.get("citations") and not result.get("full_text"):
+            return {
+                "success": False,
+                "error": "未获取到搜索结果",
+                "data": result
+            }
+        
+        return {
+            "success": True,
+            "data": {
+                "full_text": result.get("full_text", ""),
+                "queries": result.get("queries", []),
+                "citations": result.get("citations", [])
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"博查搜索失败: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": f"博查搜索失败: {str(e)}",
+            "data": None
+        }
 
 
 if __name__ == "__main__":

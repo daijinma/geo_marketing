@@ -11,6 +11,7 @@ from core.db import get_db_connection, update_domain_stats
 from core.parser import extract_domain
 from providers.deepseek_web import DeepSeekWebProvider
 from providers.doubao_web import DoubaoWebProvider
+from providers.bocha_api import BochaApiProvider
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +107,7 @@ def execute_single_task(keyword: str, platform: str, prompt: str, settings: Dict
     
     Args:
         keyword: 搜索关键词
-        platform: 平台名称 (deepseek, doubao)
+        platform: 平台名称 (deepseek, doubao, bocha)
         prompt: 提示词
         settings: 设置字典 (headless, timeout等)
     
@@ -118,7 +119,8 @@ def execute_single_task(keyword: str, platform: str, prompt: str, settings: Dict
     
     providers = {
         "deepseek": DeepSeekWebProvider(headless=headless, timeout=timeout),
-        "doubao": DoubaoWebProvider(headless=headless, timeout=timeout)
+        "doubao": DoubaoWebProvider(headless=headless, timeout=timeout),
+        "bocha": BochaApiProvider(headless=headless, timeout=timeout)
     }
     
     # 平台名称规范化

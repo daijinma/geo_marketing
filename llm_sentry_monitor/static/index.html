@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Sentry Monitor - GEO 品牌曝光监测系统</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>LLM Sentry Monitor</h1>
+            <p class="subtitle">GEO 品牌曝光监测系统</p>
+        </header>
+
+        <main class="main-content">
+            <!-- 任务创建表单 -->
+            <section class="task-form-section">
+                <div class="form-group">
+                    <label for="keyword-input">关键词</label>
+                    <input 
+                        type="text" 
+                        id="keyword-input" 
+                        class="keyword-input" 
+                        placeholder="请输入搜索关键词，例如：装修公司推荐"
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label>选择平台</label>
+                    <div class="platform-checkboxes">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="platform-deepseek" value="deepseek" checked>
+                            <span>DeepSeek</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="platform-doubao" value="doubao" checked>
+                            <span>豆包</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="platform-bocha" value="bocha">
+                            <span>博查API</span>
+                        </label>
+                    </div>
+                </div>
+
+                <button id="submit-btn" class="submit-btn">创建查询任务</button>
+            </section>
+
+            <!-- 任务状态显示 -->
+            <section id="task-status-section" class="task-status-section hidden">
+                <div class="status-info">
+                    <span class="status-label">任务状态：</span>
+                    <span id="status-text" class="status-text">等待中...</span>
+                </div>
+                <div id="progress-bar" class="progress-bar hidden">
+                    <div class="progress-fill"></div>
+                </div>
+            </section>
+
+            <!-- 结果展示区域 -->
+            <section id="results-section" class="results-section hidden">
+                <h2>查询结果</h2>
+                <div id="results-container" class="results-container">
+                    <!-- 结果将通过JS动态渲染 -->
+                </div>
+            </section>
+        </main>
+
+        <!-- 错误提示 -->
+        <div id="error-toast" class="toast error-toast hidden">
+            <span id="error-message"></span>
+            <button class="toast-close" onclick="this.parentElement.classList.add('hidden')">×</button>
+        </div>
+
+        <!-- 成功提示 -->
+        <div id="success-toast" class="toast success-toast hidden">
+            <span id="success-message"></span>
+            <button class="toast-close" onclick="this.parentElement.classList.add('hidden')">×</button>
+        </div>
+    </div>
+
+    <!-- 博查搜索结果抽屉 -->
+    <div id="drawer-overlay" class="drawer-overlay hidden"></div>
+    <div id="drawer" class="drawer">
+        <div class="drawer-header">
+            <h3 id="drawer-title">博查搜索结果</h3>
+            <button id="drawer-close" class="drawer-close">×</button>
+        </div>
+        <div class="drawer-content">
+            <div id="drawer-loading" class="drawer-loading hidden">
+                <div class="spinner"></div>
+                <p>正在搜索...</p>
+            </div>
+            <div id="drawer-error" class="drawer-error hidden"></div>
+            <div id="drawer-results" class="drawer-results">
+                <!-- 搜索结果将通过JS动态渲染 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript 模块 -->
+    <script type="module" src="/static/js/main.js"></script>
+</body>
+</html>
+
