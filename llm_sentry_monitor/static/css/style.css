@@ -189,6 +189,11 @@ body {
 .progress-fill {
     height: 100%;
     background-color: var(--primary-color);
+    width: 0%;
+    transition: width 0.3s ease-out;
+}
+
+.progress-fill.animated {
     animation: progress 1.5s ease-in-out infinite;
 }
 
@@ -249,6 +254,15 @@ body {
 .query-text {
     color: var(--text-primary);
     font-size: 1.1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: underline;
+    text-decoration-color: transparent;
+}
+
+.query-text:hover {
+    color: var(--primary-color);
+    text-decoration-color: var(--primary-color);
 }
 
 /* 分词标签 */
@@ -266,16 +280,7 @@ body {
     color: var(--primary-color);
     border-radius: 20px;
     font-size: 14px;
-    cursor: pointer;
-    transition: all 0.2s;
     user-select: none;
-}
-
-.token-tag:hover {
-    background-color: var(--primary-color);
-    color: white;
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-sm);
 }
 
 /* 链接卡片 */
@@ -633,6 +638,149 @@ body {
 
 .bocha-card-url a:hover {
     text-decoration: underline;
+}
+
+/* Tab 导航样式 */
+.tabs-container {
+    width: 100%;
+}
+
+.tabs-nav {
+    display: flex;
+    gap: 8px;
+    border-bottom: 2px solid var(--border-color);
+    margin-bottom: 20px;
+    overflow-x: auto;
+}
+
+.tab-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--text-secondary);
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.tab-button:hover {
+    color: var(--text-primary);
+    background-color: #f9fafb;
+}
+
+.tab-button.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+    background-color: #f0f7ff;
+}
+
+.tab-button .platform-status {
+    font-size: 16px;
+}
+
+.tabs-content {
+    position: relative;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* 平台信息样式 */
+.platform-info {
+    margin-bottom: 20px;
+    padding: 12px 16px;
+    background-color: #f9fafb;
+    border-radius: var(--radius);
+    border-left: 4px solid var(--primary-color);
+}
+
+.platform-status-text {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+/* 平台状态指示器 */
+.platform-status {
+    display: inline-block;
+    font-size: 16px;
+    line-height: 1;
+}
+
+.platform-status.status-completed {
+    color: var(--success-color);
+}
+
+.platform-status.status-pending {
+    color: var(--warning-color);
+}
+
+.platform-status.status-failed {
+    color: var(--error-color);
+}
+
+/* 平台状态容器 */
+.platform-status-container {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border-color);
+}
+
+.platform-status-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.platform-status-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background-color: #f9fafb;
+    border-radius: var(--radius);
+    font-size: 14px;
+}
+
+.platform-status-item .platform-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.platform-status-item .platform-status-text {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+/* 格式验证状态指示器 */
+.validation-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    margin-left: 10px;
+}
+
+.validation-status.valid {
+    background-color: #d1fae5;
+    color: var(--success-color);
+}
+
+.validation-status.invalid {
+    background-color: #fee2e2;
+    color: var(--error-color);
 }
 
 /* 工具类 */
