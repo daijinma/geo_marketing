@@ -46,7 +46,35 @@ export function showSuccess(message) {
 }
 
 /**
- * 渲染查询结果
+ * 获取平台显示名称
+ * @param {string} platform - 平台标识
+ * @returns {string} 平台显示名称
+ */
+function getPlatformDisplayName(platform) {
+    const nameMap = {
+        'deepseek': 'DeepSeek',
+        'doubao': '豆包',
+        'bocha': '博查API'
+    };
+    return nameMap[platform.toLowerCase()] || platform;
+}
+
+/**
+ * 获取平台状态图标
+ * @param {string} status - 平台状态
+ * @returns {string} 状态图标HTML
+ */
+function getPlatformStatusIcon(status) {
+    const iconMap = {
+        'completed': '<span class="platform-status status-completed">✅</span>',
+        'failed': '<span class="platform-status status-failed">❌</span>',
+        'pending': '<span class="platform-status status-pending">⏳</span>'
+    };
+    return iconMap[status] || '<span class="platform-status status-pending">⏸️</span>';
+}
+
+/**
+ * 渲染查询结果（Tab形式）
  * @param {object} data - 任务数据
  */
 export function renderResults(data) {
@@ -58,61 +86,184 @@ export function renderResults(data) {
     resultsSection.classList.remove('hidden');
     resultsContainer.innerHTML = '';
 
-    if (!data.query_tokens || data.query_tokens.length === 0) {
-        resultsContainer.innerHTML = '<p class="no-results">暂无查询结果</p>';
+    // 检查是否有按平台分组的数据
+    const resultsByPlatform = data.results_by_platform;
+    const platforms = data.platforms || [];
+
+    if (!resultsByPlatform || Object.keys(resultsByPlatform).length === 0) {
+        // 如果没有按平台分组的数据，使用旧的展示方式
+        if (!data.query_tokens || data.query_tokens.length === 0) {
+            resultsContainer.innerHTML = '<p class="no-results">暂无查询结果</p>';
+            return;
+        }
+
+        // 使用旧的展示方式（向后兼容）
+        data.query_tokens.forEach((queryToken, index) => {
+            const queryBlock = createQueryBlock(queryToken, index);
+            resultsContainer.appendChild(queryBlock);
+        });
         return;
     }
 
-    // 遍历每个查询
-    data.query_tokens.forEach((queryToken, index) => {
-        const queryBlock = document.createElement('div');
-        queryBlock.className = 'query-block';
+    // 创建Tab容器
+    const tabsContainer = document.createElement('div');
+    tabsContainer.className = 'tabs-container';
 
-        // 查询文本
-        const queryHeader = document.createElement('div');
-        queryHeader.className = 'query-header';
-        queryHeader.innerHTML = `<span class="query-label">查询 ${index + 1}:</span> <span class="query-text">${escapeHtml(queryToken.query)}</span>`;
-        queryBlock.appendChild(queryHeader);
+    // 创建Tab导航
+    const tabsNav = document.createElement('div');
+    tabsNav.className = 'tabs-nav';
 
-        // 分词标签
-        if (queryToken.tokens && queryToken.tokens.length > 0) {
-            const tokensContainer = document.createElement('div');
-            tokensContainer.className = 'tokens-container';
-            
-            queryToken.tokens.forEach(token => {
-                const tokenTag = document.createElement('span');
-                tokenTag.className = 'token-tag';
-                tokenTag.textContent = token;
-                tokenTag.title = `点击查看"${token}"的博查搜索结果`;
-                tokenTag.addEventListener('click', () => {
-                    openDrawer(token);
-                });
-                tokensContainer.appendChild(tokenTag);
-            });
-            
-            queryBlock.appendChild(tokensContainer);
+    // 创建Tab内容容器
+    const tabsContent = document.createElement('div');
+    tabsContent.className = 'tabs-content';
+
+    // 为每个平台创建Tab
+    let activeTabIndex = 0;
+    platforms.forEach((platform, index) => {
+        const platformLower = platform.toLowerCase();
+        const platformData = resultsByPlatform[platformLower];
+        
+        if (!platformData) {
+            // 如果平台数据不存在，创建一个空的状态
+            platformData = {
+                query_tokens: [],
+                status: 'pending'
+            };
         }
 
-        // 关联链接卡片
-        if (queryToken.citations && queryToken.citations.length > 0) {
-            const citationsContainer = document.createElement('div');
-            citationsContainer.className = 'citations-container';
-            
-            queryToken.citations.forEach(citation => {
-                const card = renderLinkCard(citation);
-                citationsContainer.appendChild(card);
-            });
-            
-            queryBlock.appendChild(citationsContainer);
+        // 创建Tab按钮
+        const tabButton = document.createElement('button');
+        tabButton.className = `tab-button ${index === 0 ? 'active' : ''}`;
+        tabButton.setAttribute('data-platform', platformLower);
+        tabButton.innerHTML = `
+            ${getPlatformStatusIcon(platformData.status)}
+            <span>${getPlatformDisplayName(platform)}</span>
+        `;
+        tabButton.addEventListener('click', () => {
+            // 切换Tab
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            tabButton.classList.add('active');
+            const content = document.querySelector(`.tab-content[data-platform="${platformLower}"]`);
+            if (content) {
+                content.classList.add('active');
+            }
+        });
+        tabsNav.appendChild(tabButton);
+
+        // 创建Tab内容
+        const tabContent = document.createElement('div');
+        tabContent.className = `tab-content ${index === 0 ? 'active' : ''}`;
+        tabContent.setAttribute('data-platform', platformLower);
+
+        // 显示平台状态信息
+        const platformInfo = document.createElement('div');
+        platformInfo.className = 'platform-info';
+        
+        let statusText = '';
+        if (platformData.status === 'completed') {
+            statusText = `已完成 - 引用数: ${platformData.citations_count || 0}`;
+            if (platformData.response_time_ms) {
+                statusText += `, 耗时: ${(platformData.response_time_ms / 1000).toFixed(2)}秒`;
+            }
+        } else if (platformData.status === 'failed') {
+            statusText = `执行失败`;
+            if (platformData.error_message) {
+                statusText += `: ${escapeHtml(platformData.error_message)}`;
+            }
         } else {
-            const noCitations = document.createElement('p');
-            noCitations.className = 'no-citations';
-            noCitations.textContent = '暂无关联链接';
-            queryBlock.appendChild(noCitations);
+            statusText = '执行中...';
+        }
+        
+        platformInfo.innerHTML = `<span class="platform-status-text">${statusText}</span>`;
+        tabContent.appendChild(platformInfo);
+
+        // 显示查询结果
+        if (platformData.query_tokens && platformData.query_tokens.length > 0) {
+            platformData.query_tokens.forEach((queryToken, queryIndex) => {
+                const queryBlock = createQueryBlock(queryToken, queryIndex);
+                tabContent.appendChild(queryBlock);
+            });
+        } else {
+            const noResults = document.createElement('p');
+            noResults.className = 'no-results';
+            if (platformData.status === 'pending') {
+                noResults.textContent = '正在执行中，请稍候...';
+            } else if (platformData.status === 'failed') {
+                noResults.textContent = '执行失败，暂无结果';
+            } else {
+                noResults.textContent = '暂无查询结果';
+            }
+            tabContent.appendChild(noResults);
         }
 
-        resultsContainer.appendChild(queryBlock);
+        tabsContent.appendChild(tabContent);
     });
+
+    tabsContainer.appendChild(tabsNav);
+    tabsContainer.appendChild(tabsContent);
+    resultsContainer.appendChild(tabsContainer);
+}
+
+/**
+ * 创建查询块
+ * @param {object} queryToken - 查询数据
+ * @param {number} index - 索引
+ * @returns {HTMLElement} 查询块元素
+ */
+function createQueryBlock(queryToken, index) {
+    const queryBlock = document.createElement('div');
+    queryBlock.className = 'query-block';
+
+    // 查询文本
+    const queryHeader = document.createElement('div');
+    queryHeader.className = 'query-header';
+    const queryText = document.createElement('span');
+    queryText.className = 'query-text';
+    queryText.textContent = queryToken.query;
+    queryText.title = `点击查看"${queryToken.query}"的博查搜索结果`;
+    queryText.style.cursor = 'pointer';
+    queryText.addEventListener('click', () => {
+        openDrawer(queryToken.query);
+    });
+    queryHeader.innerHTML = `<span class="query-label">查询 ${index + 1}:</span> `;
+    queryHeader.appendChild(queryText);
+    queryBlock.appendChild(queryHeader);
+
+    // 分词标签（不再可点击）
+    if (queryToken.tokens && queryToken.tokens.length > 0) {
+        const tokensContainer = document.createElement('div');
+        tokensContainer.className = 'tokens-container';
+        
+        queryToken.tokens.forEach(token => {
+            const tokenTag = document.createElement('span');
+            tokenTag.className = 'token-tag';
+            tokenTag.textContent = token;
+            tokensContainer.appendChild(tokenTag);
+        });
+        
+        queryBlock.appendChild(tokensContainer);
+    }
+
+    // 关联链接卡片
+    if (queryToken.citations && queryToken.citations.length > 0) {
+        const citationsContainer = document.createElement('div');
+        citationsContainer.className = 'citations-container';
+        
+        queryToken.citations.forEach(citation => {
+            const card = renderLinkCard(citation);
+            citationsContainer.appendChild(card);
+        });
+        
+        queryBlock.appendChild(citationsContainer);
+    } else {
+        const noCitations = document.createElement('p');
+        noCitations.className = 'no-citations';
+        noCitations.textContent = '暂无关联链接';
+        queryBlock.appendChild(noCitations);
+    }
+
+    return queryBlock;
 }
 
 /**

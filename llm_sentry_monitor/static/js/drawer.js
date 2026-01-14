@@ -7,9 +7,9 @@ import { searchBocha } from './api.js';
 
 /**
  * 打开抽屉并加载博查搜索结果
- * @param {string} token - 搜索词条
+ * @param {string} query - 查询词
  */
-export async function openDrawer(token) {
+export async function openDrawer(query) {
     const drawer = document.getElementById('drawer');
     const drawerOverlay = document.getElementById('drawer-overlay');
     const drawerTitle = document.getElementById('drawer-title');
@@ -25,7 +25,7 @@ export async function openDrawer(token) {
 
     // 设置标题
     if (drawerTitle) {
-        drawerTitle.textContent = `博查搜索结果: "${token}"`;
+        drawerTitle.textContent = `博查搜索结果: "${query}"`;
     }
 
     // 显示加载状态
@@ -42,7 +42,7 @@ export async function openDrawer(token) {
 
     try {
         // 调用博查API
-        const result = await searchBocha(token);
+        const result = await searchBocha(query);
 
         // 隐藏加载状态
         if (drawerLoading) {

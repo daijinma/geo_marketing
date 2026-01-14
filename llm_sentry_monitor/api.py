@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from core.db import get_db_connection
 from core.task_executor import execute_task_job
 from providers.bocha_api import BochaApiProvider
+from providers.doubao_web import ensure_utf8_string
 
 # 初始化 jieba 自定义词典（与 stats.py 保持一致）
 CUSTOM_WORDS = [
@@ -146,10 +147,18 @@ async def get_task_status(id: int = Query(..., description="任务ID")):
             else:
                 keywords = json.loads(keywords_json) if keywords_json else []
             
+            # 修复 keywords 中的编码问题
+            if isinstance(keywords, list):
+                keywords = [ensure_utf8_string(k) if isinstance(k, str) else k for k in keywords]
+            
             if isinstance(platforms_json, (list, dict)):
                 platforms = platforms_json
             else:
                 platforms = json.loads(platforms_json) if platforms_json else []
+            
+            # 修复 platforms 中的编码问题
+            if isinstance(platforms, list):
+                platforms = [ensure_utf8_string(p) if isinstance(p, str) else p for p in platforms]
             
             if isinstance(result_data_json, (list, dict)):
                 result_data = result_data_json
@@ -172,72 +181,125 @@ async def get_task_status(id: int = Query(..., description="任务ID")):
             # 查询内部查询的分词
             # 根据任务的 keywords 和 platforms 查找对应的 search_records
             query_tokens = []
-            if keywords and platforms:
-                # 构建查询条件：查找匹配的 search_records
-                placeholders = []
-                params = []
-                
-                # 为每个 keyword 和 platform 组合创建查询条件
-                for keyword in keywords:
-                    for platform in platforms:
-                        placeholders.append("(keyword = %s AND platform = %s AND prompt_type = 'api_task')")
-                        params.extend([keyword, platform.lower()])
-                
-                if placeholders:
-                    # 查询所有相关的 search_queries 及其对应的 citations
-                    # 注意：使用 DISTINCT 时，ORDER BY 的列必须出现在 SELECT 列表中
-                    query_sql = f"""
-                        SELECT DISTINCT sq.query, sq.record_id, sq.query_order, sq.id
-                        FROM search_queries sq
-                        INNER JOIN search_records sr ON sq.record_id = sr.id
-                        WHERE {' OR '.join(placeholders)}
-                        ORDER BY sq.query_order, sq.id
-                    """
-                    cur.execute(query_sql, params)
-                    query_rows = cur.fetchall()
-                    
-                    # 对每个查询进行分词并获取关联的链接
-                    # query_rows 包含: (query, record_id, query_order, id)
-                    for row in query_rows:
-                        query = row[0]
-                        record_id = row[1]
-                        if query:
-                            # 使用 jieba 进行分词
-                            tokens = jieba.lcut(query)
-                            # 过滤掉单字符和空白
-                            tokens = [t for t in tokens if len(t.strip()) > 1]
-                            
-                            # 查询该record_id对应的所有citations
-                            cur.execute("""
-                                SELECT url, title, snippet, site_name, cite_index, domain
-                                FROM citations
-                                WHERE record_id = %s
-                                ORDER BY cite_index, id
-                            """, (record_id,))
-                            citation_rows = cur.fetchall()
-                            
-                            # 构建citations列表
-                            citations = []
-                            for cite_row in citation_rows:
-                                citations.append({
-                                    "url": cite_row[0],
-                                    "title": cite_row[1] or "",
-                                    "snippet": cite_row[2] or "",
-                                    "site_name": cite_row[3] or "",
-                                    "cite_index": cite_row[4] or 0,
-                                    "domain": cite_row[5] or ""
-                                })
-                            
-                            if tokens:
-                                query_tokens.append({
-                                    "query": query,
-                                    "tokens": tokens,
-                                    "citations": citations
-                                })
+            results_by_platform = {}
+            platform_progress = {
+                "completed": 0,
+                "failed": 0,
+                "pending": 0,
+                "total": len(platforms) if platforms else 0
+            }
             
-            # 添加分词结果到响应
+            # 从 result_data 中提取平台执行状态
+            platform_status_map = {}
+            if result_data and isinstance(result_data, list):
+                for result_item in result_data:
+                    if isinstance(result_item, dict):
+                        platform = result_item.get("platform", "").lower()
+                        status = result_item.get("status", "pending")
+                        platform_status_map[platform] = {
+                            "status": status,
+                            "record_id": result_item.get("record_id"),
+                            "citations_count": result_item.get("citations_count", 0),
+                            "response_time_ms": result_item.get("response_time_ms"),
+                            "error_message": result_item.get("error_message")
+                        }
+                        # 更新进度统计
+                        if status == "completed":
+                            platform_progress["completed"] += 1
+                        elif status == "failed":
+                            platform_progress["failed"] += 1
+                        else:
+                            platform_progress["pending"] += 1
+            
+            if keywords and platforms:
+                # 为每个平台构建独立的数据结构
+                for platform in platforms:
+                    platform_lower = platform.lower()
+                    platform_query_tokens = []
+                    
+                    # 构建查询条件：查找匹配的 search_records
+                    placeholders = []
+                    params = []
+                    
+                    # 为每个 keyword 和当前 platform 组合创建查询条件
+                    for keyword in keywords:
+                        placeholders.append("(keyword = %s AND platform = %s AND prompt_type = 'api_task')")
+                        params.extend([keyword, platform_lower])
+                    
+                    if placeholders:
+                        # 查询所有相关的 search_queries 及其对应的 citations
+                        query_sql = f"""
+                            SELECT DISTINCT sq.query, sq.record_id, sq.query_order, sq.id
+                            FROM search_queries sq
+                            INNER JOIN search_records sr ON sq.record_id = sr.id
+                            WHERE {' OR '.join(placeholders)}
+                            ORDER BY sq.query_order, sq.id
+                        """
+                        cur.execute(query_sql, params)
+                        query_rows = cur.fetchall()
+                        
+                        # 对每个查询进行分词并获取关联的链接
+                        for row in query_rows:
+                            query = row[0]
+                            record_id = row[1]
+                            if query:
+                                # 修复查询词的编码问题
+                                query = ensure_utf8_string(query)
+                                # 使用 jieba 进行分词
+                                tokens = jieba.lcut(query)
+                                # 过滤掉单字符和空白
+                                tokens = [t for t in tokens if len(t.strip()) > 1]
+                                
+                                # 查询该record_id对应的所有citations
+                                cur.execute("""
+                                    SELECT url, title, snippet, site_name, cite_index, domain
+                                    FROM citations
+                                    WHERE record_id = %s
+                                    ORDER BY cite_index, id
+                                """, (record_id,))
+                                citation_rows = cur.fetchall()
+                                
+                                # 构建citations列表，并修复编码问题
+                                citations = []
+                                for cite_row in citation_rows:
+                                    citations.append({
+                                        "url": ensure_utf8_string(cite_row[0] or ""),
+                                        "title": ensure_utf8_string(cite_row[1] or ""),
+                                        "snippet": ensure_utf8_string(cite_row[2] or ""),
+                                        "site_name": ensure_utf8_string(cite_row[3] or ""),
+                                        "cite_index": cite_row[4] or 0,
+                                        "domain": ensure_utf8_string(cite_row[5] or "")
+                                    })
+                                
+                                if tokens:
+                                    platform_query_tokens.append({
+                                        "query": ensure_utf8_string(query),
+                                        "tokens": [ensure_utf8_string(t) for t in tokens],
+                                        "citations": citations
+                                    })
+                    
+                    # 构建平台数据
+                    platform_info = platform_status_map.get(platform_lower, {})
+                    results_by_platform[platform_lower] = {
+                        "query_tokens": platform_query_tokens,
+                        "status": platform_info.get("status", "pending"),
+                        "record_id": platform_info.get("record_id"),
+                        "citations_count": platform_info.get("citations_count", 0),
+                        "response_time_ms": platform_info.get("response_time_ms"),
+                        "error_message": platform_info.get("error_message")
+                    }
+                    
+                    # 合并到全局 query_tokens（保持向后兼容）
+                    query_tokens.extend(platform_query_tokens)
+            
+            # 添加分词结果到响应（保持向后兼容）
             if query_tokens:
                 response_data["query_tokens"] = query_tokens
+            
+            # 添加按平台分组的结果
+            if results_by_platform:
+                response_data["results_by_platform"] = results_by_platform
+                response_data["platform_progress"] = platform_progress
             
             return StatusResponse(status=status, data=response_data)
             
@@ -266,7 +328,7 @@ async def root():
         "endpoints": {
             "POST /mock": "创建新的搜索任务",
             "GET /status?id=<task_id>": "查询任务状态",
-            "POST /bocha/search?token=<token>": "博查实时搜索"
+            "POST /bocha/search?query=<query>": "博查实时搜索"
         }
     }
 
@@ -287,23 +349,23 @@ async def health():
 
 
 @app.post("/bocha/search")
-async def bocha_search(token: str = Query(..., description="搜索词条")):
+async def bocha_search(query: str = Query(..., description="查询词")):
     """
     使用博查API进行实时搜索
     
-    - **token**: 要搜索的词条（分词）
+    - **query**: 要搜索的查询词
     
     返回博查API的搜索结果，用于前端抽屉展示
     """
     try:
-        if not token or not token.strip():
-            raise HTTPException(status_code=400, detail="token 不能为空")
+        if not query or not query.strip():
+            raise HTTPException(status_code=400, detail="query 不能为空")
         
         # 创建博查Provider实例
         provider = BochaApiProvider(headless=True, timeout=30000)
         
         # 调用搜索
-        result = provider.search(token, token)
+        result = provider.search(query, query)
         
         # 检查是否有错误
         if not result.get("citations") and not result.get("full_text"):

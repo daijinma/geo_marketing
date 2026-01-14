@@ -8,6 +8,8 @@ services:
       POSTGRES_USER: geo_admin
       POSTGRES_PASSWORD: geo_password123
       POSTGRES_DB: geo_monitor
+      # 确保数据库使用 UTF-8 编码
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
     ports:
       - "5432:5432"
     volumes:

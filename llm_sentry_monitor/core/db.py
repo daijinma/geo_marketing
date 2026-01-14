@@ -23,6 +23,8 @@ def get_db_connection():
     conn = None
     try:
         conn = psycopg2.connect(**DB_CONFIG)
+        # 设置客户端编码为 UTF-8，确保正确处理中文字符
+        conn.set_client_encoding('UTF8')
         yield conn
         conn.commit()
     except Exception as e:
@@ -36,6 +38,8 @@ def get_db_connection():
 def get_db_cursor(dict_cursor=False):
     """获取数据库游标"""
     conn = psycopg2.connect(**DB_CONFIG)
+    # 设置客户端编码为 UTF-8，确保正确处理中文字符
+    conn.set_client_encoding('UTF8')
     if dict_cursor:
         return conn, conn.cursor(cursor_factory=RealDictCursor)
     return conn, conn.cursor()

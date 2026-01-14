@@ -35,3 +35,4 @@ COMMIT;
 SELECT 'Migration 002 completed successfully!' as status;
 SELECT version, applied_at, description FROM schema_version ORDER BY applied_at DESC LIMIT 5;
 
+
