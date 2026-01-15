@@ -27,3 +27,27 @@ docker-compose up -d
 
 ## 4. 数据持久化
 数据存储在本地目录 `./postgres_data` 中，即使容器销毁，数据也会保留。
+
+## 5. 数据库迁移
+
+数据库支持版本化迁移，迁移脚本位于 `migrations/` 目录：
+
+- `004_add_query_count_to_task_jobs.sql` - v2.2 版本更新
+  - 为 `task_jobs` 表添加 `query_count` 字段（查询次数/执行轮数）
+  - 默认值为 1，支持对同一查询条件执行多轮搜索
+
+执行迁移：
+```bash
+cd geo_db
+./upgrade_db.sh
+```
+
+## 6. 核心表结构
+
+### task_jobs 表
+- `id`: 任务ID
+- `keywords`: 关键词列表（JSONB）
+- `platforms`: 平台列表（JSONB）
+- `query_count`: 查询次数（执行轮数），默认 1
+- `status`: 任务状态（pending, done）
+- `result_data`: 任务结果数据（JSONB）

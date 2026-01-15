@@ -17,34 +17,66 @@
             <!-- 任务创建表单 -->
             <section class="task-form-section">
                 <div class="form-group">
-                    <label for="keyword-input">关键词</label>
-                    <input 
-                        type="text" 
+                    <label for="keyword-input">查询条件（每行一个）</label>
+                    <textarea 
                         id="keyword-input" 
                         class="keyword-input" 
-                        placeholder="请输入搜索关键词，例如：装修公司推荐"
-                    >
+                        rows="4"
+                        placeholder="请输入搜索关键词，每行一个，例如：&#10;装修公司推荐&#10;家装设计"
+                    ></textarea>
                 </div>
                 
-                <div class="form-group">
-                    <label>选择平台</label>
-                    <div class="platform-checkboxes">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="platform-deepseek" value="deepseek" checked>
-                            <span>DeepSeek</span>
-                        </label>
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="platform-doubao" value="doubao" checked>
-                            <span>豆包</span>
-                        </label>
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="platform-bocha" value="bocha">
-                            <span>博查API</span>
-                        </label>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>选择平台</label>
+                        <div class="platform-checkboxes">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="platform-deepseek" value="deepseek" checked>
+                                <span>DeepSeek</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="platform-doubao" value="doubao" checked>
+                                <span>豆包</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="platform-bocha" value="bocha">
+                                <span>博查API</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="query-count-input">查询次数</label>
+                        <input 
+                            type="number" 
+                            id="query-count-input" 
+                            class="query-count-input" 
+                            min="1" 
+                            value="1"
+                            placeholder="1"
+                        >
+                        <p class="form-tip">💡 提示：每个单独的查询耗时约 2-3 分钟</p>
                     </div>
                 </div>
 
                 <button id="submit-btn" class="submit-btn">创建查询任务</button>
+            </section>
+            
+            <!-- Task ID 管理区域 -->
+            <section id="task-id-section" class="task-id-section">
+                <div class="form-group">
+                    <label for="task-id-input">Task ID（逗号分隔，可手动添加）</label>
+                    <div class="task-id-input-group">
+                        <input 
+                            type="text" 
+                            id="task-id-input" 
+                            class="task-id-input" 
+                            placeholder="例如：1,2,3"
+                        >
+                        <button id="load-task-btn" class="load-task-btn">查询</button>
+                        <button id="download-btn" class="download-btn">下载数据</button>
+                    </div>
+                </div>
             </section>
 
             <!-- 任务状态显示 -->
@@ -99,8 +131,12 @@
         </div>
     </div>
 
+    <!-- SheetJS (xlsx) 库 -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js" async></script>
+    
     <!-- JavaScript 模块 -->
     <script type="module" src="/static/js/main.js"></script>
 </body>
 </html>
+
 

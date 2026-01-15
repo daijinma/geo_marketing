@@ -9,9 +9,10 @@ const API_BASE_URL = '';
  * 创建查询任务
  * @param {string[]} keywords - 关键词列表
  * @param {string[]} platforms - 平台列表
+ * @param {number} queryCount - 查询次数（执行轮数），默认1
  * @returns {Promise<{task_id: number}>}
  */
-export async function createTask(keywords, platforms) {
+export async function createTask(keywords, platforms, queryCount = 1) {
     try {
         const response = await fetch(`${API_BASE_URL}/mock`, {
             method: 'POST',
@@ -21,6 +22,7 @@ export async function createTask(keywords, platforms) {
             body: JSON.stringify({
                 keywords: keywords,
                 platforms: platforms,
+                query_count: queryCount,
                 settings: {
                     headless: false,
                     timeout: 60000,
@@ -45,12 +47,22 @@ export async function createTask(keywords, platforms) {
 
 /**
  * 查询任务状态
- * @param {number} taskId - 任务ID
+ * @param {number|number[]} taskId - 单个任务ID或任务ID数组
  * @returns {Promise<{status: string, data: object}>}
  */
 export async function getTaskStatus(taskId) {
     try {
-        const response = await fetch(`${API_BASE_URL}/status?id=${taskId}`);
+        let url;
+        if (Array.isArray(taskId)) {
+            // 多个任务ID
+            const ids = taskId.join(',');
+            url = `${API_BASE_URL}/status?ids=${ids}`;
+        } else {
+            // 单个任务ID
+            url = `${API_BASE_URL}/status?id=${taskId}`;
+        }
+        
+        const response = await fetch(url);
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({ detail: '请求失败' }));
@@ -158,9 +170,7 @@ export function validateApiResponse(responseData) {
                             errors.push(`平台 ${platform} 的 query_tokens[${index}] 缺少 query 字段`);
                         }
                         
-                        if (!Array.isArray(item.tokens)) {
-                            errors.push(`平台 ${platform} 的 query_tokens[${index}] 缺少 tokens 数组`);
-                        }
+                        // tokens 字段为可选（向后兼容，旧数据可能包含 tokens）
                         
                         if (!Array.isArray(item.citations)) {
                             errors.push(`平台 ${platform} 的 query_tokens[${index}] 缺少 citations 数组`);
@@ -193,4 +203,48 @@ export function validateApiResponse(responseData) {
         errors: errors
     };
 }
+
+/**
+ * 导出任务数据（CSV格式）
+ * @param {number[]} taskIds - 任务ID列表
+ * @returns {Promise<void>}
+ */
+export async function exportTaskData(taskIds) {
+    try {
+        const ids = taskIds.join(',');
+        const response = await fetch(`${API_BASE_URL}/export?ids=${ids}`);
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ detail: '请求失败' }));
+            throw new Error(errorData.detail || `HTTP ${response.status}`);
+        }
+
+        // 获取文件名
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = `task_data_${ids}.csv`;
+        if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+            if (filenameMatch) {
+                filename = filenameMatch[1];
+            }
+        }
+
+        // 下载文件
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    } catch (error) {
+        if (error instanceof TypeError && error.message.includes('fetch')) {
+            throw new Error('网络连接失败，请检查服务器是否运行');
+        }
+        throw error;
+    }
+}
+
 

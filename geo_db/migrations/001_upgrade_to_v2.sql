@@ -42,8 +42,17 @@ WHERE id IN (
     ) t WHERE rn > 1
 );
 
-ALTER TABLE citations 
-ADD CONSTRAINT unique_citation UNIQUE (record_id, url);
+-- 添加唯一约束（如果不存在）
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'unique_citation' AND table_name = 'citations'
+    ) THEN
+        ALTER TABLE citations 
+        ADD CONSTRAINT unique_citation UNIQUE (record_id, url);
+    END IF;
+END $$;
 
 -- 4. 创建域名统计表
 CREATE TABLE IF NOT EXISTS domain_stats (
@@ -112,8 +121,21 @@ CREATE TABLE IF NOT EXISTS schema_version (
     description TEXT
 );
 
+-- 确保 version 列有 UNIQUE 约束（如果不存在）
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'schema_version_version_key' AND table_name = 'schema_version'
+    ) THEN
+        ALTER TABLE schema_version 
+        ADD CONSTRAINT schema_version_version_key UNIQUE (version);
+    END IF;
+END $$;
+
 INSERT INTO schema_version (version, description) 
-VALUES ('2.0', '优化索引、添加元数据、级联删除、域名统计表');
+VALUES ('2.0', '优化索引、添加元数据、级联删除、域名统计表')
+ON CONFLICT (version) DO NOTHING;
 
 COMMIT;
 

@@ -4,37 +4,44 @@
  */
 
 import { createTask, getTaskStatus, validateApiResponse } from './api.js';
-import { showError, showSuccess } from './ui.js';
-import { renderResults } from './ui.js';
+import { showError, showSuccess, renderResults, addTaskId } from './ui.js';
 
 const POLL_INTERVAL = 2000; // 轮询间隔：2秒
 const MAX_POLL_COUNT = 300; // 最大轮询次数：10分钟
 
-let currentTaskId = null;
+let currentTaskIds = []; // 当前任务ID列表
 let pollTimer = null;
 
 /**
  * 启动查询任务
  * @param {string[]} keywords - 关键词列表
  * @param {string[]} platforms - 平台列表
+ * @param {number} queryCount - 查询次数（执行轮数），默认1
  */
-export async function startTask(keywords, platforms) {
+export async function startTask(keywords, platforms, queryCount = 1) {
     try {
         // 重置状态
-        currentTaskId = null;
+        currentTaskIds = [];
         if (pollTimer) {
             clearInterval(pollTimer);
             pollTimer = null;
         }
 
-        // 创建任务
-        const result = await createTask(keywords, platforms);
-        currentTaskId = result.task_id;
+        // 创建任务（根据执行次数，系统会在后端按轮次执行）
+        const result = await createTask(keywords, platforms, queryCount);
+        const taskId = result.task_id;
+        currentTaskIds = [taskId];
 
-        showSuccess(`任务创建成功，任务ID: ${currentTaskId}`);
+        showSuccess(`任务创建成功，任务ID: ${taskId}，将执行 ${queryCount} 轮`);
+        
+        // 添加到 task_id 输入框
+        addTaskId(taskId);
+        
+        // 保存到 localStorage
+        saveLastTaskId(taskId);
         
         // 开始轮询
-        pollTaskStatus(currentTaskId);
+        pollTaskStatus(taskId);
     } catch (error) {
         showError(`创建任务失败: ${error.message}`);
         throw error;
@@ -371,6 +378,32 @@ export function stopPolling() {
         clearInterval(pollTimer);
         pollTimer = null;
     }
-    currentTaskId = null;
+    currentTaskIds = [];
 }
+
+/**
+ * 保存最近一次的 task_id 到 localStorage
+ * @param {number|string} taskId - 任务ID
+ */
+function saveLastTaskId(taskId) {
+    try {
+        localStorage.setItem('lastTaskId', String(taskId));
+    } catch (error) {
+        console.warn('保存 task_id 到 localStorage 失败:', error);
+    }
+}
+
+/**
+ * 从 localStorage 获取最近一次的 task_id
+ * @returns {string|null} 任务ID
+ */
+export function getLastTaskId() {
+    try {
+        return localStorage.getItem('lastTaskId');
+    } catch (error) {
+        console.warn('从 localStorage 读取 task_id 失败:', error);
+        return null;
+    }
+}
+
 

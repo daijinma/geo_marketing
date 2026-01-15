@@ -20,14 +20,15 @@ CREATE TABLE IF NOT EXISTS task_jobs (
 CREATE INDEX IF NOT EXISTS idx_task_jobs_status ON task_jobs(status);
 CREATE INDEX IF NOT EXISTS idx_task_jobs_created_at ON task_jobs(created_at DESC);
 
--- 创建触发器：自动更新 updated_at
+-- 创建触发器：自动更新 updated_at（如果不存在）
+DROP TRIGGER IF EXISTS update_task_jobs_updated_at ON task_jobs;
 CREATE TRIGGER update_task_jobs_updated_at BEFORE UPDATE ON task_jobs
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- 版本记录
 INSERT INTO schema_version (version, description) 
 VALUES ('2.1', '添加任务管理表 task_jobs')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (version) DO NOTHING;
 
 COMMIT;
 

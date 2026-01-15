@@ -288,41 +288,103 @@ class DeepSeekWebProvider(BaseProvider):
                 
                 # 2. 开启"联网搜索" - 智能判断状态
                 try:
-                    # 寻找包含“联网搜索”文字的按钮容器
-                    # DeepSeek 的开关通常是一个包含图标和文字的 div
-                    search_toggle = page.locator("div:has-text('联网搜索')").last
+                    # 尝试多种可能的搜索开关选择器
+                    search_toggle_selectors = [
+                        "div:has-text('联网搜索')",
+                        "button:has-text('联网搜索')",
+                        "[aria-label*='联网']",
+                        "[title*='联网']",
+                        "div[class*='search']",
+                        "div[class*='toggle']"
+                    ]
                     
-                    if search_toggle.is_visible():
+                    search_toggle = None
+                    for selector in search_toggle_selectors:
+                        try:
+                            toggle = page.locator(selector).last
+                            if toggle.is_visible():
+                                search_toggle = toggle
+                                self.logger.info(f"找到联网搜索按钮，选择器: {selector}")
+                                break
+                        except:
+                            continue
+                    
+                    if search_toggle:
                         # 检查是否已经激活
-                        # 逻辑：检查该元素或其父级是否包含特定的激活类名（如 'checked' 或颜色相关的类）
-                        # 或者检查其内部是否有特定的激活样式
                         is_active = False
                         
-                        # 方案 A: 检查 class 中是否包含 'checked' 或 'active' (DeepSeek 常用)
-                        class_attr = search_toggle.get_attribute("class") or ""
-                        parent_class = ""
+                        # 方案 A: 检查 class 中是否包含激活状态
                         try:
-                            parent_class = page.evaluate("el => el.parentElement.className", search_toggle.element_handle())
-                        except: pass
-                        
-                        if "checked" in class_attr.lower() or "active" in class_attr.lower() or "checked" in str(parent_class).lower():
-                            is_active = True
-                        
-                        # 方案 B: 检查颜色（激活时通常是蓝色 #247fff 或类似）
-                        if not is_active:
-                            color = page.evaluate("el => window.getComputedStyle(el).color", search_toggle.element_handle())
-                            # 如果颜色不是默认的灰色（比如变成了蓝色），则认为已激活
-                            if "rgb(36, 127, 255)" in color or "rgb(0, 0, 0)" not in color: # 简单判断非黑即活
+                            class_attr = search_toggle.get_attribute("class") or ""
+                            parent_class = ""
+                            try:
+                                parent_class = page.evaluate("el => el.parentElement?.className || ''", search_toggle.element_handle())
+                            except:
+                                pass
+                            
+                            # 检查是否包含激活相关的关键字
+                            if any(keyword in (class_attr + parent_class).lower() for keyword in ["checked", "active", "on", "enabled", "selected"]):
                                 is_active = True
+                                self.logger.debug(f"通过 class 判断：已激活 (class: {class_attr}, parent: {parent_class})")
+                            
+                            # 方案 B: 检查颜色或样式
+                            if not is_active:
+                                try:
+                                    color = page.evaluate("el => window.getComputedStyle(el).color", search_toggle.element_handle())
+                                    bg_color = page.evaluate("el => window.getComputedStyle(el).backgroundColor", search_toggle.element_handle())
+                                    # DeepSeek 激活时通常是蓝色 #247fff (rgb(36, 127, 255))
+                                    if "rgb(36, 127, 255)" in color or "rgb(36, 127, 255)" in bg_color:
+                                        is_active = True
+                                        self.logger.debug(f"通过颜色判断：已激活 (color: {color}, bg: {bg_color})")
+                                    # 如果颜色不是默认的灰色/黑色，可能已激活
+                                    elif "rgb(0, 0, 0)" not in color and "rgb(128" not in color and color:
+                                        # 进一步检查：如果文字颜色明显不是灰色，可能是激活状态
+                                        if "rgb(36" in color or "rgb(24" in color:  # 蓝色系
+                                            is_active = True
+                                            self.logger.debug(f"通过颜色判断（蓝色系）：已激活 (color: {color})")
+                                except Exception as color_error:
+                                    self.logger.debug(f"检查颜色失败: {color_error}")
+                            
+                            # 方案 C: 如果无法确定，检查父级或同级元素的激活状态
+                            if not is_active:
+                                try:
+                                    # 查找父级容器，检查是否有激活标记
+                                    parent_active = page.evaluate("""
+                                        el => {
+                                            let parent = el.closest('[class*="toggle"], [class*="switch"], [class*="button"]');
+                                            if (!parent) return false;
+                                            let className = parent.className || '';
+                                            return /checked|active|on|enabled|selected/i.test(className);
+                                        }
+                                    """, search_toggle.element_handle())
+                                    if parent_active:
+                                        is_active = True
+                                        self.logger.debug("通过父级元素判断：已激活")
+                                except:
+                                    pass
 
-                        if is_active:
-                            self.logger.info("检测到‘联网搜索’已默认开启，跳过点击。")
-                        else:
-                            search_toggle.click()
-                            self.logger.info("已手动开启‘联网搜索’")
-                            time.sleep(0.5)
+                            if is_active:
+                                self.logger.info("✅ 检测到'联网搜索'已默认开启，跳过点击。")
+                            else:
+                                # 如果无法确定状态，或者确定未激活，则点击开启
+                                self.logger.info("🔄 联网搜索未开启，正在点击开启...")
+                                search_toggle.click()
+                                time.sleep(0.8)  # 等待状态更新
+                                self.logger.info("✅ 已手动开启'联网搜索'")
+                        except Exception as check_error:
+                            self.logger.warning(f"判断搜索开关状态失败: {check_error}，将强制点击以确保开启")
+                            # 如果判断失败，为了确保按钮开启，强制点击
+                            try:
+                                search_toggle.click()
+                                time.sleep(0.8)
+                                self.logger.info("✅ 已强制点击开启'联网搜索'（判断失败后的安全措施）")
+                            except:
+                                pass
+                    else:
+                        # 如果找不到按钮，记录警告，但不阻塞流程
+                        self.logger.warning("⚠️ 未找到'联网搜索'按钮，可能页面结构已变更或按钮已默认开启")
                 except Exception as e:
-                    self.logger.warning(f"判断联网搜索状态失败: {e}")
+                    self.logger.warning(f"处理联网搜索开关失败: {e}，继续执行（可能按钮已默认开启）")
                 
                 # 3. 点击发送按钮
                 try:
@@ -367,10 +429,97 @@ class DeepSeekWebProvider(BaseProvider):
                 
                 # 循环检查生成状态
                 max_retries = 30
+                max_retry_attempts = 3  # 最大重试次数
+                retry_count = 0  # 当前重试次数
                 last_content = ""
+                
                 for i in range(max_retries):
                     time.sleep(2)
                     try:
+                        # 检测是否出现刷新按钮（失败状态）
+                        refresh_button = None
+                        # 使用 JavaScript 查找刷新按钮，更可靠
+                        try:
+                            refresh_button = page.evaluate_handle("""
+                                () => {
+                                    // 查找所有可能的刷新按钮
+                                    const buttons = document.querySelectorAll('div.ds-icon-button, div[role="button"].ds-icon-button');
+                                    
+                                    for (const btn of buttons) {
+                                        // 检查是否在消息元素中
+                                        const inMessage = btn.closest('div.ds-message');
+                                        if (!inMessage) continue;
+                                        
+                                        // 检查是否包含 SVG
+                                        const svg = btn.querySelector('svg');
+                                        if (!svg) continue;
+                                        
+                                        // 检查 SVG 路径是否包含刷新图标的特征
+                                        const path = svg.querySelector('path');
+                                        if (!path) continue;
+                                        
+                                        const pathData = path.getAttribute('d') || '';
+                                        
+                                        // 检查路径是否包含刷新图标的特征（M1.27206 或类似的路径）
+                                        // 刷新图标的路径通常很长且包含特定的数值
+                                        if (pathData && (pathData.includes('M1.27206') || pathData.includes('1.27206') || pathData.length > 200)) {
+                                            // 进一步验证：检查是否可见
+                                            const style = window.getComputedStyle(btn);
+                                            if (style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0') {
+                                                return btn;
+                                            }
+                                        }
+                                    }
+                                    return null;
+                                }
+                            """)
+                            
+                            # 如果找到了按钮，检查是否真的存在
+                            if refresh_button and refresh_button.as_element():
+                                # 验证元素是否仍然可见
+                                try:
+                                    element = refresh_button.as_element()
+                                    if element and element.is_visible():
+                                        refresh_button = element
+                                    else:
+                                        refresh_button = None
+                                except:
+                                    refresh_button = None
+                            else:
+                                refresh_button = None
+                        except Exception as e:
+                            self.logger.debug(f"检测刷新按钮时出错: {e}")
+                            refresh_button = None
+                        
+                        # 如果检测到刷新按钮，说明失败了，需要重试
+                        if refresh_button:
+                            retry_count += 1
+                            self.logger.warning(f"⚠️ 检测到失败状态（刷新按钮出现），开始第 {retry_count}/{max_retry_attempts} 次重试...")
+                            
+                            if retry_count > max_retry_attempts:
+                                self.logger.error(f"❌ 重试次数已达上限 ({max_retry_attempts} 次)，停止重试")
+                                raise Exception(f"DeepSeek 回答生成失败，已重试 {max_retry_attempts} 次")
+                            
+                            # 点击刷新按钮
+                            try:
+                                refresh_button.click()
+                                self.logger.info(f"🔄 已点击刷新按钮，等待重新生成...")
+                                time.sleep(3)  # 等待刷新后的响应
+                                
+                                # 重置等待状态
+                                last_content = ""
+                                
+                                # 重新等待回答容器出现
+                                try:
+                                    page.wait_for_selector(content_selector, timeout=self.timeout)
+                                except:
+                                    self.logger.warning("重试后未发现 .ds-markdown 容器，继续等待...")
+                                
+                                continue  # 继续循环，等待新的回答生成
+                            except Exception as click_error:
+                                self.logger.error(f"❌ 点击刷新按钮失败: {click_error}")
+                                raise Exception(f"无法点击刷新按钮进行重试: {click_error}")
+                        
                         # 尝试获取当前内容
                         content_el = page.query_selector(content_selector)
                         if content_el:
@@ -382,13 +531,22 @@ class DeepSeekWebProvider(BaseProvider):
                                     # 内容不再变化，检查是否有"停止生成"按钮
                                     stop_btn = page.query_selector("text=停止生成")
                                     if not stop_btn:
-                                        self.logger.info("回答生成已完成")
+                                        if retry_count > 0:
+                                            self.logger.info(f"✅ 回答生成已完成（经过 {retry_count} 次重试）")
+                                        else:
+                                            self.logger.info("回答生成已完成")
                                         full_response_text = current_content
                                         break
                                 
                             last_content = current_content
-                            self.logger.info(f"正在生成中... (当前长度: {len(current_content)}, 已捕获 {len(captured_search_results)} 个搜索结果)")
+                            if retry_count > 0:
+                                self.logger.info(f"正在生成中... (当前长度: {len(current_content)}, 已捕获 {len(captured_search_results)} 个搜索结果, 重试次数: {retry_count})")
+                            else:
+                                self.logger.info(f"正在生成中... (当前长度: {len(current_content)}, 已捕获 {len(captured_search_results)} 个搜索结果)")
                     except Exception as e:
+                        # 如果是重试次数超限的异常，直接抛出
+                        if "重试次数已达上限" in str(e) or "无法点击刷新按钮" in str(e):
+                            raise
                         continue
                 
                 # 5. 数据已从网络接口抓取完成，优先使用接口数据

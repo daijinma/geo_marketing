@@ -14,6 +14,7 @@
     --error-color: #ef4444;
     --warning-color: #f59e0b;
     --bg-color: #f5f7fa;
+    --bg-secondary: #f9fafb;
     --card-bg: #ffffff;
     --text-primary: #1f2937;
     --text-secondary: #6b7280;
@@ -21,52 +22,53 @@
     --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-    --radius: 8px;
+    --radius: 6px;
 }
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
     background-color: var(--bg-color);
     color: var(--text-primary);
-    line-height: 1.6;
+    line-height: 1.4;
     min-height: 100vh;
+    font-size: 13px;
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 1400px;
     margin: 0 auto;
-    padding: 20px;
+    padding: 12px;
 }
 
 /* 头部样式 */
 .header {
     text-align: center;
-    margin-bottom: 40px;
-    padding: 30px 0;
+    margin-bottom: 20px;
+    padding: 16px 0;
 }
 
 .header h1 {
-    font-size: 2.5rem;
+    font-size: 24px;
     color: var(--text-primary);
-    margin-bottom: 10px;
+    margin-bottom: 8px;
 }
 
 .subtitle {
     color: var(--text-secondary);
-    font-size: 1.1rem;
+    font-size: 13px;
 }
 
 /* 表单区域 */
 .task-form-section {
     background: var(--card-bg);
-    padding: 30px;
+    padding: 16px;
     border-radius: var(--radius);
     box-shadow: var(--shadow-md);
-    margin-bottom: 30px;
+    margin-bottom: 16px;
 }
 
 .form-group {
-    margin-bottom: 25px;
+    margin-bottom: 12px;
 }
 
 .form-group label {
@@ -76,12 +78,19 @@ body {
     color: var(--text-primary);
 }
 
+.form-tip {
+    margin-top: 8px;
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
 .keyword-input {
     width: 100%;
-    padding: 12px 16px;
-    border: 2px solid var(--border-color);
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
     border-radius: var(--radius);
-    font-size: 16px;
+    font-size: 13px;
     transition: border-color 0.2s;
 }
 
@@ -111,18 +120,18 @@ body {
 }
 
 .checkbox-label span {
-    font-size: 16px;
+    font-size: 13px;
     color: var(--text-primary);
 }
 
 .submit-btn {
     width: 100%;
-    padding: 14px 24px;
+    padding: 10px 16px;
     background-color: var(--primary-color);
     color: white;
     border: none;
     border-radius: var(--radius);
-    font-size: 16px;
+    font-size: 13px;
     font-weight: 500;
     cursor: pointer;
     transition: background-color 0.2s;
@@ -140,10 +149,10 @@ body {
 /* 任务状态区域 */
 .task-status-section {
     background: var(--card-bg);
-    padding: 20px 30px;
+    padding: 12px 16px;
     border-radius: var(--radius);
     box-shadow: var(--shadow-md);
-    margin-bottom: 30px;
+    margin-bottom: 16px;
 }
 
 .status-info {
@@ -214,10 +223,10 @@ body {
 /* 结果展示区域 */
 .results-section {
     background: var(--card-bg);
-    padding: 30px;
+    padding: 16px;
     border-radius: var(--radius);
     box-shadow: var(--shadow-md);
-    margin-bottom: 30px;
+    margin-bottom: 16px;
 }
 
 .results-section h2 {
@@ -253,7 +262,7 @@ body {
 
 .query-text {
     color: var(--text-primary);
-    font-size: 1.1rem;
+    font-size: 13px;
     cursor: pointer;
     transition: all 0.2s;
     text-decoration: underline;
@@ -308,7 +317,7 @@ body {
 }
 
 .link-title a {
-    font-size: 1.1rem;
+    font-size: 13px;
     font-weight: 600;
     color: var(--text-primary);
     text-decoration: none;
@@ -372,8 +381,158 @@ body {
 .no-results {
     color: var(--text-secondary);
     text-align: center;
-    padding: 40px;
-    font-size: 1.1rem;
+    padding: 24px;
+    font-size: 13px;
+}
+
+/* 树状结构样式 */
+.tree-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.tree-node {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background-color: var(--card-bg);
+    overflow: hidden;
+}
+
+.tree-node-level-1 {
+    margin-bottom: 20px;
+}
+
+.tree-node-level-2 {
+    margin: 10px 0;
+    border: 1px solid #e0e7ff;
+    background-color: #f8fafc;
+}
+
+.tree-node-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s;
+    background-color: #f9fafb;
+}
+
+.tree-node-level-2 .tree-node-header {
+    background-color: #f1f5f9;
+}
+
+.tree-node-header:hover {
+    background-color: #f3f4f6;
+}
+
+.tree-node-level-2 .tree-node-header:hover {
+    background-color: #e2e8f0;
+}
+
+.tree-toggle {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    transition: transform 0.2s;
+    flex-shrink: 0;
+}
+
+.tree-label {
+    flex: 1;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.tree-node-level-1 .tree-label {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.tree-node-level-2 .tree-label {
+    font-size: 12px;
+}
+
+.tree-count {
+    color: var(--primary-color);
+    font-weight: 600;
+    margin-left: 4px;
+}
+
+.tree-query-text {
+    transition: all 0.2s;
+}
+
+.tree-node-content {
+    padding: 16px;
+    border-top: 1px solid var(--border-color);
+    background-color: white;
+}
+
+.tree-node-content.collapsed {
+    display: none;
+}
+
+.tree-node-level-2 .tree-node-content {
+    padding: 12px;
+    background-color: white;
+}
+
+.tree-node-detail-section {
+    margin-bottom: 20px;
+}
+
+.tree-node-detail-section:last-child {
+    margin-bottom: 0;
+}
+
+.tree-detail-label {
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+/* Domain 统计样式 */
+.domain-stats {
+    margin-top: 8px;
+}
+
+.domain-stats-empty {
+    color: var(--text-secondary);
+    font-style: italic;
+    font-size: 14px;
+}
+
+.domain-stats-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+}
+
+.domain-stat-item {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 12px;
+    background-color: #e0e7ff;
+    border-radius: 16px;
+    font-size: 14px;
+}
+
+.domain-name {
+    color: var(--primary-color);
+    font-weight: 500;
+    margin-right: 4px;
+}
+
+.domain-count {
+    color: var(--text-secondary);
+    font-size: 13px;
 }
 
 /* Toast 提示 */
@@ -788,35 +947,440 @@ body {
     display: none !important;
 }
 
-/* 响应式设计 */
-@media (max-width: 768px) {
-    .container {
-        padding: 15px;
-    }
+/* PC 专用样式 - 移除响应式设计 */
 
-    .header h1 {
-        font-size: 2rem;
-    }
-
-    .task-form-section,
-    .results-section {
-        padding: 20px;
-    }
-
-    .platform-checkboxes {
-        flex-direction: column;
-        gap: 12px;
-    }
-
-    .drawer {
-        width: 100vw;
-        right: -100vw;
-    }
-
-    .toast {
-        right: 10px;
-        left: 10px;
-        max-width: none;
-    }
+/* 新增样式：表单行布局 */
+.form-row {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
 }
+
+.form-row .form-group {
+    flex: 1;
+}
+
+/* Textarea 样式 */
+.keyword-input[type="textarea"],
+.keyword-input {
+    resize: vertical;
+    min-height: 100px;
+    font-family: inherit;
+}
+
+/* 查询次数输入框 */
+.query-count-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    font-size: 13px;
+    transition: border-color 0.2s;
+    max-width: 120px;
+}
+
+.query-count-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+/* Task ID 管理区域 */
+.task-id-section {
+    background: var(--card-bg);
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-md);
+    margin-bottom: 16px;
+}
+
+.task-id-input-group {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+}
+
+.task-id-input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    font-size: 13px;
+    transition: border-color 0.2s;
+}
+
+.task-id-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.load-task-btn,
+.download-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.load-task-btn {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.load-task-btn:hover {
+    background-color: var(--primary-hover);
+}
+
+.download-btn {
+    background-color: var(--success-color);
+    color: white;
+}
+
+.download-btn:hover {
+    background-color: #059669;
+}
+
+.load-task-btn:disabled,
+.download-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* 任务块样式（紧密展示） */
+.task-block {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 15px;
+    box-shadow: var(--shadow-sm);
+}
+
+.task-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.task-header h3 {
+    font-size: 14px;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.task-status {
+    font-size: 12px;
+    color: var(--text-secondary);
+    padding: 4px 10px;
+    background-color: #f3f4f6;
+    border-radius: 4px;
+}
+
+.task-queries {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.task-query-item {
+    padding: 6px 10px;
+    background-color: #f9fafb;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--text-primary);
+}
+
+/* 更紧密的查询块展示 */
+.query-block {
+    margin-bottom: 12px;
+    padding: 15px;
+    background: #fafbfc;
+    border-left: 3px solid var(--primary-color);
+    border-radius: 4px;
+}
+
+.query-header {
+    margin-bottom: 10px;
+    font-weight: 500;
+}
+
+.query-label {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.query-text {
+    color: var(--text-primary);
+    font-size: 12px;
+}
+
+.tokens-container {
+    margin: 8px 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.token-tag {
+    padding: 3px 8px;
+    background-color: #e0e7ff;
+    color: #4338ca;
+    border-radius: 4px;
+    font-size: 11px;
+}
+
+.citations-container {
+    margin-top: 10px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 10px;
+}
+
+.link-card {
+    padding: 10px;
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.link-title {
+    margin-bottom: 6px;
+}
+
+.link-title a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.link-title a:hover {
+    text-decoration: underline;
+}
+
+.link-meta {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.link-snippet {
+    margin-top: 6px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.link-url {
+    margin-top: 6px;
+    font-size: 10px;
+}
+
+.link-url a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    word-break: break-all;
+}
+
+.link-url a:hover {
+    color: var(--primary-color);
+    text-decoration: underline;
+}
+
+/* PC 专用 - Task ID 区域样式已统一 */
+
+/* ============================================
+   表格和详细日志样式
+   ============================================ */
+
+/* 结果区域标题 */
+.results-section-title {
+    margin-top: 16px;
+    margin-bottom: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 6px;
+}
+
+.results-section-title:first-child {
+    margin-top: 0;
+}
+
+/* 表格容器 */
+.table-container {
+    margin-bottom: 16px;
+}
+
+.table-wrapper {
+    overflow-x: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--card-bg);
+}
+
+/* 汇总表格样式 */
+.results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.results-table thead {
+    background-color: var(--bg-secondary);
+}
+
+.results-table th {
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-primary);
+    border-bottom: 2px solid var(--border-color);
+    white-space: nowrap;
+    font-size: 12px;
+}
+
+.results-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+    word-break: break-word;
+    font-size: 12px;
+}
+
+.results-table tbody tr:hover {
+    background-color: var(--bg-secondary);
+}
+
+.results-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Domain 统计表格 mini 样式 */
+.table-mini {
+    font-size: 11px;
+}
+
+.table-mini th {
+    padding: 6px 10px;
+    font-size: 11px;
+}
+
+.table-mini td {
+    padding: 6px 10px;
+    font-size: 11px;
+}
+
+/* Domain 列样式：固定宽度，不折行，溢出显示省略号，固定定位 */
+.domain-table .domain-column {
+    width: 150px;
+    min-width: 150px;
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: keep-all;
+    position: sticky;
+    left: 0;
+    background-color: var(--card-bg);
+    z-index: 10;
+}
+
+/* Domain 列表头固定 */
+.domain-table thead .domain-column {
+    background-color: var(--bg-secondary);
+    z-index: 11;
+}
+
+/* Domain 列表体固定 */
+.domain-table tbody .domain-column {
+    background-color: var(--card-bg);
+}
+
+/* Domain 列表体 hover 时的背景色 */
+.domain-table tbody tr:hover .domain-column {
+    background-color: var(--bg-secondary);
+}
+
+/* Domain 表格行 hover 效果 */
+.domain-table tbody tr {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.domain-table tbody tr:hover {
+    background-color: var(--bg-secondary);
+}
+
+/* 详细日志容器 */
+.detail-logs-wrapper {
+    margin-bottom: 16px;
+}
+
+.detail-logs-container {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 10px;
+    background: var(--card-bg);
+}
+
+/* 详细日志项（单行横向滚动） */
+.detail-log-item {
+    display: block;
+    white-space: nowrap;
+    padding: 8px 12px;
+    background: var(--bg-secondary);
+    font-size: 12px;
+    color: var(--text-primary);
+    min-width: 100%;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+}
+
+.detail-log-item::-webkit-scrollbar {
+    height: 6px;
+}
+
+.detail-log-item::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.detail-log-item::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.detail-log-item::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+/* 详细日志中的超链样式 */
+.detail-log-link {
+    color: var(--primary-color);
+    text-decoration: none;
+    margin-left: 4px;
+}
+
+.detail-log-link:hover {
+    text-decoration: underline;
+    color: var(--primary-hover);
+}
+
+/* PC 专用 - 表格和日志样式已统一为 mini */
+
 

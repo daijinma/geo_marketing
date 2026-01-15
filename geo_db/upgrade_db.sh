@@ -38,6 +38,18 @@ if [ -f "migrations/002_add_task_jobs.sql" ]; then
     docker exec -i "$CONTAINER_NAME" psql -U geo_admin -d geo_monitor < migrations/002_add_task_jobs.sql
 fi
 
+# 检查并执行 v2.2 迁移
+if [ -f "migrations/004_add_query_count_to_task_jobs.sql" ]; then
+    echo "  → 执行 v2.2 迁移（添加 query_count 字段）..."
+    docker exec -i "$CONTAINER_NAME" psql -U geo_admin -d geo_monitor < migrations/004_add_query_count_to_task_jobs.sql
+fi
+
+# 检查并执行 v3.1 迁移
+if [ -f "migrations/003_add_task_relations.sql" ]; then
+    echo "  → 执行 v3.1 迁移（添加任务关联关系）..."
+    docker exec -i "$CONTAINER_NAME" psql -U geo_admin -d geo_monitor < migrations/003_add_task_relations.sql
+fi
+
 echo "✅ 数据库升级完成！"
 echo ""
 echo "📊 当前数据库版本："
