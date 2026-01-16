@@ -716,6 +716,8 @@ function exportToExcel(detailLogs) {
             'Sub Query',
             '时间',
             '域名',
+            '标题',
+            '摘要',
             '网址'
         ]);
         
@@ -734,6 +736,8 @@ function exportToExcel(detailLogs) {
                 log.sub_query || '',
                 log.time || 'N/A',
                 log.domain || '',
+                log.title || '',
+                log.snippet || '',
                 log.url || ''
             ]);
         });
@@ -751,6 +755,8 @@ function exportToExcel(detailLogs) {
             { wch: 40 },  // Sub Query
             { wch: 20 },  // 时间
             { wch: 25 },  // 域名
+            { wch: 50 },  // 标题
+            { wch: 60 },  // 摘要
             { wch: 50 }   // 网址
         ];
         
@@ -1046,6 +1052,8 @@ function renderDetailLogs(detailLogs, container) {
             `Sub Query: ${escapeHtml(log.sub_query || '')}`,
             `时间: ${log.time || 'N/A'}`,
             `域名: ${escapeHtml(log.domain || '')}`,
+            `标题: ${escapeHtml(log.title || 'N/A')}`,
+            `摘要: ${escapeHtml(log.snippet || 'N/A')}`,
             log.url ? `<a href="${escapeHtml(log.url)}" target="_blank" rel="noopener noreferrer" class="detail-log-link">${escapeHtml(log.url)}</a>` : '网址: N/A'
         ];
         

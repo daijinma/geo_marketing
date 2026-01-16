@@ -7,11 +7,14 @@ import jieba
 import jieba.analyse
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+import os
 from tabulate import tabulate
 from collections import Counter
 from core.db import get_db_cursor
 
-load_dotenv()
+# 根据 ENV_FILE 环境变量加载不同的 .env 文件
+env_file = os.getenv("ENV_FILE", ".env")
+load_dotenv(env_file)
 
 # 自定义词典（行业术语）
 CUSTOM_WORDS = [

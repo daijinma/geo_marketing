@@ -124,7 +124,8 @@ class BochaApiProvider(BaseProvider):
                                 "title": result.get("title", result.get("name", "")),
                                 "snippet": result.get("snippet", result.get("description", result.get("summary", ""))),
                                 "site_name": result.get("site_name", result.get("source", extract_domain(url))),
-                                "cite_index": result.get("cite_index", result.get("index", idx + 1))
+                                "cite_index": result.get("cite_index", result.get("index", idx + 1)),
+                                "query_indexes": result.get("query_indexes", [])
                             })
             elif "items" in data:
                 items = data.get("items", [])
@@ -137,7 +138,8 @@ class BochaApiProvider(BaseProvider):
                                 "title": item.get("title", item.get("name", "")),
                                 "snippet": item.get("snippet", item.get("description", item.get("summary", ""))),
                                 "site_name": item.get("site_name", item.get("source", extract_domain(url))),
-                                "cite_index": item.get("cite_index", item.get("index", idx + 1))
+                                "cite_index": item.get("cite_index", item.get("index", idx + 1)),
+                                "query_indexes": item.get("query_indexes", [])
                             })
             elif "citations" in data and isinstance(data.get("citations"), list):
                 citations_data = data.get("citations", [])
@@ -150,7 +152,8 @@ class BochaApiProvider(BaseProvider):
                                 "title": cite.get("title", cite.get("name", "")),
                                 "snippet": cite.get("snippet", cite.get("description", cite.get("summary", ""))),
                                 "site_name": cite.get("site_name", cite.get("source", extract_domain(url))),
-                                "cite_index": cite.get("cite_index", cite.get("index", idx + 1))
+                                "cite_index": cite.get("cite_index", cite.get("index", idx + 1)),
+                                "query_indexes": cite.get("query_indexes", [])
                             })
             elif "references" in data:
                 references = data.get("references", [])
@@ -163,7 +166,8 @@ class BochaApiProvider(BaseProvider):
                                 "title": ref.get("title", ref.get("name", "")),
                                 "snippet": ref.get("snippet", ref.get("description", ref.get("summary", ""))),
                                 "site_name": ref.get("site_name", ref.get("source", extract_domain(url))),
-                                "cite_index": ref.get("cite_index", ref.get("index", idx + 1))
+                                "cite_index": ref.get("cite_index", ref.get("index", idx + 1)),
+                                "query_indexes": ref.get("query_indexes", [])
                             })
             
             # 如果没有提取到查询词，使用原始关键词

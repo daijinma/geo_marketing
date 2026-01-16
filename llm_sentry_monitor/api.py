@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 import csv
 import io
+import psycopg2.errors
 from core.db import get_db_connection
 from core.task_executor import execute_task_job
 from providers.bocha_api import BochaApiProvider
@@ -203,7 +204,7 @@ async def get_task_status(
                 if task_query_ids:
                     placeholders = ','.join(['%s'] * len(task_query_ids))
                     cur.execute(f"""
-                        SELECT id, task_query_id, sub_query, url, domain, title, snippet, site_name, cite_index, created_at, record_id
+                        SELECT id, task_query_id, sub_query, url, domain, title, snippet, site_name, cite_index, created_at, record_id, citation_id
                         FROM executor_sub_query_log
                         WHERE task_query_id IN ({placeholders})
                         ORDER BY task_query_id, created_at
@@ -272,7 +273,7 @@ async def get_task_status(
                                 round_map[key][record_id] = round_num
                 
                 # 构建汇总表格数据
-                # 使用字典存储 (query, platform, sub_query) -> set(record_id) 来统计查询次数
+                # 使用 citation_id 去重统计，确保每个 citation 对每个 sub_query 只计算一次
                 summary_table = {}
                 for sql in sub_query_logs:
                     # 过滤：只处理有 url 的记录（过滤掉 A 类型，取消单独保存的 sub_query）
@@ -284,6 +285,7 @@ async def get_task_status(
                     query = task_query_map.get(task_query_id, "")
                     sub_query = ensure_utf8_string(sql[2]) if sql[2] and isinstance(sql[2], str) else (sql[2] or "")
                     record_id = sql[10]  # record_id 字段
+                    citation_id = sql[11] if len(sql) > 11 else None  # citation_id 字段
                     
                     platform = ""
                     if record_id:
@@ -306,17 +308,22 @@ async def get_task_status(
                     key = (query, platform, sub_query)
                     if key not in summary_table:
                         summary_table[key] = set()
-                    if record_id:
-                        summary_table[key].add(record_id)
+                    
+                    # 使用 citation_id 去重：同一个 citation_id 只计算一次
+                    if citation_id:
+                        summary_table[key].add(citation_id)
+                    elif url:
+                        # 如果没有 citation_id，使用 url 作为去重依据（备用方案）
+                        summary_table[key].add(url)
                 
                 response_data["summary_table"] = [
                     {
                         "query": query,
                         "platform": platform,
                         "sub_query": sub_query,
-                        "count": len(record_ids)  # 统计不同的record_id数量（查询次数）
+                        "count": len(citation_ids)  # 统计不同的 citation_id 数量（真实关联的链接数）
                     }
-                    for (query, platform, sub_query), record_ids in summary_table.items()
+                    for (query, platform, sub_query), citation_ids in summary_table.items()
                 ]
                 
                 # 构建详细日志数据
@@ -332,6 +339,8 @@ async def get_task_status(
                     sub_query = ensure_utf8_string(sql[2]) if sql[2] and isinstance(sql[2], str) else (sql[2] or "")
                     url = ensure_utf8_string(url) if isinstance(url, str) else url
                     domain = ensure_utf8_string(sql[4]) if sql[4] and isinstance(sql[4], str) else (sql[4] or "")
+                    title = ensure_utf8_string(sql[5]) if sql[5] and isinstance(sql[5], str) else (sql[5] or "")
+                    snippet = ensure_utf8_string(sql[6]) if sql[6] and isinstance(sql[6], str) else (sql[6] or "")
                     created_at = sql[9]
                     record_id = sql[10]
                     
@@ -357,7 +366,9 @@ async def get_task_status(
                         "sub_query": sub_query,
                         "time": created_at.isoformat() if created_at else None,
                         "domain": domain,
-                        "url": url
+                        "url": url,
+                        "title": title,
+                        "snippet": snippet
                     })
                 
                 response_data["detail_logs"] = detail_logs
@@ -587,7 +598,7 @@ async def get_task_status(
                         cur.execute(f"""
                             SELECT esql.id, esql.task_query_id, esql.sub_query, esql.url, esql.domain, 
                                    esql.title, esql.snippet, esql.site_name, esql.cite_index, esql.created_at,
-                                   esql.record_id
+                                   esql.record_id, esql.citation_id
                             FROM executor_sub_query_log esql
                             WHERE esql.task_query_id IN ({placeholders_sql})
                             ORDER BY esql.task_query_id, esql.created_at
@@ -622,7 +633,7 @@ async def get_task_status(
                                     round_map[key][record_id] = round_num
                     
                     # 构建汇总表格数据：查询词、平台、sub_query、sub_query次数
-                    # 使用字典存储 (query, platform, sub_query) -> set(record_id) 来统计查询次数
+                    # 使用 citation_id 去重统计，确保每个 citation 对每个 sub_query 只计算一次
                     summary_table = {}
                     # 使用 (query, platform, sub_query) 作为 key
                     for sql in sub_query_logs:
@@ -635,6 +646,7 @@ async def get_task_status(
                         query = task_query_map.get(task_query_id, "")
                         sub_query = ensure_utf8_string(sql[2]) if sql[2] and isinstance(sql[2], str) else (sql[2] or "")
                         record_id = sql[10]  # record_id 字段
+                        citation_id = sql[11] if len(sql) > 11 else None  # citation_id 字段
                         
                         # 需要确定平台，通过 record_id 查询 search_records
                         platform = ""
@@ -661,8 +673,13 @@ async def get_task_status(
                         key = (query, platform, sub_query)
                         if key not in summary_table:
                             summary_table[key] = set()
-                        if record_id:
-                            summary_table[key].add(record_id)
+                        
+                        # 使用 citation_id 去重：同一个 citation_id 只计算一次
+                        if citation_id:
+                            summary_table[key].add(citation_id)
+                        elif url:
+                            # 如果没有 citation_id，使用 url 作为去重依据（备用方案）
+                            summary_table[key].add(url)
                     
                     # 转换为列表格式
                     summary_table_list = [
@@ -670,9 +687,9 @@ async def get_task_status(
                             "query": query,
                             "platform": platform,
                             "sub_query": sub_query,
-                            "count": len(record_ids)  # 统计不同的record_id数量（查询次数）
+                            "count": len(citation_ids)  # 统计不同的 citation_id 数量（真实关联的链接数）
                         }
-                        for (query, platform, sub_query), record_ids in summary_table.items()
+                        for (query, platform, sub_query), citation_ids in summary_table.items()
                     ]
                     
                     # 构建详细日志数据：task_id、查询词、轮次、平台、sub_query、时间、域名、网址超链
@@ -688,6 +705,8 @@ async def get_task_status(
                         sub_query = ensure_utf8_string(sql[2]) if sql[2] and isinstance(sql[2], str) else (sql[2] or "")
                         url = ensure_utf8_string(url) if isinstance(url, str) else url
                         domain = ensure_utf8_string(sql[4]) if sql[4] and isinstance(sql[4], str) else (sql[4] or "")
+                        title = ensure_utf8_string(sql[5]) if sql[5] and isinstance(sql[5], str) else (sql[5] or "")
+                        snippet = ensure_utf8_string(sql[6]) if sql[6] and isinstance(sql[6], str) else (sql[6] or "")
                         created_at = sql[9]
                         record_id = sql[10]
                         
@@ -715,7 +734,9 @@ async def get_task_status(
                             "sub_query": sub_query,
                             "time": created_at.isoformat() if created_at else None,
                             "domain": domain,
-                            "url": url
+                            "url": url,
+                            "title": title,
+                            "snippet": snippet
                         })
                     
                     tasks_data.append({
@@ -733,6 +754,31 @@ async def get_task_status(
                 
                 return StatusResponse(status="multiple", data={"tasks": tasks_data})
             
+    except psycopg2.errors.UndefinedTable as e:
+        # 处理表不存在的情况，返回友好的错误信息
+        error_msg = str(e)
+        if "task_jobs" in error_msg:
+            logger.warning(f"数据库表 task_jobs 不存在，可能需要执行数据库迁移: {e}")
+            return StatusResponse(
+                status="none",
+                data={
+                    "error": True,
+                    "error_type": "table_not_found",
+                    "message": "数据库表 task_jobs 不存在，请检查数据库迁移状态",
+                    "detail": "请运行数据库迁移脚本以创建必要的表结构"
+                }
+            )
+        else:
+            logger.error(f"数据库表不存在: {e}", exc_info=True)
+            return StatusResponse(
+                status="none",
+                data={
+                    "error": True,
+                    "error_type": "table_not_found",
+                    "message": f"数据库表不存在: {str(e)}",
+                    "detail": "请检查数据库迁移状态"
+                }
+            )
     except Exception as e:
         logger.error(f"查询任务状态失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"查询任务状态失败: {str(e)}")

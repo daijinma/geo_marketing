@@ -65,6 +65,7 @@ logs/
 .env
 .env.local
 .env.*.local
+.env.development
 
 # Temporary files
 *.tmp

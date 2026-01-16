@@ -3,12 +3,15 @@ import logging
 import yaml
 import time
 from dotenv import load_dotenv
+import os
 from core.parser import extract_domain
 from core.db import get_db_connection, update_domain_stats
 from providers.deepseek_web import DeepSeekWebProvider
 from providers.doubao_web import DoubaoWebProvider
 
-load_dotenv()
+# 根据 ENV_FILE 环境变量加载不同的 .env 文件
+env_file = os.getenv("ENV_FILE", ".env")
+load_dotenv(env_file)
 
 logging.basicConfig(
     level=logging.INFO,

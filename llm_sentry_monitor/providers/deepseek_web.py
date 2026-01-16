@@ -111,7 +111,8 @@ class DeepSeekWebProvider(BaseProvider):
                                                                     "title": r.get('title', r.get('name', '')),
                                                                     "snippet": r.get('snippet', r.get('description', '')),
                                                                     "site_name": r.get('site_name', r.get('source', '')),
-                                                                    "cite_index": r.get('cite_index', r.get('index', 0))
+                                                                    "cite_index": r.get('cite_index', r.get('index', 0)),
+                                                                    "query_indexes": r.get('query_indexes', [])
                                                                 })
                                                                 self.logger.info(f"[数据抓取] 网站: {url[:60]}... (域名: {domain})")
                                                         
@@ -135,7 +136,8 @@ class DeepSeekWebProvider(BaseProvider):
                                                                 "title": r.get('title', r.get('name', '')),
                                                                 "snippet": r.get('snippet', r.get('description', '')),
                                                                 "site_name": r.get('site_name', r.get('source', '')),
-                                                                "cite_index": r.get('cite_index', r.get('index', 0))
+                                                                "cite_index": r.get('cite_index', r.get('index', 0)),
+                                                                "query_indexes": r.get('query_indexes', [])
                                                             })
                                                             self.logger.info(f"从 API 增量更新捕获网站: {url[:60]}... (域名: {domain}, cite_index: {r.get('cite_index', 0)})")
                                                     
@@ -170,7 +172,8 @@ class DeepSeekWebProvider(BaseProvider):
                                                         "title": r.get('title', r.get('name', '')),
                                                         "snippet": r.get('snippet', r.get('description', '')),
                                                         "site_name": r.get('site_name', r.get('source', '')),
-                                                        "cite_index": r.get('cite_index', r.get('index', 0))
+                                                        "cite_index": r.get('cite_index', r.get('index', 0)),
+                                                        "query_indexes": r.get('query_indexes', [])
                                                     })
                                                     self.logger.info(f"从 SSE (results字段) 提取到网站: {url[:60]}... (域名: {domain})")
                                             
@@ -240,7 +243,8 @@ class DeepSeekWebProvider(BaseProvider):
                                                 "title": r.get('title', ''),
                                                 "snippet": r.get('snippet', ''),
                                                 "site_name": r.get('site_name', r.get('source', '')),
-                                                "cite_index": r.get('cite_index', r.get('index', 0))
+                                                "cite_index": r.get('cite_index', r.get('index', 0)),
+                                                "query_indexes": r.get('query_indexes', [])
                                             })
                                             self.logger.info(f"从 JSON 响应提取到网站: {url[:60]}... (域名: {domain})")
                                     
@@ -793,7 +797,8 @@ class DeepSeekWebProvider(BaseProvider):
                             "title": result.get('title', ''),
                             "snippet": result.get('snippet', ''),
                             "site_name": result.get('site_name', ''),
-                            "cite_index": result.get('cite_index', 0)
+                            "cite_index": result.get('cite_index', 0),
+                            "query_indexes": result.get('query_indexes', [])  # 保留 query_indexes 字段
                         })
                 
                 # 按 cite_index 排序

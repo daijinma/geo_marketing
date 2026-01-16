@@ -252,7 +252,8 @@ class DoubaoWebProvider(BaseProvider):
                                                                                             "title": ensure_utf8_string(text_card.get('title', ''), self.logger),
                                                                                             "snippet": ensure_utf8_string(text_card.get('summary', ''), self.logger),
                                                                                             "site_name": ensure_utf8_string(text_card.get('sitename', ''), self.logger),
-                                                                                            "cite_index": text_card.get('index', r.get('index', 0))
+                                                                                            "cite_index": text_card.get('index', r.get('index', 0)),
+                                                                                            "query_indexes": r.get('query_indexes', text_card.get('query_indexes', []))
                                                                                         })
                                                                                         self.logger.info(f"         🔗 捕获网页引用 #{r_idx+1}: {url[:80]}... (cite_index: {text_card.get('index', 0)})")
                                                                                         self.logger.info(f"            标题: {text_card.get('title', '')[:50]}...")
@@ -267,7 +268,8 @@ class DoubaoWebProvider(BaseProvider):
                                                                                             "title": ensure_utf8_string(video_card.get('title', video_card.get('description', '')), self.logger),
                                                                                             "snippet": ensure_utf8_string(video_card.get('description', video_card.get('summary', '')), self.logger),
                                                                                             "site_name": ensure_utf8_string(video_card.get('platform', 'video'), self.logger),
-                                                                                            "cite_index": video_card.get('index', r.get('index', 0))
+                                                                                            "cite_index": video_card.get('index', r.get('index', 0)),
+                                                                                            "query_indexes": r.get('query_indexes', video_card.get('query_indexes', []))
                                                                                         })
                                                                                         self.logger.info(f"         🎬 捕获视频引用 #{r_idx+1}: {video_url[:80]}... (cite_index: {video_card.get('index', 0)})")
                                                                                         self.logger.info(f"            平台: {video_card.get('platform', 'unknown')}")
@@ -340,7 +342,8 @@ class DoubaoWebProvider(BaseProvider):
                                                                     "title": ensure_utf8_string(r.get('title', r.get('name', '')), self.logger),
                                                                     "snippet": ensure_utf8_string(r.get('snippet', r.get('content', r.get('description', ''))), self.logger),
                                                                     "site_name": ensure_utf8_string(r.get('site_name', r.get('source', r.get('domain', ''))), self.logger),
-                                                                    "cite_index": r.get('cite_index', r.get('index', r.get('order', 0)))
+                                                                    "cite_index": r.get('cite_index', r.get('index', r.get('order', 0))),
+                                                                    "query_indexes": r.get('query_indexes', [])
                                                                 })
                                             
                                             # 提取回答内容（多种可能的字段名）
@@ -394,7 +397,8 @@ class DoubaoWebProvider(BaseProvider):
                                                 "title": ensure_utf8_string(r.get('title', ''), self.logger),
                                                 "snippet": ensure_utf8_string(r.get('snippet', ''), self.logger),
                                                 "site_name": ensure_utf8_string(r.get('source', ''), self.logger),
-                                                "cite_index": r.get('index', 0)
+                                                "cite_index": r.get('index', 0),
+                                                "query_indexes": r.get('query_indexes', [])
                                             })
                         except Exception as e:
                             self.logger.debug(f"解析 JSON 响应失败: {e}")

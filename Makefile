@@ -1,6 +1,6 @@
 VENV = .venv
 
-.PHONY: setup db-up db-down db-logs db-reset db-upgrade run install sync playwright-install dev stats stats-full status clean help
+.PHONY: setup db-up db-down db-logs db-reset db-upgrade run install sync playwright-install dev dev2 stats stats-full status clean help
 
 help:
 	@echo "LLM Sentry 开发指令集:"
@@ -14,7 +14,8 @@ help:
 	@echo "  make sync            - 同步依赖（检查并安装缺失的库）"
 	@echo "  make playwright-install - 安装 Playwright 浏览器"
 	@echo "  make run             - 执行 GEO 监测任务"
-	@echo "  make dev             - 启动 API 开发服务器"
+	@echo "  make run             - 启动 API 开发服务器"
+	@echo "  make dev            - 启动 API 开发服务器（使用 .env.development）"
 	@echo "  make stats           - 生成基础深度洞察报告（简单版）"
 	@echo "  make stats-full      - 生成完整深度洞察报告（包含所有分析维度）"
 	@echo "  make status          - 查看服务状态"
@@ -59,10 +60,16 @@ playwright-install:
 	@echo "✅ Playwright 浏览器安装完成"
 
 # 启动开发服务器：先执行 sync 确保库是最新的
-dev:
+run:
 	@echo "正在启动服务..."
 	@lsof -ti:8000 | xargs kill -9 2>/dev/null || true
 	cd llm_sentry_monitor && PYTHONPATH=. uv run python api.py
+
+# 启动开发服务器（dev2模式）：使用 .env.development 配置文件
+dev:
+	@echo "正在启动服务（dev2模式，使用 .env.development）..."
+	@lsof -ti:8000 | xargs kill -9 2>/dev/null || true
+	cd llm_sentry_monitor && ENV_FILE=.env.development PYTHONPATH=. uv run python api.py
 
 stats:
 	cd llm_sentry_monitor && uv run python stats.py

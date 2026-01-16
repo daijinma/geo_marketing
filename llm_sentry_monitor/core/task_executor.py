@@ -124,12 +124,12 @@ def save_to_db(keyword, platform, prompt, result, prompt_type="default", respons
             
             # 4. 如果提供了 task_query_id，保存到 executor_sub_query_log 表
             # 合并策略：取消 A 类型（只有 sub_query），合并到 B 类型（有 url）
-            # 为每个 citation 与每个 query 的组合创建记录
+            # 根据 citation 的 query_indexes 字段建立真实关联
             if task_query_id and result:
                 queries = result.get("queries", [])
                 citations = result.get("citations", [])
                 
-                # 保存网址信息，关联对应的 queries
+                # 保存网址信息，根据 query_indexes 关联对应的 query
                 # 如果 citations 为空但 queries 不为空，则不保存（取消 A 类型）
                 for cite in citations:
                     url = cite.get("url", "")
@@ -146,29 +146,36 @@ def save_to_db(keyword, platform, prompt, result, prompt_type="default", respons
                     site_name = ensure_utf8_string(cite.get("site_name", "")) if isinstance(cite.get("site_name", ""), str) else cite.get("site_name", "")
                     cite_index = cite.get("cite_index", 0)
                     
-                    # 如果有 queries，为每个 query 创建一条记录
-                    if queries:
-                        for query in queries:
+                    # 根据 query_indexes 获取对应的 query
+                    # query_indexes[0] 表示关联到 queries 数组的第几个 query（索引从 0 开始）
+                    sub_query = None
+                    query_indexes = cite.get("query_indexes", [])
+                    
+                    if queries and query_indexes and len(query_indexes) > 0:
+                        # 有明确的 query_indexes，按索引关联（DeepSeek 等情况）
+                        query_idx = query_indexes[0]  # 只使用第一个索引
+                        # 检查索引有效性
+                        if isinstance(query_idx, int) and 0 <= query_idx < len(queries):
+                            query = queries[query_idx]
                             if query:
-                                query = ensure_utf8_string(query) if isinstance(query, str) else query
-                                try:
-                                    cur.execute("""
-                                        INSERT INTO executor_sub_query_log 
-                                        (task_query_id, sub_query, record_id, url, domain, title, snippet, site_name, cite_index, citation_id)
-                                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                                    """, (task_query_id, query, record_id, url, domain, title, snippet, site_name, cite_index, citation_id))
-                                except Exception as e:
-                                    logger.debug(f"插入网址信息失败: {e}")
-                    else:
-                        # 如果没有 queries，仍然保存 citation，但 sub_query 为 NULL（向后兼容）
-                        try:
-                            cur.execute("""
-                                INSERT INTO executor_sub_query_log 
-                                (task_query_id, sub_query, record_id, url, domain, title, snippet, site_name, cite_index, citation_id)
-                                VALUES (%s, NULL, %s, %s, %s, %s, %s, %s, %s, %s)
-                            """, (task_query_id, record_id, url, domain, title, snippet, site_name, cite_index, citation_id))
-                        except Exception as e:
-                            logger.debug(f"插入网址信息失败: {e}")
+                                sub_query = ensure_utf8_string(query) if isinstance(query, str) else query
+                    elif queries and len(queries) == 1:
+                        # 没有 query_indexes，但只有一个 query（豆包等情况）
+                        # 认为所有链接都参考此 query
+                        query = queries[0]
+                        if query:
+                            sub_query = ensure_utf8_string(query) if isinstance(query, str) else query
+                    # 其他情况（没有 query_indexes 且 queries 不为 1 个）：保持现状，sub_query 为 NULL
+                    
+                    # 保存记录（每个 citation 只保存一次）
+                    try:
+                        cur.execute("""
+                            INSERT INTO executor_sub_query_log 
+                            (task_query_id, sub_query, record_id, url, domain, title, snippet, site_name, cite_index, citation_id)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """, (task_query_id, sub_query, record_id, url, domain, title, snippet, site_name, cite_index, citation_id))
+                    except Exception as e:
+                        logger.debug(f"插入网址信息失败: {e}")
             
             logger.info(f"✅ 成功保存 {platform} 的数据，记录 ID: {record_id}")
             logger.info(f"  - 拓展词: {len(result.get('queries', []))} 个")

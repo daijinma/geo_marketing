@@ -6,8 +6,11 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from contextlib import contextmanager
 from dotenv import load_dotenv
+import os
 
-load_dotenv()
+# 根据 ENV_FILE 环境变量加载不同的 .env 文件
+env_file = os.getenv("ENV_FILE", ".env")
+load_dotenv(env_file)
 
 DB_CONFIG = {
     "host": os.getenv("DB_HOST", "localhost"),
