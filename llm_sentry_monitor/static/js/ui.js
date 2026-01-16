@@ -1007,11 +1007,13 @@ function renderTableResults(summaryTableData, container) {
     const tbody = document.createElement('tbody');
     summaryTableData.forEach(row => {
         const tr = document.createElement('tr');
+        // 对于 count 为 0 且 sub_query 存在的记录，显示特殊标记 "-"
+        const countDisplay = (row.count === 0 && row.sub_query) ? '-' : (row.count || 0);
         tr.innerHTML = `
             <td>${escapeHtml(row.query || '')}</td>
             <td>${escapeHtml(row.platform || '')}</td>
             <td>${escapeHtml(row.sub_query || '')}</td>
-            <td>${row.count || 0}</td>
+            <td>${countDisplay}</td>
         `;
         tbody.appendChild(tr);
     });
@@ -1036,13 +1038,13 @@ function renderDetailLogs(detailLogs, container) {
     logsContainer.className = 'detail-logs-container';
     
     detailLogs.forEach(log => {
-        // 过滤：只显示有 url 的记录（过滤掉 A 类型，虽然后端已过滤，但作为保险）
-        if (!log.url) {
-            return; // 跳过没有 url 的记录
-        }
-        
         const logItem = document.createElement('div');
         logItem.className = 'detail-log-item';
+        
+        // 对于没有 URL 的记录，显示特殊标记
+        const urlDisplay = log.url 
+            ? `<a href="${escapeHtml(log.url)}" target="_blank" rel="noopener noreferrer" class="detail-log-link">${escapeHtml(log.url)}</a>`
+            : '网址: 无关联网页';
         
         const parts = [
             `任务ID: ${log.task_id || ''}`,
@@ -1051,10 +1053,10 @@ function renderDetailLogs(detailLogs, container) {
             `平台: ${escapeHtml(log.platform || '')}`,
             `Sub Query: ${escapeHtml(log.sub_query || '')}`,
             `时间: ${log.time || 'N/A'}`,
-            `域名: ${escapeHtml(log.domain || '')}`,
+            `域名: ${escapeHtml(log.domain || 'N/A')}`,
             `标题: ${escapeHtml(log.title || 'N/A')}`,
             `摘要: ${escapeHtml(log.snippet || 'N/A')}`,
-            log.url ? `<a href="${escapeHtml(log.url)}" target="_blank" rel="noopener noreferrer" class="detail-log-link">${escapeHtml(log.url)}</a>` : '网址: N/A'
+            urlDisplay
         ];
         
         logItem.innerHTML = parts.join(' | ');

@@ -123,14 +123,15 @@ def save_to_db(keyword, platform, prompt, result, prompt_type="default", respons
                     logger.debug(f"插入引用失败: {e}")
             
             # 4. 如果提供了 task_query_id，保存到 executor_sub_query_log 表
-            # 合并策略：取消 A 类型（只有 sub_query），合并到 B 类型（有 url）
-            # 根据 citation 的 query_indexes 字段建立真实关联
+            # 保存策略：
+            # - 有 URL 的记录：根据 query_indexes 关联对应的 query
+            # - 只有 sub_query 没有 URL 的记录：也需要保存（用于汇总表格显示）
             if task_query_id and result:
                 queries = result.get("queries", [])
                 citations = result.get("citations", [])
                 
-                # 保存网址信息，根据 query_indexes 关联对应的 query
-                # 如果 citations 为空但 queries 不为空，则不保存（取消 A 类型）
+                # 保存有 URL 的记录，根据 query_indexes 关联对应的 query
+                saved_sub_queries = set()  # 记录已保存的 sub_query（用于去重）
                 for cite in citations:
                     url = cite.get("url", "")
                     if not url:
@@ -167,6 +168,10 @@ def save_to_db(keyword, platform, prompt, result, prompt_type="default", respons
                             sub_query = ensure_utf8_string(query) if isinstance(query, str) else query
                     # 其他情况（没有 query_indexes 且 queries 不为 1 个）：保持现状，sub_query 为 NULL
                     
+                    # 记录已保存的 sub_query
+                    if sub_query:
+                        saved_sub_queries.add(sub_query)
+                    
                     # 保存记录（每个 citation 只保存一次）
                     try:
                         cur.execute("""
@@ -176,6 +181,26 @@ def save_to_db(keyword, platform, prompt, result, prompt_type="default", respons
                         """, (task_query_id, sub_query, record_id, url, domain, title, snippet, site_name, cite_index, citation_id))
                     except Exception as e:
                         logger.debug(f"插入网址信息失败: {e}")
+                
+                # 保存只有 sub_query 没有 URL 的记录（用于汇总表格显示）
+                # 只保存那些没有关联到任何 URL 的 sub_query
+                if queries:
+                    for query in queries:
+                        if not query:
+                            continue
+                        sub_query = ensure_utf8_string(query) if isinstance(query, str) else query
+                        # 如果这个 sub_query 已经通过 URL 记录保存过了，跳过
+                        if sub_query in saved_sub_queries:
+                            continue
+                        # 保存只有 sub_query 没有 URL 的记录
+                        try:
+                            cur.execute("""
+                                INSERT INTO executor_sub_query_log 
+                                (task_query_id, sub_query, record_id, url, domain, title, snippet, site_name, cite_index, citation_id)
+                                VALUES (%s, %s, %s, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
+                            """, (task_query_id, sub_query, record_id))
+                        except Exception as e:
+                            logger.debug(f"插入无URL的sub_query失败: {e}")
             
             logger.info(f"✅ 成功保存 {platform} 的数据，记录 ID: {record_id}")
             logger.info(f"  - 拓展词: {len(result.get('queries', []))} 个")

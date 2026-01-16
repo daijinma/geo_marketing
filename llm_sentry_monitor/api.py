@@ -18,6 +18,24 @@ from core.task_executor import execute_task_job
 from providers.bocha_api import BochaApiProvider
 from providers.doubao_web import ensure_utf8_string
 
+
+def get_doubao_query_tokens(results_by_platform):
+    """
+    从 results_by_platform 中获取豆包的 query_tokens 合集
+    返回逗号分隔的字符串
+    """
+    doubao_data = results_by_platform.get("doubao") or results_by_platform.get("豆包")
+    if not doubao_data:
+        return None
+    
+    query_tokens = doubao_data.get("query_tokens", [])
+    if not query_tokens:
+        return None
+    
+    # 提取所有 query，用逗号连接
+    queries = [token.get("query", "") for token in query_tokens if token.get("query")]
+    return ", ".join(queries) if queries else None
+
 # 配置日志
 logging.basicConfig(
     level=logging.INFO,
@@ -272,118 +290,12 @@ async def get_task_status(
                                     round_map[key] = {}
                                 round_map[key][record_id] = round_num
                 
-                # 构建汇总表格数据
-                # 使用 citation_id 去重统计，确保每个 citation 对每个 sub_query 只计算一次
-                summary_table = {}
-                for sql in sub_query_logs:
-                    # 过滤：只处理有 url 的记录（过滤掉 A 类型，取消单独保存的 sub_query）
-                    url = sql[3]  # url 字段
-                    if not url:
-                        continue  # 跳过没有 url 的记录
-                    
-                    task_query_id = sql[1]
-                    query = task_query_map.get(task_query_id, "")
-                    sub_query = ensure_utf8_string(sql[2]) if sql[2] and isinstance(sql[2], str) else (sql[2] or "")
-                    record_id = sql[10]  # record_id 字段
-                    citation_id = sql[11] if len(sql) > 11 else None  # citation_id 字段
-                    
-                    platform = ""
-                    if record_id:
-                        cur.execute("""
-                            SELECT platform FROM search_records WHERE id = %s LIMIT 1
-                        """, (record_id,))
-                        platform_row = cur.fetchone()
-                        if platform_row:
-                            platform = ensure_utf8_string(platform_row[0]) if isinstance(platform_row[0], str) else platform_row[0]
-                    
-                    if not platform and task_query_id:
-                        cur.execute("""
-                            SELECT DISTINCT platform FROM search_records 
-                            WHERE task_id = %s AND task_query_id = %s LIMIT 1
-                        """, (task_id, task_query_id))
-                        platform_row = cur.fetchone()
-                        if platform_row:
-                            platform = ensure_utf8_string(platform_row[0]) if isinstance(platform_row[0], str) else platform_row[0]
-                    
-                    key = (query, platform, sub_query)
-                    if key not in summary_table:
-                        summary_table[key] = set()
-                    
-                    # 使用 citation_id 去重：同一个 citation_id 只计算一次
-                    if citation_id:
-                        summary_table[key].add(citation_id)
-                    elif url:
-                        # 如果没有 citation_id，使用 url 作为去重依据（备用方案）
-                        summary_table[key].add(url)
-                
-                response_data["summary_table"] = [
-                    {
-                        "query": query,
-                        "platform": platform,
-                        "sub_query": sub_query,
-                        "count": len(citation_ids)  # 统计不同的 citation_id 数量（真实关联的链接数）
-                    }
-                    for (query, platform, sub_query), citation_ids in summary_table.items()
-                ]
-                
-                # 构建详细日志数据
-                detail_logs = []
-                for sql in sub_query_logs:
-                    # 过滤：只处理有 url 的记录（过滤掉 A 类型，取消单独保存的 sub_query）
-                    url = sql[3]  # url 字段
-                    if not url:
-                        continue  # 跳过没有 url 的记录
-                    
-                    task_query_id = sql[1]
-                    query = task_query_map.get(task_query_id, "")
-                    sub_query = ensure_utf8_string(sql[2]) if sql[2] and isinstance(sql[2], str) else (sql[2] or "")
-                    url = ensure_utf8_string(url) if isinstance(url, str) else url
-                    domain = ensure_utf8_string(sql[4]) if sql[4] and isinstance(sql[4], str) else (sql[4] or "")
-                    title = ensure_utf8_string(sql[5]) if sql[5] and isinstance(sql[5], str) else (sql[5] or "")
-                    snippet = ensure_utf8_string(sql[6]) if sql[6] and isinstance(sql[6], str) else (sql[6] or "")
-                    created_at = sql[9]
-                    record_id = sql[10]
-                    
-                    platform = ""
-                    round_num = None
-                    if record_id:
-                        cur.execute("""
-                            SELECT platform FROM search_records WHERE id = %s LIMIT 1
-                        """, (record_id,))
-                        platform_row = cur.fetchone()
-                        if platform_row:
-                            platform = ensure_utf8_string(platform_row[0]) if isinstance(platform_row[0], str) else platform_row[0]
-                            
-                            key = (task_query_id, platform.lower())
-                            if key in round_map and record_id in round_map[key]:
-                                round_num = round_map[key][record_id]
-                    
-                    detail_logs.append({
-                        "task_id": task_id,
-                        "query": query,
-                        "round": round_num,
-                        "platform": platform,
-                        "sub_query": sub_query,
-                        "time": created_at.isoformat() if created_at else None,
-                        "domain": domain,
-                        "url": url,
-                        "title": title,
-                        "snippet": snippet
-                    })
-                
-                response_data["detail_logs"] = detail_logs
-                
-                # 如果任务完成，添加结果
-                if status == "done" and result_data:
-                    response_data["results"] = result_data
-                
+                # 提前构建 results_by_platform（用于填充豆包的 sub_query）
                 # 查询内部查询的分词（保持向后兼容）
                 query_tokens = []
                 results_by_platform = {}
                 
                 # 计算总轮次数：关键词数 × 平台数 × 查询次数
-                # 每个 (keyword, platform) 组合会执行 query_count 轮
-                # 使用 task_query_ids 的长度（如果为空则使用 keywords 的长度作为备选）
                 num_keywords = len(task_query_ids) if task_query_ids else len(keywords) if keywords else 0
                 total_rounds = num_keywords * len(platforms) * query_count if num_keywords > 0 and platforms and query_count else 0
                 
@@ -445,9 +357,9 @@ async def get_task_status(
                         query_rows = []
                         
                         # 优先使用新的关联字段查询（通过 task_id 和 task_query_id）
-                        task_query_ids = [tq[0] for tq in task_queries]
-                        if task_query_ids:
-                            placeholders = ','.join(['%s'] * len(task_query_ids))
+                        task_query_ids_for_query = [tq[0] for tq in task_queries]
+                        if task_query_ids_for_query:
+                            placeholders = ','.join(['%s'] * len(task_query_ids_for_query))
                             # 使用新的关联字段查询，效率更高
                             query_sql = f"""
                                 SELECT DISTINCT sq.query, sq.record_id, sq.query_order, sq.id
@@ -459,7 +371,7 @@ async def get_task_status(
                                   AND sr.prompt_type = 'api_task'
                                 ORDER BY sq.query_order, sq.id
                             """
-                            cur.execute(query_sql, [task_id] + task_query_ids + [platform_lower])
+                            cur.execute(query_sql, [task_id] + task_query_ids_for_query + [platform_lower])
                             query_rows = cur.fetchall()
                         
                         # 如果没有结果，回退到旧的查询方式（向后兼容）
@@ -524,6 +436,158 @@ async def get_task_status(
                         
                         query_tokens.extend(platform_query_tokens)
                 
+                # 构建汇总表格数据
+                # 使用 citation_id 去重统计，确保每个 citation 对每个 sub_query 只计算一次
+                # 同时包含没有 URL 但有 sub_query 的记录（count 为 0）
+                summary_table = {}
+                for sql in sub_query_logs:
+                    url = sql[3]  # url 字段
+                    task_query_id = sql[1]
+                    query = task_query_map.get(task_query_id, "")
+                    sub_query = ensure_utf8_string(sql[2]) if sql[2] and isinstance(sql[2], str) else (sql[2] or "")
+                    
+                    # 如果没有 sub_query，跳过（根据表约束，至少要有 sub_query 或 url 之一）
+                    if not sub_query and not url:
+                        continue
+                    
+                    record_id = sql[10]  # record_id 字段
+                    citation_id = sql[11] if len(sql) > 11 else None  # citation_id 字段
+                    
+                    platform = ""
+                    if record_id:
+                        cur.execute("""
+                            SELECT platform FROM search_records WHERE id = %s LIMIT 1
+                        """, (record_id,))
+                        platform_row = cur.fetchone()
+                        if platform_row:
+                            platform = ensure_utf8_string(platform_row[0]) if isinstance(platform_row[0], str) else platform_row[0]
+                    
+                    if not platform and task_query_id:
+                        # 尝试从 task_query_id 关联的 search_records 中获取平台
+                        cur.execute("""
+                            SELECT DISTINCT platform FROM search_records 
+                            WHERE task_id = %s AND task_query_id = %s LIMIT 1
+                        """, (task_id, task_query_id))
+                        platform_row = cur.fetchone()
+                        if platform_row:
+                            platform = ensure_utf8_string(platform_row[0]) if isinstance(platform_row[0], str) else platform_row[0]
+                    
+                    # 如果仍然没有平台信息，且没有 record_id（只有 sub_query 没有 URL），
+                    # 尝试从 task_query_id 关联的所有 search_records 中查找所有可能的平台
+                    if not platform and not record_id and sub_query and task_query_id:
+                        cur.execute("""
+                            SELECT DISTINCT platform FROM search_records 
+                            WHERE task_id = %s AND task_query_id = %s
+                            ORDER BY platform
+                        """, (task_id, task_query_id))
+                        platform_rows = cur.fetchall()
+                        if platform_rows:
+                            # 如果找到了关联的平台，使用第一个（通常只有一个）
+                            platform = ensure_utf8_string(platform_rows[0][0]) if isinstance(platform_rows[0][0], str) else platform_rows[0][0]
+                        else:
+                            # 如果没有找到任何关联的 search_records，说明这个 sub_query 可能属于某个平台但没有关联记录
+                            # 在这种情况下，我们需要为所有可能的平台创建记录，确保每个平台的 sub_query 都能显示
+                            # 为每个平台创建一条记录
+                            for platform_name in platforms:
+                                platform_key = ensure_utf8_string(platform_name) if isinstance(platform_name, str) else platform_name
+                                key = (query, platform_key, sub_query)
+                                if key not in summary_table:
+                                    summary_table[key] = set()
+                                # 没有 URL 的记录，count 保持为 0
+                            # 跳过后续处理，因为已经为每个平台创建了记录
+                            continue
+                    
+                    # 对于豆包平台，如果 sub_query 为空，使用 results_by_platform 中的 query_tokens 填充
+                    platform_lower = platform.lower() if platform else ""
+                    if (platform_lower == "doubao" or platform_lower == "豆包") and not sub_query:
+                        doubao_queries = get_doubao_query_tokens(results_by_platform)
+                        if doubao_queries:
+                            sub_query = doubao_queries
+                    
+                    key = (query, platform, sub_query)
+                    if key not in summary_table:
+                        summary_table[key] = set()
+                    
+                    # 对于有 URL 的记录，使用 citation_id 或 url 去重统计
+                    if url:
+                        if citation_id:
+                            summary_table[key].add(citation_id)
+                        else:
+                            # 如果没有 citation_id，使用 url 作为去重依据（备用方案）
+                            summary_table[key].add(url)
+                    # 对于没有 URL 但有 sub_query 的记录，不添加到集合中（count 将保持为 0）
+                
+                response_data["summary_table"] = [
+                    {
+                        "query": query,
+                        "platform": platform,
+                        "sub_query": sub_query,
+                        "count": len(citation_ids)  # 统计不同的 citation_id 数量（真实关联的链接数），无 URL 的记录 count 为 0
+                    }
+                    for (query, platform, sub_query), citation_ids in summary_table.items()
+                ]
+                
+                # 构建详细日志数据
+                # 包含所有记录，包括没有 URL 但有 sub_query 的记录
+                detail_logs = []
+                for sql in sub_query_logs:
+                    url = sql[3]  # url 字段
+                    task_query_id = sql[1]
+                    query = task_query_map.get(task_query_id, "")
+                    sub_query = ensure_utf8_string(sql[2]) if sql[2] and isinstance(sql[2], str) else (sql[2] or "")
+                    
+                    # 如果没有 sub_query 也没有 url，跳过（根据表约束，至少要有其中之一）
+                    if not sub_query and not url:
+                        continue
+                    
+                    url = ensure_utf8_string(url) if url and isinstance(url, str) else (url or "")
+                    domain = ensure_utf8_string(sql[4]) if sql[4] and isinstance(sql[4], str) else (sql[4] or "")
+                    title = ensure_utf8_string(sql[5]) if sql[5] and isinstance(sql[5], str) else (sql[5] or "")
+                    snippet = ensure_utf8_string(sql[6]) if sql[6] and isinstance(sql[6], str) else (sql[6] or "")
+                    created_at = sql[9]
+                    record_id = sql[10]
+                    
+                    platform = ""
+                    round_num = None
+                    if record_id:
+                        cur.execute("""
+                            SELECT platform FROM search_records WHERE id = %s LIMIT 1
+                        """, (record_id,))
+                        platform_row = cur.fetchone()
+                        if platform_row:
+                            platform = ensure_utf8_string(platform_row[0]) if isinstance(platform_row[0], str) else platform_row[0]
+                            
+                            key = (task_query_id, platform.lower())
+                            if key in round_map and record_id in round_map[key]:
+                                round_num = round_map[key][record_id]
+                    
+                    # 对于豆包平台，如果 sub_query 为空，使用 results_by_platform 中的 query_tokens 填充
+                    platform_lower = platform.lower() if platform else ""
+                    if (platform_lower == "doubao" or platform_lower == "豆包") and not sub_query:
+                        doubao_queries = get_doubao_query_tokens(results_by_platform)
+                        if doubao_queries:
+                            sub_query = doubao_queries
+                    
+                    detail_logs.append({
+                        "task_id": task_id,
+                        "query": query,
+                        "round": round_num,
+                        "platform": platform,
+                        "sub_query": sub_query,
+                        "time": created_at.isoformat() if created_at else None,
+                        "domain": domain,
+                        "url": url,
+                        "title": title,
+                        "snippet": snippet
+                    })
+                
+                response_data["detail_logs"] = detail_logs
+                
+                # 如果任务完成，添加结果
+                if status == "done" and result_data:
+                    response_data["results"] = result_data
+                
+                # results_by_platform 已经在前面构建完成，直接添加到响应中
                 if query_tokens:
                     response_data["query_tokens"] = query_tokens
                 
@@ -632,19 +696,56 @@ async def get_task_status(
                                         round_map[key] = {}
                                     round_map[key][record_id] = round_num
                     
+                    # 为当前任务构建 results_by_platform（用于填充豆包的 sub_query）
+                    task_results_by_platform = {}
+                    if keywords and platforms:
+                        for platform in platforms:
+                            platform_lower = platform.lower()
+                            platform_query_tokens = []
+                            
+                            # 查询该平台的 query_tokens
+                            if task_query_ids:
+                                placeholders_query = ','.join(['%s'] * len(task_query_ids))
+                                cur.execute(f"""
+                                    SELECT DISTINCT sq.query, sq.record_id, sq.query_order, sq.id
+                                    FROM search_queries sq
+                                    INNER JOIN search_records sr ON sq.record_id = sr.id
+                                    WHERE sr.task_id = %s 
+                                      AND sr.task_query_id IN ({placeholders_query})
+                                      AND sr.platform = %s
+                                      AND sr.prompt_type = 'api_task'
+                                    ORDER BY sq.query_order, sq.id
+                                """, [task_id] + task_query_ids + [platform_lower])
+                                query_rows = cur.fetchall()
+                                
+                                for row in query_rows:
+                                    query = row[0]
+                                    if query:
+                                        query = ensure_utf8_string(query)
+                                        platform_query_tokens.append({
+                                            "query": query,
+                                            "citations": []  # 简化版本，不包含 citations
+                                        })
+                            
+                            task_results_by_platform[platform_lower] = {
+                                "query_tokens": platform_query_tokens
+                            }
+                    
                     # 构建汇总表格数据：查询词、平台、sub_query、sub_query次数
                     # 使用 citation_id 去重统计，确保每个 citation 对每个 sub_query 只计算一次
+                    # 同时包含没有 URL 但有 sub_query 的记录（count 为 0）
                     summary_table = {}
                     # 使用 (query, platform, sub_query) 作为 key
                     for sql in sub_query_logs:
-                        # 过滤：只处理有 url 的记录（过滤掉 A 类型，取消单独保存的 sub_query）
                         url = sql[3]  # url 字段
-                        if not url:
-                            continue  # 跳过没有 url 的记录
-                        
                         task_query_id = sql[1]
                         query = task_query_map.get(task_query_id, "")
                         sub_query = ensure_utf8_string(sql[2]) if sql[2] and isinstance(sql[2], str) else (sql[2] or "")
+                        
+                        # 如果没有 sub_query，跳过（根据表约束，至少要有 sub_query 或 url 之一）
+                        if not sub_query and not url:
+                            continue
+                        
                         record_id = sql[10]  # record_id 字段
                         citation_id = sql[11] if len(sql) > 11 else None  # citation_id 字段
                         
@@ -670,16 +771,25 @@ async def get_task_status(
                                 if platform_row:
                                     platform = ensure_utf8_string(platform_row[0]) if isinstance(platform_row[0], str) else platform_row[0]
                         
+                        # 对于豆包平台，如果 sub_query 为空，使用 task_results_by_platform 中的 query_tokens 填充
+                        platform_lower = platform.lower() if platform else ""
+                        if (platform_lower == "doubao" or platform_lower == "豆包") and not sub_query:
+                            doubao_queries = get_doubao_query_tokens(task_results_by_platform)
+                            if doubao_queries:
+                                sub_query = doubao_queries
+                        
                         key = (query, platform, sub_query)
                         if key not in summary_table:
                             summary_table[key] = set()
                         
-                        # 使用 citation_id 去重：同一个 citation_id 只计算一次
-                        if citation_id:
-                            summary_table[key].add(citation_id)
-                        elif url:
-                            # 如果没有 citation_id，使用 url 作为去重依据（备用方案）
-                            summary_table[key].add(url)
+                        # 对于有 URL 的记录，使用 citation_id 或 url 去重统计
+                        if url:
+                            if citation_id:
+                                summary_table[key].add(citation_id)
+                            else:
+                                # 如果没有 citation_id，使用 url 作为去重依据（备用方案）
+                                summary_table[key].add(url)
+                        # 对于没有 URL 但有 sub_query 的记录，不添加到集合中（count 将保持为 0）
                     
                     # 转换为列表格式
                     summary_table_list = [
@@ -687,23 +797,25 @@ async def get_task_status(
                             "query": query,
                             "platform": platform,
                             "sub_query": sub_query,
-                            "count": len(citation_ids)  # 统计不同的 citation_id 数量（真实关联的链接数）
+                            "count": len(citation_ids)  # 统计不同的 citation_id 数量（真实关联的链接数），无 URL 的记录 count 为 0
                         }
                         for (query, platform, sub_query), citation_ids in summary_table.items()
                     ]
                     
                     # 构建详细日志数据：task_id、查询词、轮次、平台、sub_query、时间、域名、网址超链
+                    # 包含所有记录，包括没有 URL 但有 sub_query 的记录
                     detail_logs = []
                     for sql in sub_query_logs:
-                        # 过滤：只处理有 url 的记录（过滤掉 A 类型，取消单独保存的 sub_query）
                         url = sql[3]  # url 字段
-                        if not url:
-                            continue  # 跳过没有 url 的记录
-                        
                         task_query_id = sql[1]
                         query = task_query_map.get(task_query_id, "")
                         sub_query = ensure_utf8_string(sql[2]) if sql[2] and isinstance(sql[2], str) else (sql[2] or "")
-                        url = ensure_utf8_string(url) if isinstance(url, str) else url
+                        
+                        # 如果没有 sub_query 也没有 url，跳过（根据表约束，至少要有其中之一）
+                        if not sub_query and not url:
+                            continue
+                        
+                        url = ensure_utf8_string(url) if url and isinstance(url, str) else (url or "")
                         domain = ensure_utf8_string(sql[4]) if sql[4] and isinstance(sql[4], str) else (sql[4] or "")
                         title = ensure_utf8_string(sql[5]) if sql[5] and isinstance(sql[5], str) else (sql[5] or "")
                         snippet = ensure_utf8_string(sql[6]) if sql[6] and isinstance(sql[6], str) else (sql[6] or "")
@@ -725,6 +837,13 @@ async def get_task_status(
                                 key = (task_query_id, platform.lower())
                                 if key in round_map and record_id in round_map[key]:
                                     round_num = round_map[key][record_id]
+                        
+                        # 对于豆包平台，如果 sub_query 为空，使用 task_results_by_platform 中的 query_tokens 填充
+                        platform_lower = platform.lower() if platform else ""
+                        if (platform_lower == "doubao" or platform_lower == "豆包") and not sub_query:
+                            doubao_queries = get_doubao_query_tokens(task_results_by_platform)
+                            if doubao_queries:
+                                sub_query = doubao_queries
                         
                         detail_logs.append({
                             "task_id": task_id,
