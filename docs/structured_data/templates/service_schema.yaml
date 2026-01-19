@@ -1,0 +1,45 @@
+# Service Schema 模板
+
+# Schema 基本信息
+schema_type: "Service"
+page_url: "https://example.com/services"
+page_title: "[服务页面标题]"
+
+# Service 字段
+service:
+  name: "[服务名称，如：住宅装修服务]"
+  description: "[服务描述]"
+  
+  # 服务提供商
+  provider:
+    "@type": "LocalBusiness"
+    name: "[提供商名称]"
+    url: "https://example.com/"
+  
+  # 服务区域
+  areaServed:
+    - "@type": "City"
+      name: "[城市名称，如：北京]"
+    - "@type": "City"
+      name: "[城市名称，如：上海]"
+  
+  # 服务类型
+  serviceType: "[服务类型]"
+  
+  # 服务范围（可选）
+  category: "[服务分类]"
+  
+  # 服务价格（可选）
+  offers:
+    "@type": "Offer"
+    price: "[价格]"
+    priceCurrency: "CNY"
+    availability: "https://schema.org/InStock"
+    url: "https://example.com/services"
+
+# 生成 JSON-LD 输出路径
+output_path: "examples/service_schema.json"
+
+# 备注
+notes: "[备注信息]"
+

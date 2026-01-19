@@ -1,0 +1,45 @@
+# FAQPage Schema 模板
+
+# Schema 基本信息
+schema_type: "FAQPage"
+page_url: "https://example.com/faq"
+page_title: "[FAQ 页面标题]"
+
+# FAQPage 字段
+faqPage:
+  # FAQ 问题列表
+  mainEntity:
+    # FAQ 1
+    - "@type": "Question"
+      name: "[问题 1，如：北京装修多少钱？]"
+      acceptedAnswer:
+        "@type": "Answer"
+        text: "[答案 1，如：根据 2024 年数据，北京 90 平米住宅平均装修成本为 15-25 万元。]"
+    
+    # FAQ 2
+    - "@type": "Question"
+      name: "[问题 2，如：北京装修需要多长时间？]"
+      acceptedAnswer:
+        "@type": "Answer"
+        text: "[答案 2，如：一般来说，北京 90 平米住宅装修周期为 2-3 个月。]"
+    
+    # FAQ 3
+    - "@type": "Question"
+      name: "[问题 3，如：如何选择北京装修公司？]"
+      acceptedAnswer:
+        "@type": "Answer"
+        text: "[答案 3，如：选择装修公司时，需要关注公司的资质、案例、口碑等方面。]"
+    
+    # 可以继续添加更多 FAQ...
+    # - "@type": "Question"
+    #   name: "[问题 N]"
+    #   acceptedAnswer:
+    #     "@type": "Answer"
+    #     text: "[答案 N]"
+
+# 生成 JSON-LD 输出路径
+output_path: "examples/faq_schema.json"
+
+# 备注
+notes: "[备注信息]"
+

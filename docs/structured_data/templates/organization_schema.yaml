@@ -1,0 +1,47 @@
+# Organization Schema 模板
+
+# Schema 基本信息
+schema_type: "Organization"
+page_url: "https://example.com/"
+page_title: "[网站标题]"
+
+# Organization 字段
+organization:
+  name: "[组织名称，如：北京XX装修公司]"
+  url: "https://example.com/"
+  logo: "https://example.com/logo.png"
+  description: "[组织描述]"
+  
+  # 联系方式
+  contactPoint:
+    - contactType: "customer service"
+      telephone: "+86-010-12345678"
+      email: "contact@example.com"
+      availableLanguage: ["zh-CN", "en"]
+  
+  # 社交媒体链接
+  sameAs:
+    - "https://weibo.com/xxx"
+    - "https://zhihu.com/xxx"
+    - "https://www.douyin.com/user/xxx"
+  
+  # 地址
+  address:
+    addressType: "PostalAddress"
+    streetAddress: "[街道地址]"
+    addressLocality: "[城市，如：北京]"
+    addressRegion: "[省份，如：北京市]"
+    postalCode: "[邮政编码]"
+    addressCountry: "CN"
+  
+  # 地理坐标（可选）
+  geo:
+    latitude: 39.9042
+    longitude: 116.4074
+
+# 生成 JSON-LD 输出路径
+output_path: "examples/organization_schema.json"
+
+# 备注
+notes: "[备注信息]"
+

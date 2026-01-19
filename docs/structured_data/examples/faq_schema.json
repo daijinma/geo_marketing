@@ -1,0 +1,31 @@
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "北京装修多少钱？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "根据 2024 年北京市住建委数据显示，北京地区 90 平米住宅平均装修成本为 15-25 万元。具体价格因装修标准、材料选择、装修风格等因素而异。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "北京装修需要多长时间？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "一般来说，北京 90 平米住宅装修周期为 2-3 个月。具体时间取决于装修复杂度、施工进度、天气等因素。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "如何选择北京装修公司？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "选择装修公司时，需要关注公司的资质、案例、口碑等方面。建议选择有资质认证、案例丰富、用户评价良好的装修公司。"
+      }
+    }
+  ]
+}
+
