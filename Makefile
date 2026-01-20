@@ -1,90 +1,48 @@
-VENV = .venv
+# GEO Marketing - 项目导航 Makefile
+# 
+# 本 Makefile 提供快速导航到各个独立项目
+# 每个项目都有自己的 Makefile 来管理命令
 
-.PHONY: setup db-up db-down db-logs db-reset db-upgrade run install sync playwright-install dev dev2 stats stats-full status clean help
+# 颜色输出
+GREEN = \033[0;32m
+YELLOW = \033[0;33m
+BLUE = \033[0;34m
+NC = \033[0m # No Color
+
+.PHONY: help
 
 help:
-	@echo "LLM Sentry 开发指令集:"
-	@echo "  make setup            - 安装所有依赖 (Python & Playwright)"
-	@echo "  make db-up           - 启动 PostgreSQL 数据库容器"
-	@echo "  make db-down         - 停止 PostgreSQL 数据库容器"
-	@echo "  make db-reset        - 重置数据库 (删除旧数据并重建)"
-	@echo "  make db-upgrade      - 升级数据库到最新版本 (v1.0 -> v2.0)"
-	@echo "  make db-logs         - 查看数据库日志"
-	@echo "  make install         - 创建虚拟环境并安装依赖"
-	@echo "  make sync            - 同步依赖（检查并安装缺失的库）"
-	@echo "  make playwright-install - 安装 Playwright 浏览器"
-	@echo "  make run             - 执行 GEO 监测任务"
-	@echo "  make run             - 启动 API 开发服务器"
-	@echo "  make dev            - 启动 API 开发服务器（使用 .env.development）"
-	@echo "  make stats           - 生成基础深度洞察报告（简单版）"
-	@echo "  make stats-full      - 生成完整深度洞察报告（包含所有分析维度）"
-	@echo "  make status          - 查看服务状态"
-	@echo "  make clean           - 停止数据库并清理临时文件"
-
-setup:
-	./scripts/setup_monitor.sh
-
-db-up:
-	./scripts/start_db.sh
-
-db-down:
-	cd geo_db && docker-compose down
-
-db-reset:
-	./scripts/reset_db.sh
-
-db-upgrade:
-	cd geo_db && chmod +x upgrade_db.sh && ./upgrade_db.sh
-
-db-logs:
-	cd geo_db && docker-compose logs -f
-
-run:
-	./scripts/run_monitor.sh
-
-# 安装：创建虚拟环境并同步依赖
-install:
-	@echo "正在创建虚拟环境..."
-	cd llm_sentry_monitor && uv venv $(VENV)
-	@$(MAKE) sync
-
-# 同步依赖：检查并安装缺失的库
-sync:
-	@echo "正在检查并更新依赖..."
-	cd llm_sentry_monitor && uv pip install -e .
-
-# 安装 Playwright 浏览器
-playwright-install:
-	@echo "正在安装 Playwright 浏览器..."
-	cd llm_sentry_monitor && uv run playwright install chromium
-	@echo "✅ Playwright 浏览器安装完成"
-
-# 启动开发服务器：先执行 sync 确保库是最新的
-run:
-	@echo "正在启动服务..."
-	@lsof -ti:8000 | xargs kill -9 2>/dev/null || true
-	cd llm_sentry_monitor && PYTHONPATH=. uv run python api.py
-
-# 启动开发服务器（dev2模式）：使用 .env.development 配置文件
-dev:
-	@echo "正在启动服务（dev2模式，使用 .env.development）..."
-	@lsof -ti:8000 | xargs kill -9 2>/dev/null || true
-	cd llm_sentry_monitor && ENV_FILE=.env.development PYTHONPATH=. uv run python api.py
-
-stats:
-	cd llm_sentry_monitor && uv run python stats.py
-
-stats-full:
-	cd llm_sentry_monitor && uv run python stats_full.py
-
-status:
-	@echo "--- Docker 容器状态 ---"
-	@docker ps --filter "name=geo_db"
-	@echo "\n--- 虚拟环境状态 ---"
-	@if [ -d "llm_sentry_monitor/.venv" ]; then echo "✅ 虚拟环境已就绪"; else echo "❌ 虚拟环境未创建"; fi
-
-clean:
-	@echo "正在清理环境..."
-	cd geo_db && make down
-	rm -rf llm_sentry_monitor/browser_data/*
-	@echo "✅ 清理完成 (保留了 .venv 以加快下次启动)"
+	@echo "╔═══════════════════════════════════════════════════════════════╗"
+	@echo "║  ${GREEN}GEO Marketing - 项目导航${NC}                                   ║"
+	@echo "╚═══════════════════════════════════════════════════════════════╝"
+	@echo ""
+	@echo "本仓库包含以下独立项目，每个项目都有自己的 Makefile："
+	@echo ""
+	@echo "${YELLOW}📁 项目列表${NC}"
+	@echo ""
+	@echo "  ${BLUE}1. geo_db${NC} - PostgreSQL 数据库服务"
+	@echo "     ${GREEN}cd geo_db && make help${NC}"
+	@echo "     常用命令: make up, make down, make logs"
+	@echo ""
+	@echo "  ${BLUE}2. geo_server${NC} - Python 后端服务"
+	@echo "     ${GREEN}cd geo_server && make help${NC}"
+	@echo "     常用命令: make install, make dev, make run"
+	@echo ""
+	@echo "  ${BLUE}3. geo_client${NC} - Electron 桌面客户端"
+	@echo "     ${GREEN}cd geo_client && make help${NC}"
+	@echo "     常用命令: make setup, make dev, make build"
+	@echo ""
+	@echo "${YELLOW}🚀 快速开始${NC}"
+	@echo ""
+	@echo "  # 终端 1: 启动数据库"
+	@echo "  cd geo_db && make up"
+	@echo ""
+	@echo "  # 终端 2: 启动后端服务"
+	@echo "  cd geo_server && make install && make dev"
+	@echo ""
+	@echo "  # 终端 3: 启动客户端"
+	@echo "  cd geo_client && make setup && make dev"
+	@echo ""
+	@echo "${YELLOW}📚 更多信息${NC}"
+	@echo "  查看各项目的 README.md 了解详细说明"
+	@echo ""

@@ -1,17 +1,16 @@
-import { invoke } from '@tauri-apps/api/core';
 import type { LoginRequest, LoginResponse } from '@/types/auth';
 import type { Task } from '@/types/task';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
-// 检查是否在Tauri环境中
-const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+// 检查是否在 Electron 环境中
+const isElectron = typeof window !== 'undefined' && window.electronAPI !== undefined;
 
 // 获取token（优先从数据库获取，如果没有则从localStorage获取）
 async function getToken(): Promise<string | null> {
-  if (isTauri) {
+  if (isElectron) {
     try {
-      const tokenInfo = await invoke<{ token: string; expires_at: string; is_valid: boolean }>('get_token');
+      const tokenInfo = await window.electronAPI.auth.getToken();
       if (tokenInfo && tokenInfo.is_valid) {
         return tokenInfo.token;
       }
@@ -35,9 +34,9 @@ async function getToken(): Promise<string | null> {
 
 // 检查token是否有效
 async function checkTokenValid(): Promise<boolean> {
-  if (isTauri) {
+  if (isElectron) {
     try {
-      return await invoke<boolean>('check_token_valid');
+      return await window.electronAPI.auth.checkTokenValid();
     } catch {
       return false;
     }
@@ -81,9 +80,9 @@ async function apiRequest<T>(
   if (!response.ok) {
     if (response.status === 401) {
       // Token失效，清除本地token
-      if (isTauri) {
+      if (isElectron) {
         try {
-          await invoke('logout');
+          await window.electronAPI.auth.logout();
         } catch (error) {
           console.warn('清除数据库token失败:', error);
         }
@@ -100,18 +99,18 @@ async function apiRequest<T>(
 
 // 认证API
 export const authApi = {
-  // 使用Tauri命令登录（会保存到数据库）或直接调用API
+  // 使用 Electron IPC 登录（会保存到数据库）或直接调用API
   login: async (credentials: LoginRequest): Promise<LoginResponse> => {
-    if (isTauri) {
+    if (isElectron) {
       try {
-        const response = await invoke<LoginResponse>('login', {
-          username: credentials.username,
-          password: credentials.password,
-          apiBaseUrl: API_BASE_URL,
-        });
+        const response = await window.electronAPI.auth.login(
+          credentials.username,
+          credentials.password,
+          API_BASE_URL
+        );
         return response;
       } catch (error: any) {
-        throw new Error(error || '登录失败');
+        throw new Error(error?.message || error || '登录失败');
       }
     }
     
@@ -129,9 +128,9 @@ export const authApi = {
   
   // 退出登录
   logout: async (): Promise<void> => {
-    if (isTauri) {
+    if (isElectron) {
       try {
-        await invoke('logout');
+        await window.electronAPI.auth.logout();
       } catch (error) {
         console.warn('清除数据库token失败:', error);
       }

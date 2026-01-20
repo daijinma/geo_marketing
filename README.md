@@ -1,42 +1,54 @@
 # LLM Sentry: GEO (生成式引擎优化) 实时监测平台
 
-> **Monorepo 多项目仓库** - 本仓库包含 LLM Sentry 项目的所有子模块
-
 `LLM Sentry` 是一个专为 **GEO (Generative Engine Optimization)** 设计的自动化监测与分析平台。它能够实时追踪品牌或内容在主流 AI 搜索引擎（如 DeepSeek、豆包）回答中的曝光情况，并量化分析其引用来源。
 
-## 📦 项目结构 (Monorepo)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
+[![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/)
 
-本仓库采用 monorepo 架构，包含以下独立子项目：
+## 📦 项目结构
+
+本仓库包含以下独立项目：
 
 ```text
-GEO/ (Root Monorepo)
+geo_marketing/
+├── geo_client/              # 【客户端应用】Electron 桌面应用
+│   ├── src/                 # React 前端代码
+│   ├── electron/            # Electron 后端代码
+│   ├── Makefile             # 客户端管理命令
+│   ├── package.json
+│   └── README.md
+│
 ├── geo_db/                  # 【数据库服务】PostgreSQL 容器化部署
-│   ├── pyproject.toml       # 项目配置
 │   ├── docker-compose.yml
-│   ├── init.sql
+│   ├── init_v3.1.sql        # 最新版本初始化脚本
+│   ├── migrations/          # 数据库迁移脚本
+│   ├── Makefile             # 数据库管理命令
 │   └── README.md
 │
-├── llm_sentry_monitor/      # 【监控抓取服务】Web 自动化与数据采集
-│   ├── pyproject.toml       # 项目配置
-│   ├── main.py
-│   ├── providers/           # 多模型适配器 (DeepSeek, 豆包)
-│   ├── core/                # 域名清洗与引用解析引擎
+├── geo_server/              # 【后端服务】Web 自动化与数据采集
+│   ├── api.py               # FastAPI 服务
+│   ├── providers/           # 多平台适配器 (DeepSeek, 豆包, 博查)
+│   ├── core/                # 核心业务逻辑
+│   ├── Makefile             # 后端服务管理命令
 │   └── README.md
 │
-├── scripts/                 # 共享脚本工具
-├── pyproject.toml           # 工作区配置
-├── .workspace.json          # 工作区元数据
-├── Makefile                 # 统一构建与运行指令
-├── README.md                # 本文件
-└── MONOREPO.md              # Monorepo 架构说明
+├── docs/                    # 【文档】项目文档与规范
+│   ├── GEO实施工程化方案.md
+│   ├── semantic_footprint/  # 语义足迹相关文档
+│   └── structured_data/     # 结构化数据模板
+│
+├── scripts/                 # 【脚本】共享工具脚本
+└── README.md                # 本文件
 ```
 
 ### 子项目说明
 
-- **`geo_db/`**: PostgreSQL 数据库服务模块，提供数据持久化能力
-- **`llm_sentry_monitor/`**: 监控抓取服务，负责模拟用户行为并解析 AI 回答
-
-> 📖 关于 Monorepo 架构的详细说明，请参阅 [MONOREPO.md](./MONOREPO.md)
+| 项目 | 技术栈 | 描述 |
+|------|--------|------|
+| **geo_client** | React + Electron + TypeScript | 桌面客户端，提供可视化界面进行任务管理和监控 |
+| **geo_db** | PostgreSQL 15 + Docker | 数据库服务，负责数据持久化和版本管理 |
+| **geo_server** | Python + FastAPI + Playwright | 后端服务，负责浏览器自动化和数据采集 |
 
 ## 1. 核心价值
 在 AI 驱动搜索的时代，传统的 SEO 正在向 GEO 演进。本项目旨在解决以下核心痛点：
@@ -53,7 +65,7 @@ GEO/ (Root)
 ├── geo_db/                  # 【数据库服务】
 │   ├── docker-compose.yml   # PostgreSQL 15 容器化部署
 │   └── init.sql             # 自动化表结构初始化 (Records & Citations)
-└── llm_sentry_monitor/      # 【监控抓取服务】
+└── geo_server/              # 【后端服务】
     ├── main.py              # 任务调度与业务逻辑入口
     ├── providers/           # 多模型适配器 (基于 Playwright 的网页自动化)
     └── core/                # 域名清洗与引用解析引擎
@@ -71,72 +83,313 @@ GEO/ (Root)
 4. **引用提取**：解析 Markdown 文本及页面 DOM，提取所有 `[1][2]` 形式的参考资料链接。
 5. **量化分析**：将 URL 还原为域名，存入数据库并计算各站点的收录占比。
 
-## 4. 快速开始指南 (极简模式)
+## 4. 快速开始指南 ⚡
 
-为了简化操作，我们提供了 `Makefile` 指令：
+### 前置要求
 
-### 1. 环境初始化 (使用 uv 管理虚拟环境)
+在开始之前，请确保已安装以下工具：
+
+| 工具 | 版本要求 | 安装检查 | 安装指南 |
+|------|----------|----------|----------|
+| **Docker** | 20.0+ | `docker --version` | [Docker 官网](https://docs.docker.com/get-docker/) |
+| **Node.js** | 18.0+ | `node --version` | [Node.js 官网](https://nodejs.org/) |
+| **pnpm** | 8.0+ | `pnpm --version` | `npm install -g pnpm` |
+| **Python** | 3.9+ | `python --version` | [Python 官网](https://www.python.org/) |
+| **uv** | 最新版 | `uv --version` | [uv 安装指南](https://github.com/astral-sh/uv) |
+
+### 快速开始
+
+每个项目都有独立的 `Makefile` 来管理自己的命令。
+
+#### 1. 启动数据库服务
+
 ```bash
-make setup
+cd geo_db
+make help      # 查看所有可用命令
+make up        # 启动 PostgreSQL 数据库
 ```
-该指令会自动创建 `.venv` 虚拟环境并安装所有依赖。
 
-### 2. 启动数据库
+#### 2. 安装并启动后端服务
+
 ```bash
-make db
+cd geo_server
+make help      # 查看所有可用命令
+make install   # 安装依赖（首次运行）
+make playwright # 安装浏览器（首次运行）
+make dev       # 启动 API 服务 (http://localhost:8000)
 ```
 
-### 3. 执行监测任务
+#### 3. 安装并启动客户端
+
 ```bash
-make run
+cd geo_client
+make help      # 查看所有可用命令
+make setup     # 安装依赖（首次运行）
+make dev       # 启动客户端应用
 ```
 
-### 4. 帮助与清理
-```bash
-make help   # 查看所有指令
-make clean  # 停止数据库并清理缓存
-```
+### 各项目常用命令速查
 
-> **提示**：首次运行 `make run` 时建议在非无头模式下手动完成登录。
+#### geo_db（数据库服务）
+| 命令 | 描述 |
+|------|------|
+| `make up` | 启动数据库 |
+| `make down` | 停止数据库 |
+| `make logs` | 查看数据库日志 |
+| `make reset` | 重置数据库（删除所有数据） |
 
-## 5. API 使用
+#### geo_server（后端服务）
+| 命令 | 描述 |
+|------|------|
+| `make install` | 安装依赖 |
+| `make dev` | 启动 API 服务 |
+| `make run` | 执行监测任务 |
+| `make stats` | 生成数据报告 |
 
-项目提供 REST API 接口用于任务管理。启动服务后，可通过 API 创建监测任务：
+#### geo_client（客户端应用）
+| 命令 | 描述 |
+|------|------|
+| `make setup` | 一键安装客户端 |
+| `make dev` | 启动开发服务器 |
+| `make build` | 构建生产版本 |
+| `make electron-build` | 打包为可执行文件 |
 
-### 创建任务接口
+> **提示**：
+> - 首次运行后端服务或客户端时，需要在浏览器中完成登录，Cookie 将被保存以供后续使用
+> - 每个项目的 Makefile 都提供了 `make help` 命令来查看所有可用指令
+> - 各项目可以独立运行，根据需要启动相应服务
+
+## 5. API 文档
+
+项目提供 REST API 接口用于任务管理。启动后端服务后，可访问：
+
+- **API 服务**: http://localhost:8000
+- **交互式文档**: http://localhost:8000/docs (Swagger UI)
+- **API 规范**: http://localhost:8000/redoc
+
+### 主要接口
+
+#### 创建任务
 
 **POST** `/mock`
 
-请求参数：
-- `keywords`: 搜索关键词列表（必填）
-- `platforms`: 平台列表，可选值：`["deepseek", "doubao", "bocha"]`（默认：`["deepseek"]`）
-- `query_count`: 查询次数（执行轮数），默认 `1`。设置为大于 1 的值时，系统会对每个关键词-平台组合执行多轮搜索
-- `settings`: 可选设置
-  - `headless`: 是否无头模式（默认：`false`）
-  - `timeout`: 超时时间（毫秒，默认：`60000`）
-  - `delay_between_tasks`: 任务间延迟（秒，默认：`5`）
+创建新的监测任务，支持多关键词、多平台组合。
 
-示例请求：
+**请求参数：**
+
 ```json
 {
   "keywords": ["AI搜索引擎", "生成式搜索"],
-  "platforms": ["deepseek", "doubao"],
+  "platforms": ["deepseek", "doubao", "bocha"],
   "query_count": 3,
   "settings": {
     "headless": false,
+    "timeout": 60000,
     "delay_between_tasks": 5
   }
 }
 ```
 
+| 参数 | 类型 | 必填 | 描述 |
+|------|------|------|------|
+| `keywords` | `string[]` | ✅ | 搜索关键词列表 |
+| `platforms` | `string[]` | ❌ | 平台列表，默认 `["deepseek"]` |
+| `query_count` | `number` | ❌ | 查询次数（执行轮数），默认 `1` |
+| `settings.headless` | `boolean` | ❌ | 是否无头模式，默认 `false` |
+| `settings.timeout` | `number` | ❌ | 超时时间（毫秒），默认 `60000` |
+| `settings.delay_between_tasks` | `number` | ❌ | 任务间延迟（秒），默认 `5` |
+
+**响应示例：**
+
+```json
+{
+  "status": "success",
+  "task_id": "abc123",
+  "message": "任务已创建"
+}
+```
+
+#### 查询任务状态
+
+**GET** `/tasks/{task_id}`
+
+#### 获取任务列表
+
+**GET** `/tasks?status=pending&limit=10`
+
 ### 多轮执行功能
 
 `query_count` 参数允许对同一查询条件执行多次搜索，适用于：
-- **稳定性测试**：验证 AI 回答的一致性
-- **数据采集**：获取多次查询的平均结果，减少单次查询的随机性
-- **趋势分析**：观察不同时间点的搜索结果变化
 
-执行逻辑：系统会按照 `query_count` 的值，对每个 `(关键词, 平台)` 组合循环执行指定轮数。
+| 场景 | 说明 |
+|------|------|
+| 🔬 **稳定性测试** | 验证 AI 回答的一致性 |
+| 📊 **数据采集** | 获取多次查询的平均结果，减少随机性 |
+| 📈 **趋势分析** | 观察不同时间点的搜索结果变化 |
+
+**执行逻辑**：系统会按照 `query_count` 的值，对每个 `(关键词, 平台)` 组合循环执行指定轮数。
+
+### 认证
+
+目前 API 支持基于 token 的认证（可选）。详见 [llm_sentry_monitor/README_AUTH.md](./llm_sentry_monitor/README_AUTH.md)。
 
 ---
-*LLM Sentry - 助力品牌在生成式搜索时代赢得先机*
+
+## 6. 客户端使用
+
+客户端提供了友好的图形界面，支持：
+
+- 📊 **仪表盘**：查看监控概览和统计数据
+- 🔐 **登录管理**：管理各平台登录状态
+- 🔍 **搜索任务**：创建和管理搜索任务
+- 📝 **日志查看**：查看任务执行日志
+- ⚙️ **设置**：配置 API 地址和其他选项
+
+详细使用说明请参阅 [geo_client/README.md](./geo_client/README.md)。
+
+---
+
+## 7. 开发指南
+
+### 项目架构
+
+```
+┌─────────────────┐      ┌─────────────────┐
+│   Electron      │      │   Web Browser   │
+│   Client        │─────▶│   (用户界面)     │
+│  (geo_client)   │      └─────────────────┘
+└────────┬────────┘
+         │ HTTP
+         │
+         ▼
+┌─────────────────┐      ┌─────────────────┐
+│   FastAPI       │      │   Playwright    │
+│   Server        │─────▶│   (浏览器自动化)  │
+│ (monitor)       │      └─────────────────┘
+└────────┬────────┘
+         │ SQL
+         │
+         ▼
+┌─────────────────┐
+│   PostgreSQL    │
+│   Database      │
+│   (geo_db)      │
+└─────────────────┘
+```
+
+### 添加新的 Provider
+
+1. 在 `llm_sentry_monitor/providers/` 创建新文件
+2. 继承 `BaseProvider` 类
+3. 实现 `search()` 方法
+4. 在 API 中注册新 Provider
+
+参考示例：[llm_sentry_monitor/providers/doubao_web.py](./llm_sentry_monitor/providers/doubao_web.py)
+
+### 数据库迁移
+
+数据库采用版本化迁移系统：
+
+```bash
+# 查看当前版本
+make db-status
+
+# 升级到最新版本
+make db-upgrade
+
+# 重置数据库（谨慎使用）
+make db-reset
+```
+
+迁移脚本位于 `geo_db/migrations/` 目录。
+
+### 代码规范
+
+- **Python**: 遵循 PEP 8
+- **TypeScript**: 使用 ESLint + Prettier
+- **提交信息**: 遵循 Conventional Commits
+
+详见 [CONTRIBUTING.md](./CONTRIBUTING.md)（即将创建）。
+
+---
+
+## 8. 故障排除
+
+### 常见问题
+
+<details>
+<summary><b>Docker 数据库启动失败</b></summary>
+
+检查端口占用：
+```bash
+lsof -i:5432
+```
+
+如果端口被占用，停止其他 PostgreSQL 实例或修改 `geo_db/docker-compose.yml` 中的端口。
+</details>
+
+<details>
+<summary><b>Electron 安装失败</b></summary>
+
+配置镜像后重试：
+```bash
+export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
+cd geo_client
+pnpm install --force
+```
+</details>
+
+<details>
+<summary><b>Playwright 浏览器未安装</b></summary>
+
+手动安装：
+```bash
+cd llm_sentry_monitor
+uv run playwright install chromium
+```
+</details>
+
+<details>
+<summary><b>API 连接失败</b></summary>
+
+1. 确认 API 服务正在运行：`make status`
+2. 检查防火墙设置
+3. 确认 `.env` 文件中的 API 地址配置正确
+</details>
+
+更多问题请查看各子项目的 README：
+- [geo_client/README.md](./geo_client/README.md)
+- [geo_db/README.md](./geo_db/README.md)
+- [llm_sentry_monitor/README.md](./llm_sentry_monitor/README.md)
+
+---
+
+## 9. 贡献指南
+
+我们欢迎任何形式的贡献！在提交 PR 之前，请：
+
+1. Fork 本仓库
+2. 创建特性分支（`git checkout -b feature/AmazingFeature`）
+3. 提交更改（`git commit -m 'Add some AmazingFeature'`）
+4. 推送到分支（`git push origin feature/AmazingFeature`）
+5. 开启 Pull Request
+
+详细规范请参阅 [CONTRIBUTING.md](./CONTRIBUTING.md)。
+
+---
+
+## 10. 许可证
+
+本项目采用 MIT 许可证。详见 [LICENSE](./LICENSE) 文件。
+
+---
+
+## 11. 联系我们
+
+- 📧 Email: your-email@example.com
+- 💬 Issues: [GitHub Issues](https://github.com/your-org/geo_marketing/issues)
+- 📖 文档: [项目文档](./docs/)
+
+---
+
+*LLM Sentry - 助力品牌在生成式搜索时代赢得先机* 🚀

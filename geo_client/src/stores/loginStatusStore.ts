@@ -6,6 +6,7 @@ interface LoginStatusState {
   setStatus: (platform: PlatformName, status: LoginStatus) => void;
   getStatus: (platform: PlatformName) => LoginStatus | null;
   isLoggedIn: (platform: PlatformName) => boolean;
+  updateLoginStatus: (platform: PlatformName, isLoggedIn: boolean) => void;
 }
 
 export const useLoginStatusStore = create<LoginStatusState>((set, get) => ({
@@ -24,4 +25,15 @@ export const useLoginStatusStore = create<LoginStatusState>((set, get) => ({
     const status = get().statuses[platform];
     return status?.is_logged_in || false;
   },
+  updateLoginStatus: (platform, isLoggedIn) =>
+    set((state) => ({
+      statuses: {
+        ...state.statuses,
+        [platform]: {
+          ...(state.statuses[platform] || {}),
+          is_logged_in: isLoggedIn,
+          last_check_at: new Date().toISOString(),
+        } as LoginStatus,
+      },
+    })),
 }));

@@ -1,0 +1,19 @@
+{
+  "name": "geo-marketing",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "GEO Marketing Monorepo",
+  "scripts": {
+    "client:dev": "pnpm --filter geo-client dev",
+    "client:electron:dev": "pnpm --filter geo-client electron:dev",
+    "client:electron:dev:fast": "pnpm --filter geo-client electron:dev:fast",
+    "client:build": "pnpm --filter geo-client build",
+    "client:electron:build": "pnpm --filter geo-client electron:build"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

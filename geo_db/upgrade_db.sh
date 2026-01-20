@@ -50,6 +50,18 @@ if [ -f "migrations/003_add_task_relations.sql" ]; then
     docker exec -i "$CONTAINER_NAME" psql -U geo_admin -d geo_monitor < migrations/003_add_task_relations.sql
 fi
 
+# 检查并执行 GEO 内容优化器迁移
+if [ -f "migrations/005_add_geo_content_optimizer_tables.sql" ]; then
+    echo "  → 执行 GEO 内容优化器迁移（添加 topic_maps, fact_sources 等表）..."
+    docker exec -i "$CONTAINER_NAME" psql -U geo_admin -d geo_monitor < migrations/005_add_geo_content_optimizer_tables.sql
+fi
+
+# 检查并执行用户认证迁移
+if [ -f "migrations/006_add_users_and_auth_tables.sql" ]; then
+    echo "  → 执行用户认证迁移（添加 users 和 auth_tokens 表）..."
+    docker exec -i "$CONTAINER_NAME" psql -U geo_admin -d geo_monitor < migrations/006_add_users_and_auth_tables.sql
+fi
+
 echo "✅ 数据库升级完成！"
 echo ""
 echo "📊 当前数据库版本："

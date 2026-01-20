@@ -128,7 +128,7 @@ docs/
 
 ### Phase 4: 监控与反馈集成（1-2 周）
 
-1. 与 `llm_sentry_monitor` 集成
+1. 与 `geo_server` 集成
 2. 建立反馈循环
 3. 生成监控报告
 

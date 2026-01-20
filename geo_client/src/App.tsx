@@ -4,8 +4,10 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Search from './pages/Search';
+import Auth from './pages/Auth';
 import Tasks from './pages/Tasks';
 import Logs from './pages/Logs';
+import Settings from './pages/Settings';
 import { useAuthStore } from './stores/authStore';
 
 function App() {
@@ -34,8 +36,10 @@ function App() {
         >
           <Route index element={<Dashboard />} />
           <Route path="search" element={<Search />} />
+          <Route path="auth" element={<Auth />} />
           <Route path="tasks" element={<Tasks />} />
           <Route path="logs" element={<Logs />} />
+          <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>
     </BrowserRouter>

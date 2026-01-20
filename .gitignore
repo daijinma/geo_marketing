@@ -35,7 +35,7 @@ venv.bak/
 geo_db/postgres_data/
 
 # Browser Data
-llm_sentry_monitor/browser_data/
+geo_server/browser_data/
 
 # IDE
 .vscode/

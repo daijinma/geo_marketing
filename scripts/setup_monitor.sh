@@ -1,16 +1,16 @@
 #!/bin/bash
-# 使用 uv 安装监控服务依赖并创建虚拟环境
+# 使用 uv 安装后端服务依赖并创建虚拟环境
 set -e
 
 echo "正在初始化环境..."
 
 # 1. 检查并创建 .env 文件
-if [ ! -f "llm_sentry_monitor/.env" ]; then
+if [ ! -f "geo_server/.env" ]; then
     echo "未发现 .env 文件，正在从 .env.example 复制..."
-    cp llm_sentry_monitor/.env.example llm_sentry_monitor/.env
+    cp geo_server/.env.example geo_server/.env
 fi
 
-cd llm_sentry_monitor
+cd geo_server
 
 # 2. 创建虚拟环境 (如果不存在)
 if [ ! -d ".venv" ]; then
@@ -26,5 +26,5 @@ uv pip install -r requirements.txt
 echo "正在安装 Playwright 浏览器..."
 uv run playwright install chromium
 
-echo "✅ 依赖安装完成。虚拟环境位于 llm_sentry_monitor/.venv"
-echo "💡 请根据需要修改 llm_sentry_monitor/.env 中的配置。"
+echo "✅ 依赖安装完成。虚拟环境位于 geo_server/.venv"
+echo "💡 请根据需要修改 geo_server/.env 中的配置。"

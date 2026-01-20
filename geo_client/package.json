@@ -3,37 +3,45 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && tsc -p electron",
     "preview": "vite preview",
-    "tauri": "tauri",
-    "tauri:dev": "tauri dev",
-    "tauri:dev:fast": "./scripts/dev.sh",
-    "tauri:build": "tauri build",
-    "tauri:prebuild": "cd src-tauri && cargo fetch",
-    "type-check": "tsc --noEmit"
+    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:1420 && electron .\"",
+    "electron:build": "npm run build && electron-builder",
+    "electron:dev:fast": "./scripts/electron-dev.sh",
+    "type-check": "tsc --noEmit",
+    "postinstall": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
+    "better-sqlite3": "^11.6.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^3.6.0",
+    "electron": "^30.0.0",
+    "lucide-react": "^0.454.0",
+    "p-limit": "^5.0.0",
+    "playwright": "^1.48.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0",
-    "zustand": "^4.5.5",
-    "@tauri-apps/api": "^2.1.1",
-    "lucide-react": "^0.454.0",
-    "clsx": "^2.1.1",
-    "tailwind-merge": "^2.5.4"
+    "tailwind-merge": "^2.5.4",
+    "zustand": "^4.5.5"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.1.1",
+    "@electron/rebuild": "^4.0.2",
+    "@types/node": "^20.14.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.2",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^9.0.0",
+    "electron-builder": "^24.13.3",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.6.3",
-    "vite": "^5.4.8"
+    "vite": "^5.4.8",
+    "wait-on": "^7.2.0"
   }
 }
