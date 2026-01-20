@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Default capabilities","local":true,"windows":["main"],"permissions":["opener:default","shell:allow-open","shell:allow-execute"]}}
