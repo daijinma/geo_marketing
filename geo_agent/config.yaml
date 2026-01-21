@@ -1,0 +1,20 @@
+server:
+  host: 0.0.0.0
+  port: 8100
+  workers: 4
+  reload: false
+
+qwen:
+  api_key: ${DASHSCOPE_API_KEY}
+  model: qwen-max
+  timeout: 60
+  max_retries: 3
+
+logging:
+  level: INFO
+  format: json
+  rotation: daily
+  retention: 30d
+  
+security:
+  api_keys: ${AGENT_API_KEYS}
