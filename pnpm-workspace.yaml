@@ -1,6 +1,0 @@
-packages:
-  - 'geo_client'
-
-# Ignore built dependencies to avoid rebuilding
-ignoredBuiltDependencies:
-  - electron
