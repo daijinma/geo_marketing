@@ -505,7 +505,6 @@ func (d *YuanbaoProvider) waitForResponseComplete(ctx context.Context, page *rod
 	lastContent := ""
 	stableCount := 0
 
-	// Selectors that might contain the AI response
 	contentSelectors := []string{
 		".markdown-body",
 		"div[class*='answer']",
@@ -521,7 +520,6 @@ func (d *YuanbaoProvider) waitForResponseComplete(ctx context.Context, page *rod
 		}
 		time.Sleep(2 * time.Second)
 
-		// Check for content stability
 		currentContent := ""
 		for _, sel := range contentSelectors {
 			elements, err := page.Elements(sel)
@@ -534,15 +532,12 @@ func (d *YuanbaoProvider) waitForResponseComplete(ctx context.Context, page *rod
 		if currentContent != "" {
 			if currentContent == lastContent {
 				stableCount++
-				// If content is stable and we don't see a "Stop" button, we might be done
 				if stableCount >= 3 {
-					// Check for stop button as a sign that it is still generating
 					hasStop, _, _ := page.HasR("button, div, span", "停止")
 					if !hasStop {
 						d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Response stable and no stop button found. Assuming complete.", nil, nil)
 						return
 					}
-					// If stop button exists, reset stable count to keep waiting
 					stableCount = 0
 				}
 			} else {
@@ -551,12 +546,10 @@ func (d *YuanbaoProvider) waitForResponseComplete(ctx context.Context, page *rod
 			}
 		}
 
-		// Also check if the send button has returned to "enabled" state
 		submitBtn, err := d.findSubmitButton(ctx, page)
 		if err == nil && submitBtn != nil {
 			disabled, _ := submitBtn.Attribute("disabled")
 			if disabled == nil {
-				// Button is enabled, check if it's because we are done or just started
 				if len(currentContent) > 50 {
 					d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Submit button enabled and content found. Assuming complete.", nil, nil)
 					return
