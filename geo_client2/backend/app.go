@@ -1,0 +1,410 @@
+package backend
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"geo_client2/backend/account"
+	"geo_client2/backend/auth"
+	"geo_client2/backend/database"
+	"geo_client2/backend/database/repositories"
+	"geo_client2/backend/logger"
+	"geo_client2/backend/provider"
+	"geo_client2/backend/search"
+	"geo_client2/backend/settings"
+	"geo_client2/backend/task"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+)
+
+type App struct {
+	ctx          context.Context
+	accountSvc   *account.Service
+	authSvc      *auth.Service
+	settingsSvc  *settings.Service
+	taskManager  *task.Manager
+	searchSvc    *search.Service
+	providerFact *provider.Factory
+	logRepo      *repositories.LogRepository
+	loginCancel  func()
+}
+
+func NewApp() *App {
+	return &App{}
+}
+
+func (a *App) Startup(ctx context.Context) {
+	a.ctx = ctx
+
+	// Initialize database
+	if err := database.Init(); err != nil {
+		logger.GetLogger().Error("Failed to initialize database", err)
+		return
+	}
+
+	db := database.GetDB()
+
+	// Initialize logger with database connection
+	logger.SetDB(db)
+
+	// Initialize repositories
+	accountRepo := repositories.NewAccountRepository(db)
+	authRepo := repositories.NewAuthRepository(db)
+	settingsRepo := repositories.NewSettingsRepository(db)
+	taskRepo := repositories.NewTaskRepository(db)
+	loginRepo := repositories.NewLoginStatusRepository(db)
+	logRepo := repositories.NewLogRepository(db)
+
+	// Initialize services
+	a.accountSvc = account.NewService(accountRepo)
+	a.authSvc = auth.NewService(authRepo)
+	a.settingsSvc = settings.NewService(settingsRepo)
+	a.logRepo = logRepo
+
+	// Initialize provider factory
+	headlessStr, _ := a.settingsSvc.Get("browser_headless")
+	headless := headlessStr != "false" // Default to true if not set or "true"
+	a.providerFact = provider.NewFactory(headless, 60000)
+
+	// Initialize task executor and manager
+	executor := task.NewExecutor(taskRepo, a.providerFact, accountRepo, ctx)
+	a.taskManager = task.NewManager(taskRepo, loginRepo, executor, ctx)
+
+	// Initialize search service
+	a.searchSvc = search.NewService(a.taskManager, a.providerFact, loginRepo, accountRepo, settingsRepo)
+}
+
+func (a *App) Shutdown(ctx context.Context) {
+	database.Close()
+}
+
+// Greet returns a greeting (placeholder for Phase 1 binding test).
+func (a *App) Greet(name string) string {
+	return "Hello, " + name + "!"
+}
+
+// EmitTestEvent emits a test event for Phase 1 verification.
+func (a *App) EmitTestEvent() {
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "test", map[string]string{"message": "hello from Go"})
+	}
+}
+
+// Settings methods
+func (a *App) GetSetting(key string) (string, error) {
+	return a.settingsSvc.Get(key)
+}
+
+func (a *App) SetSetting(key, value string) error {
+	if key == "browser_headless" {
+		a.providerFact.SetHeadless(value != "false")
+	}
+	return a.settingsSvc.Set(key, value)
+}
+
+// Task methods
+func (a *App) CreateLocalSearchTask(keywordsJSON, platformsJSON string, queryCount int) (map[string]interface{}, error) {
+	var keywords, platforms []string
+	json.Unmarshal([]byte(keywordsJSON), &keywords)
+	json.Unmarshal([]byte(platformsJSON), &platforms)
+
+	taskID, err := a.taskManager.CreateLocalSearchTask(keywords, platforms, queryCount, "local_search", "local", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{"success": true, "taskId": taskID}, nil
+}
+
+func (a *App) GetAllTasks(limit, offset int, filtersJSON string) (map[string]interface{}, error) {
+	var filters *repositories.TaskFilters
+	if filtersJSON != "" {
+		json.Unmarshal([]byte(filtersJSON), &filters)
+	}
+	tasks, err := a.taskManager.GetAllTasks(limit, offset, filters)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{"success": true, "tasks": tasks}, nil
+}
+
+func (a *App) GetTaskDetail(taskID int) (map[string]interface{}, error) {
+	detail, err := a.taskManager.GetTaskDetail(taskID)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{"success": true, "data": detail}, nil
+}
+
+func (a *App) CancelTask(taskID int) error {
+	return a.taskManager.CancelTask(taskID)
+}
+
+func (a *App) RetryTask(taskID int) error {
+	return a.taskManager.RetryTask(taskID)
+}
+
+func (a *App) GetStats() (map[string]interface{}, error) {
+	return a.taskManager.GetStats()
+}
+
+// Search methods
+func (a *App) CheckLoginStatus(platform string) (map[string]interface{}, error) {
+	loggedIn, err := a.searchSvc.CheckLoginStatus(platform)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{"success": true, "isLoggedIn": loggedIn}, nil
+}
+
+// Account methods
+func (a *App) CreateAccount(platform, accountName string) (map[string]interface{}, error) {
+	fmt.Printf("[DEBUG] App.CreateAccount called with: platform=%s, name=%s\n", platform, accountName)
+	acc, err := a.accountSvc.CreateAccount(platform, accountName)
+	if err != nil {
+		fmt.Printf("[DEBUG] App.CreateAccount error: %v\n", err)
+		return nil, err
+	}
+	fmt.Printf("[DEBUG] App.CreateAccount success: %v\n", acc.AccountID)
+	return map[string]interface{}{
+		"success": true,
+		"account": map[string]interface{}{
+			"id":            acc.ID,
+			"platform":      acc.Platform,
+			"account_id":    acc.AccountID,
+			"account_name":  acc.AccountName,
+			"user_data_dir": acc.UserDataDir,
+			"is_active":     acc.IsActive,
+			"created_at":    acc.CreatedAt,
+			"updated_at":    acc.UpdatedAt,
+		},
+	}, nil
+}
+
+func (a *App) ListAccounts(platform string) (map[string]interface{}, error) {
+	accounts, err := a.accountSvc.ListAccounts(platform)
+	if err != nil {
+		return nil, err
+	}
+	accountList := make([]map[string]interface{}, len(accounts))
+	for i, acc := range accounts {
+		accountList[i] = map[string]interface{}{
+			"id":            acc.ID,
+			"platform":      acc.Platform,
+			"account_id":    acc.AccountID,
+			"account_name":  acc.AccountName,
+			"user_data_dir": acc.UserDataDir,
+			"is_active":     acc.IsActive,
+			"created_at":    acc.CreatedAt,
+			"updated_at":    acc.UpdatedAt,
+		}
+	}
+	return map[string]interface{}{"success": true, "accounts": accountList}, nil
+}
+
+func (a *App) GetActiveAccount(platform string) (map[string]interface{}, error) {
+	acc, err := a.accountSvc.GetActiveAccount(platform)
+	if err != nil {
+		return nil, err
+	}
+	if acc == nil {
+		return map[string]interface{}{"success": true, "account": nil}, nil
+	}
+	return map[string]interface{}{
+		"success": true,
+		"account": map[string]interface{}{
+			"id":            acc.ID,
+			"platform":      acc.Platform,
+			"account_id":    acc.AccountID,
+			"account_name":  acc.AccountName,
+			"user_data_dir": acc.UserDataDir,
+			"is_active":     acc.IsActive,
+			"created_at":    acc.CreatedAt,
+			"updated_at":    acc.UpdatedAt,
+		},
+	}, nil
+}
+
+func (a *App) SetActiveAccount(platform, accountID string) error {
+	return a.accountSvc.SetActiveAccount(platform, accountID)
+}
+
+func (a *App) DeleteAccount(accountID string) error {
+	return a.accountSvc.DeleteAccount(accountID)
+}
+
+func (a *App) UpdateAccountName(accountID, name string) error {
+	return a.accountSvc.UpdateAccountName(accountID, name)
+}
+
+// Auth methods
+
+// Login performs user authentication and saves the token.
+func (a *App) Login(username, password, apiBaseURL string) (map[string]interface{}, error) {
+	resp, err := a.authSvc.Login(username, password, apiBaseURL)
+	if err != nil {
+		return map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		}, nil
+	}
+	return map[string]interface{}{
+		"success":    resp.Success,
+		"token":      resp.Token,
+		"expires_at": resp.ExpiresAt,
+	}, nil
+}
+
+// Login methods
+
+// StartLogin opens a browser for the specified account to login.
+func (a *App) StartLogin(platform, accountID string) error {
+	if a.loginCancel != nil {
+		a.loginCancel()
+		a.loginCancel = nil
+	}
+
+	// Always headless=false for login
+	prov, err := a.providerFact.GetProvider(platform, false, 0, accountID)
+	if err != nil {
+		logger.GetLogger().Error("Failed to get provider for login", err)
+		return err
+	}
+
+	cancel, err := prov.StartLogin()
+	if err != nil {
+		logger.GetLogger().Error("Failed to start login browser", err)
+		return err
+	}
+
+	a.loginCancel = cancel
+	return nil
+}
+
+// StopLogin closes the current login browser.
+func (a *App) StopLogin() error {
+	if a.loginCancel != nil {
+		a.loginCancel()
+		a.loginCancel = nil
+	}
+	return nil
+}
+
+// Log methods
+func (a *App) GetLogs(limit, offset int, filtersJSON string) (map[string]interface{}, error) {
+	var level, source *string
+	var taskID *int
+
+	if filtersJSON != "" {
+		var filters map[string]interface{}
+		if err := json.Unmarshal([]byte(filtersJSON), &filters); err == nil {
+			if lvl, ok := filters["level"].(string); ok && lvl != "" {
+				level = &lvl
+			}
+			if src, ok := filters["source"].(string); ok && src != "" {
+				source = &src
+			}
+			if tid, ok := filters["task_id"].(float64); ok {
+				tidInt := int(tid)
+				taskID = &tidInt
+			}
+		}
+	}
+
+	logs, err := a.logRepo.GetAll(limit, offset, level, source, taskID)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"success": true,
+		"logs":    logs,
+		"total":   len(logs),
+	}, nil
+}
+
+func (a *App) AddLog(level, source, message, detailsJSON, sessionID, correlationID, component, userAction string, performanceMS, taskID *int) error {
+	var details *string
+	if detailsJSON != "" {
+		details = &detailsJSON
+	}
+
+	var sessionIDPtr, correlationIDPtr, componentPtr, userActionPtr *string
+	if sessionID != "" {
+		sessionIDPtr = &sessionID
+	}
+	if correlationID != "" {
+		correlationIDPtr = &correlationID
+	}
+	if component != "" {
+		componentPtr = &component
+	}
+	if userAction != "" {
+		userActionPtr = &userAction
+	}
+
+	return a.logRepo.AddWithContext(level, source, message, details, taskID, sessionIDPtr, correlationIDPtr, componentPtr, userActionPtr, performanceMS)
+}
+
+func (a *App) ClearOldLogs(daysToKeep int) (map[string]interface{}, error) {
+	count, err := a.logRepo.GetLogsCountOlderThan(daysToKeep)
+	if err != nil {
+		return nil, err
+	}
+
+	err = a.logRepo.ClearOldLogs(daysToKeep)
+	if err != nil {
+		return nil, err
+	}
+
+	// Log the cleanup operation
+	logger.GetLogger().Info(fmt.Sprintf("Old logs cleared: deleted %d logs older than %d days", count, daysToKeep))
+
+	return map[string]interface{}{
+		"success": true,
+		"deleted": count,
+	}, nil
+}
+
+func (a *App) DeleteAllLogs() (map[string]interface{}, error) {
+	count, err := a.logRepo.DeleteAllLogs()
+	if err != nil {
+		return nil, err
+	}
+
+	// Log the deletion operation (this will be the only log left after deletion)
+	logger.GetLogger().Warn(fmt.Sprintf("All logs deleted by user: %d logs removed", count))
+
+	return map[string]interface{}{
+		"success": true,
+		"deleted": count,
+	}, nil
+}
+
+// GetVersionInfo returns version and build time information
+func (a *App) GetVersionInfo() map[string]interface{} {
+	buildTime := BuildTime
+	formattedTime := buildTime
+
+	// Parse and format build time if it's a valid timestamp
+	if buildTime != "unknown" && buildTime != "" {
+		if t, err := time.Parse(time.RFC3339, buildTime); err == nil {
+			// Format as "Jan 23, 2026 10:30"
+			formattedTime = t.Format("Jan 02, 2006 15:04")
+		}
+	}
+
+	return map[string]interface{}{
+		"version":   Version,
+		"buildTime": formattedTime,
+	}
+}
+
+func (a *App) GetSearchRecords(taskID int) (map[string]interface{}, error) {
+	records, err := a.taskManager.GetSearchRecords(taskID)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{"success": true, "records": records}, nil
+}
