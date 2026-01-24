@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"geo_client2/backend/config"
 	"geo_client2/backend/logger"
 	"github.com/google/uuid"
 )
@@ -16,6 +17,7 @@ type Account struct {
 	Platform    string `json:"platform"`
 	AccountID   string `json:"account_id"`
 	AccountName string `json:"account_name"`
+	Category    string `json:"category"`
 	UserDataDir string `json:"user_data_dir"`
 	IsActive    bool   `json:"is_active"`
 	CreatedAt   string `json:"created_at"`
@@ -35,6 +37,8 @@ func NewAccountRepository(db *sql.DB) *AccountRepository {
 // CreateAccount creates a new account.
 func (r *AccountRepository) CreateAccount(platform, accountName string) (*Account, error) {
 	accountID := uuid.New().String()
+
+	category := config.GetPlatformCategory(platform)
 
 	// Generate user_data_dir path
 	homeDir, err := os.UserHomeDir()
@@ -59,9 +63,9 @@ func (r *AccountRepository) CreateAccount(platform, accountName string) (*Accoun
 
 	// Insert account
 	result, err := r.db.Exec(`
-		INSERT INTO accounts (platform, account_id, account_name, user_data_dir, is_active)
-		VALUES (?, ?, ?, ?, ?)
-	`, platform, accountID, accountName, userDataDir, isActive)
+		INSERT INTO accounts (platform, account_id, account_name, user_data_dir, is_active, category)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, platform, accountID, accountName, userDataDir, isActive, category)
 	if err != nil {
 		// Cleanup directory on error
 		os.RemoveAll(userDataDir)
@@ -78,6 +82,7 @@ func (r *AccountRepository) CreateAccount(platform, accountName string) (*Accoun
 		AccountName: accountName,
 		UserDataDir: userDataDir,
 		IsActive:    isActive == 1,
+		Category:    category,
 	}, nil
 }
 
@@ -86,11 +91,11 @@ func (r *AccountRepository) GetAccountByID(accountID string) (*Account, error) {
 	var account Account
 	var isActiveInt int
 	err := r.db.QueryRow(`
-		SELECT id, platform, account_id, account_name, user_data_dir, is_active, created_at, updated_at
+		SELECT id, platform, account_id, account_name, user_data_dir, is_active, category, created_at, updated_at
 		FROM accounts WHERE account_id = ?
 	`, accountID).Scan(
 		&account.ID, &account.Platform, &account.AccountID, &account.AccountName,
-		&account.UserDataDir, &isActiveInt, &account.CreatedAt, &account.UpdatedAt,
+		&account.UserDataDir, &isActiveInt, &account.Category, &account.CreatedAt, &account.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -105,8 +110,8 @@ func (r *AccountRepository) GetAccountByID(accountID string) (*Account, error) {
 // GetAccountsByPlatform retrieves all accounts for a platform.
 func (r *AccountRepository) GetAccountsByPlatform(platform string) ([]Account, error) {
 	rows, err := r.db.Query(`
-		SELECT id, platform, account_id, account_name, user_data_dir, is_active, created_at, updated_at
-		FROM accounts WHERE platform = ? ORDER BY is_active DESC, created_at ASC
+		SELECT id, platform, account_id, account_name, user_data_dir, is_active, category, created_at, updated_at
+		FROM accounts WHERE platform = ? ORDER BY created_at ASC
 	`, platform)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get accounts: %w", err)
@@ -119,7 +124,7 @@ func (r *AccountRepository) GetAccountsByPlatform(platform string) ([]Account, e
 		var isActiveInt int
 		if err := rows.Scan(
 			&account.ID, &account.Platform, &account.AccountID, &account.AccountName,
-			&account.UserDataDir, &isActiveInt, &account.CreatedAt, &account.UpdatedAt,
+			&account.UserDataDir, &isActiveInt, &account.Category, &account.CreatedAt, &account.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan account: %w", err)
 		}
@@ -134,11 +139,11 @@ func (r *AccountRepository) GetActiveAccount(platform string) (*Account, error) 
 	var account Account
 	var isActiveInt int
 	err := r.db.QueryRow(`
-		SELECT id, platform, account_id, account_name, user_data_dir, is_active, created_at, updated_at
+		SELECT id, platform, account_id, account_name, user_data_dir, is_active, category, created_at, updated_at
 		FROM accounts WHERE platform = ? AND is_active = 1 LIMIT 1
 	`, platform).Scan(
 		&account.ID, &account.Platform, &account.AccountID, &account.AccountName,
-		&account.UserDataDir, &isActiveInt, &account.CreatedAt, &account.UpdatedAt,
+		&account.UserDataDir, &isActiveInt, &account.Category, &account.CreatedAt, &account.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -176,7 +181,6 @@ func (r *AccountRepository) SetActiveAccount(platform, accountID string) error {
 
 // DeleteAccount deletes an account and its user data directory.
 func (r *AccountRepository) DeleteAccount(accountID string) error {
-	// Get account info first
 	account, err := r.GetAccountByID(accountID)
 	if err != nil {
 		return fmt.Errorf("failed to get account: %w", err)
@@ -185,20 +189,27 @@ func (r *AccountRepository) DeleteAccount(accountID string) error {
 		return fmt.Errorf("account not found")
 	}
 
-	// Start transaction
 	tx, err := r.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	// Delete account
 	_, err = tx.Exec("DELETE FROM accounts WHERE account_id = ?", accountID)
 	if err != nil {
 		return fmt.Errorf("failed to delete account: %w", err)
 	}
 
-	// If this was the active account, set another account as active (if exists)
+	_, err = tx.Exec("DELETE FROM login_status WHERE account_id = ?", accountID)
+	if err != nil {
+		logger.GetLogger().Error(fmt.Sprintf("Failed to delete login_status for account %s", accountID), err)
+	}
+
+	_, err = tx.Exec("DELETE FROM tasks WHERE account_id = ?", accountID)
+	if err != nil {
+		logger.GetLogger().Error(fmt.Sprintf("Failed to delete tasks for account %s", accountID), err)
+	}
+
 	if account.IsActive {
 		var newActiveID string
 		err = tx.QueryRow(`
@@ -214,15 +225,12 @@ func (r *AccountRepository) DeleteAccount(accountID string) error {
 		}
 	}
 
-	// Commit transaction
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	// Delete user data directory
 	if err := os.RemoveAll(account.UserDataDir); err != nil {
-		// Log error but don't fail (directory might not exist)
-		fmt.Printf("Warning: failed to delete user data dir %s: %v\n", account.UserDataDir, err)
+		logger.GetLogger().Error(fmt.Sprintf("Failed to delete user data dir %s", account.UserDataDir), err)
 	}
 
 	return nil

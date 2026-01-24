@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { wailsAPI, type Account } from '@/utils/wails-api';
 
-type PlatformName = 'deepseek' | 'doubao' | 'xiaohongshu';
+type PlatformName = 'deepseek' | 'doubao' | 'xiaohongshu' | 'yiyan' | 'yuanbao';
 
 interface AccountState {
   // Active accounts per platform
@@ -14,7 +14,7 @@ interface AccountState {
   // Actions
   loadAccounts: (platform: PlatformName) => Promise<void>;
   loadActiveAccount: (platform: PlatformName) => Promise<void>;
-  createAccount: (platform: PlatformName, accountName: string) => Promise<Account>;
+  createAccount: (platform: PlatformName, accountName: string, category?: string) => Promise<Account>;
   setActiveAccount: (platform: PlatformName, accountID: string) => Promise<void>;
   deleteAccount: (accountID: string) => Promise<void>;
   updateAccountName: (accountID: string, name: string) => Promise<void>;
@@ -28,11 +28,15 @@ export const useAccountStore = create<AccountState>((set, get) => ({
     deepseek: null,
     doubao: null,
     xiaohongshu: null,
+    yiyan: null,
+    yuanbao: null,
   },
   accountsByPlatform: {
     deepseek: [],
     doubao: [],
     xiaohongshu: [],
+    yiyan: [],
+    yuanbao: [],
   },
   loading: {},
 
@@ -74,10 +78,10 @@ export const useAccountStore = create<AccountState>((set, get) => ({
     }
   },
 
-  createAccount: async (platform: PlatformName, accountName: string) => {
+  createAccount: async (platform: PlatformName, accountName: string, category: string = 'large_model') => {
     set((state) => ({ loading: { ...state.loading, [`${platform}_create`]: true } }));
     try {
-      const response = await wailsAPI.account.create(platform, accountName);
+      const response = await wailsAPI.account.create(platform, accountName, category);
       if (response.success && response.account) {
         // Refresh accounts list
         await get().loadAccounts(platform);
@@ -115,7 +119,7 @@ export const useAccountStore = create<AccountState>((set, get) => ({
       await wailsAPI.account.delete(accountID);
       // Find which platform this account belongs to and refresh
       const state = get();
-      for (const platform of ['deepseek', 'doubao', 'xiaohongshu'] as PlatformName[]) {
+      for (const platform of ['deepseek', 'doubao', 'xiaohongshu', 'yiyan', 'yuanbao'] as PlatformName[]) {
         const account = state.accountsByPlatform[platform].find((a) => a.account_id === accountID);
         if (account) {
           await get().loadAccounts(platform);
@@ -137,7 +141,7 @@ export const useAccountStore = create<AccountState>((set, get) => ({
       await wailsAPI.account.updateName(accountID, name);
       // Refresh accounts
       const state = get();
-      for (const platform of ['deepseek', 'doubao', 'xiaohongshu'] as PlatformName[]) {
+      for (const platform of ['deepseek', 'doubao', 'xiaohongshu', 'yiyan', 'yuanbao'] as PlatformName[]) {
         const account = state.accountsByPlatform[platform].find((a) => a.account_id === accountID);
         if (account) {
           await get().loadAccounts(platform);

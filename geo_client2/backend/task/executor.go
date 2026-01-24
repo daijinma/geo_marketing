@@ -117,6 +117,18 @@ func (e *Executor) ExecuteLocalTask(taskID int, keywords, platforms []string, qu
 					return ctx.Err()
 				}
 
+				isCompleted, err := e.taskRepo.IsSearchRecordCompleted(taskID, keyword, platformName, round)
+				if err == nil && isCompleted {
+					e.logger.InfoWithContext(ctx, "Skipping already completed query", map[string]interface{}{
+						"taskID":   taskID,
+						"keyword":  keyword,
+						"platform": platformName,
+						"round":    round,
+					}, &taskID)
+					completedQueries++
+					continue
+				}
+
 				activeAccount, err := e.accountRepo.GetActiveAccount(platformName)
 				if err != nil {
 					e.logger.ErrorWithContext(ctx, "Failed to get active account", map[string]interface{}{

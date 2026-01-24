@@ -45,7 +45,11 @@ interface WailsApp {
   GetTaskDetail(taskID: number): Promise<{ success: boolean; data: unknown }>;
   CancelTask(taskID: number): Promise<void>;
   RetryTask(taskID: number): Promise<void>;
+  ContinueTask(taskID: number): Promise<void>;
+  DeleteTask(taskID: number): Promise<void>;
+  UpdateTaskName(taskID: number, name: string): Promise<void>;
   GetSearchRecords(taskID: number): Promise<{ success: boolean; records: any[] }>;
+  GetMergedSearchRecords(taskIDsJSON: string): Promise<{ success: boolean; records: any[] }>;
   GetStats(): Promise<unknown>;
 
   // Search
@@ -87,6 +91,7 @@ interface Account {
   account_name: string;
   user_data_dir: string;
   is_active: boolean;
+  category: string;
   created_at: string;
   updated_at: string;
 }
@@ -205,6 +210,21 @@ export const wailsAPI = {
       if (!app) return;
       return app.RetryTask(taskId);
     },
+    continueTask: async (taskId: number) => {
+      const app = getApp();
+      if (!app) return;
+      return app.ContinueTask(taskId);
+    },
+    deleteTask: async (taskId: number) => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.DeleteTask(taskId);
+    },
+    updateName: async (taskId: number, name: string) => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.UpdateTaskName(taskId, name);
+    },
     getStats: async () => {
       const app = getApp();
       if (!app) return null;
@@ -214,6 +234,12 @@ export const wailsAPI = {
       const app = getApp();
       if (!app) return { success: false, records: [] };
       return app.GetSearchRecords(taskId);
+    },
+    getMergedSearchRecords: async (taskIds: number[]) => {
+      const app = getApp();
+      if (!app) return { success: false, records: [] };
+      const taskIDsJSON = JSON.stringify(taskIds);
+      return app.GetMergedSearchRecords(taskIDsJSON);
     },
   },
   settings: {

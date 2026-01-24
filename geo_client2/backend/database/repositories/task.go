@@ -69,6 +69,15 @@ func (r *TaskRepository) UpdateStatus(id int, status string, resultData *string)
 	return err
 }
 
+// UpdateName updates task name.
+func (r *TaskRepository) UpdateName(id int, name string) error {
+	_, err := r.db.Exec(
+		"UPDATE tasks SET name = ?, updated_at = datetime('now') WHERE id = ?",
+		name, id,
+	)
+	return err
+}
+
 // UpdateStats updates task statistics.
 func (r *TaskRepository) UpdateStats(id int, totalQueries, completedQueries, totalRecords, completedRecords, failedRecords, totalCitations int) error {
 	_, err := r.db.Exec(
@@ -242,7 +251,7 @@ func (r *TaskRepository) DeleteSearchRecordsByTaskID(taskID int) error {
 	if err != nil {
 		return err
 	}
-	
+
 	_, err = r.db.Exec(`
 		DELETE FROM search_queries 
 		WHERE record_id IN (SELECT id FROM search_records WHERE task_id = ?)
@@ -277,11 +286,10 @@ func (r *TaskRepository) GetSearchRecordsByTaskID(taskID int) ([]map[string]inte
 		for i, col := range cols {
 			entry[col] = values[i]
 		}
-		
-		// Fetch related data
+
 		var recordID int64
 		var ok bool
-		
+
 		switch v := entry["id"].(type) {
 		case int64:
 			recordID = v
@@ -297,24 +305,89 @@ func (r *TaskRepository) GetSearchRecordsByTaskID(taskID int) ([]map[string]inte
 		if ok {
 			citations, _ := r.GetCitationsByRecordID(recordID)
 			entry["citations"] = citations
-			
+
 			queries, _ := r.GetQueriesByRecordID(recordID)
 			entry["queries"] = queries
 		}
-		
+
 		results = append(results, entry)
 	}
 	return results, nil
 }
 
-// GetCitationsByRecordID retrieves citations for a record.
+func (r *TaskRepository) GetMergedSearchRecords(taskIDs []int) ([]map[string]interface{}, error) {
+	if len(taskIDs) == 0 {
+		return []map[string]interface{}{}, nil
+	}
+
+	query := "SELECT * FROM search_records WHERE task_id IN ("
+	args := make([]interface{}, len(taskIDs))
+	for i, id := range taskIDs {
+		if i > 0 {
+			query += ","
+		}
+		query += "?"
+		args[i] = id
+	}
+	query += ") ORDER BY task_id ASC, created_at ASC"
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []map[string]interface{}
+	cols, _ := rows.Columns()
+	for rows.Next() {
+		values := make([]interface{}, len(cols))
+		valuePtrs := make([]interface{}, len(cols))
+		for i := range values {
+			valuePtrs[i] = &values[i]
+		}
+		if err := rows.Scan(valuePtrs...); err != nil {
+			return nil, err
+		}
+		entry := make(map[string]interface{})
+		for i, col := range cols {
+			entry[col] = values[i]
+		}
+
+		var recordID int64
+		var ok bool
+
+		switch v := entry["id"].(type) {
+		case int64:
+			recordID = v
+			ok = true
+		case int:
+			recordID = int64(v)
+			ok = true
+		case float64:
+			recordID = int64(v)
+			ok = true
+		}
+
+		if ok {
+			citations, _ := r.GetCitationsByRecordID(recordID)
+			entry["citations"] = citations
+
+			queries, _ := r.GetQueriesByRecordID(recordID)
+			entry["queries"] = queries
+		}
+
+		results = append(results, entry)
+	}
+	return results, nil
+}
+
 func (r *TaskRepository) GetCitationsByRecordID(recordID int64) ([]map[string]interface{}, error) {
 	rows, err := r.db.Query("SELECT * FROM citations WHERE record_id = ? ORDER BY cite_index ASC", recordID)
 	if err != nil {
 		return []map[string]interface{}{}, err
 	}
 	defer rows.Close()
-	
+
 	var results []map[string]interface{}
 	cols, _ := rows.Columns()
 	for rows.Next() {
@@ -342,7 +415,7 @@ func (r *TaskRepository) GetQueriesByRecordID(recordID int64) ([]map[string]inte
 		return []map[string]interface{}{}, err
 	}
 	defer rows.Close()
-	
+
 	var results []map[string]interface{}
 	cols, _ := rows.Columns()
 	for rows.Next() {
@@ -361,4 +434,34 @@ func (r *TaskRepository) GetQueriesByRecordID(recordID int64) ([]map[string]inte
 		results = append(results, entry)
 	}
 	return results, nil
+}
+
+// Delete deletes a task and all related data (search_records, citations, queries).
+func (r *TaskRepository) Delete(taskID int) error {
+	// Delete in order: citations -> search_queries -> search_records -> task
+	if err := r.DeleteSearchRecordsByTaskID(taskID); err != nil {
+		return fmt.Errorf("failed to delete search records: %w", err)
+	}
+
+	_, err := r.db.Exec("DELETE FROM tasks WHERE id = ?", taskID)
+	if err != nil {
+		return fmt.Errorf("failed to delete task: %w", err)
+	}
+
+	return nil
+}
+
+// IsSearchRecordCompleted checks if a search record exists and is completed.
+func (r *TaskRepository) IsSearchRecordCompleted(taskID int, keyword, platform string, round int) (bool, error) {
+	var exists bool
+	err := r.db.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM search_records 
+			WHERE task_id = ? AND keyword = ? AND platform = ? AND round_number = ? AND search_status = 'completed'
+		)
+	`, taskID, keyword, platform, round).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
 }

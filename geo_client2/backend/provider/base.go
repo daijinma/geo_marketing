@@ -26,7 +26,8 @@ type Citation struct {
 	Title        string `json:"title"`
 	Snippet      string `json:"snippet"`
 	QueryIndexes []int  `json:"query_indexes"`
-	Query        string `json:"query"` // 根据 QueryIndexes[0] 从 Queries 数组中获取的查询词
+	Query        string `json:"query"`      // 根据 QueryIndexes[0] 从 Queries 数组中获取的查询词
+	CiteIndex    int    `json:"cite_index"` // 引用序号，用于排序
 }
 
 // Provider interface for search providers.
@@ -88,7 +89,8 @@ func (b *BaseProvider) LaunchBrowser(headless bool) (*rod.Browser, func(), error
 	l := launcher.New().
 		UserDataDir(b.userDataDir).
 		Headless(headless).
-		Delete("SingletonLock")
+		Delete("SingletonLock").
+		Set("lang", "zh-CN") // Set language to Chinese
 
 	l.Set("disable-blink-features", "AutomationControlled")
 	l.NoSandbox(true)
@@ -105,6 +107,9 @@ func (b *BaseProvider) LaunchBrowser(headless bool) (*rod.Browser, func(), error
 	if err != nil {
 		return nil, nil, fmt.Errorf("connecting to browser: %w", err)
 	}
+	// 禁用默认设备模拟（修复窗口调整大小时内容不随之调整的问题）
+	browser = browser.NoDefaultDevice()
+
 	b.browser = browser
 
 	cleanup := func() {}
@@ -182,6 +187,10 @@ func (f *Factory) GetProvider(platform string, headless bool, timeout int, accou
 		return NewDeepSeekProvider(headless, timeout, accountID), nil
 	case "xiaohongshu":
 		return NewXiaohongshuProvider(headless, timeout, accountID), nil
+	case "yiyan":
+		return NewYiyanProvider(headless, timeout, accountID), nil
+	case "yuanbao":
+		return NewYuanbaoProvider(headless, timeout, accountID), nil
 	default:
 		return nil, fmt.Errorf("unsupported platform: %s", platform)
 	}

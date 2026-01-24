@@ -10,7 +10,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 8
+const schemaVersion = 11
 
 var db *sql.DB
 
@@ -98,12 +98,90 @@ func runMigrations() error {
 			}
 		}
 
+		// Migrate from version 8 to 9: Add name column to tasks
+		if currentVersion <= 8 {
+			if err := migrateToV9(); err != nil {
+				return fmt.Errorf("failed to migrate to v9: %w", err)
+			}
+		}
+
+		// Migrate from version 9 to 10: Add category column to accounts
+		if currentVersion <= 9 {
+			if err := migrateToV10(); err != nil {
+				return fmt.Errorf("failed to migrate to v10: %w", err)
+			}
+		}
+
+		// Migrate from version 10 to 11: Update category values based on platform
+		if currentVersion <= 10 {
+			if err := migrateToV11(); err != nil {
+				return fmt.Errorf("failed to migrate to v11: %w", err)
+			}
+		}
+
 		_, err = GetDB().Exec("UPDATE db_version SET version = ?, updated_at = datetime('now') WHERE id = 1", schemaVersion)
 		if err != nil {
 			return fmt.Errorf("failed to update version: %w", err)
 		}
 	}
 
+	return nil
+}
+
+// migrateToV10 migrates database from version 9 to 10.
+// Adds category column to accounts table.
+func migrateToV10() error {
+	db := GetDB()
+	var colExists int
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('accounts') WHERE name='category'").Scan(&colExists)
+	if colExists == 0 {
+		if _, err := db.Exec("ALTER TABLE accounts ADD COLUMN category TEXT DEFAULT 'ai_model'"); err != nil {
+			return fmt.Errorf("failed to add category column to accounts: %w", err)
+		}
+		if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_accounts_category ON accounts(category)"); err != nil {
+			return fmt.Errorf("failed to create index on accounts(category): %w", err)
+		}
+	}
+	return nil
+}
+
+// migrateToV11 migrates database from version 10 to 11.
+// Updates category values based on platform type.
+func migrateToV11() error {
+	db := GetDB()
+
+	// Set AI model platforms
+	aiModelPlatforms := []string{"deepseek", "doubao", "yiyan", "yuanbao"}
+	for _, platform := range aiModelPlatforms {
+		_, err := db.Exec("UPDATE accounts SET category = 'ai_model' WHERE platform = ?", platform)
+		if err != nil {
+			return fmt.Errorf("failed to update category for platform %s: %w", platform, err)
+		}
+	}
+
+	// Set publishing platforms
+	publishingPlatforms := []string{"xiaohongshu"}
+	for _, platform := range publishingPlatforms {
+		_, err := db.Exec("UPDATE accounts SET category = 'publishing' WHERE platform = ?", platform)
+		if err != nil {
+			return fmt.Errorf("failed to update category for platform %s: %w", platform, err)
+		}
+	}
+
+	return nil
+}
+
+// migrateToV9 migrates database from version 8 to 9.
+// Adds name column to tasks table.
+func migrateToV9() error {
+	db := GetDB()
+	var colExists int
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('tasks') WHERE name='name'").Scan(&colExists)
+	if colExists == 0 {
+		if _, err := db.Exec("ALTER TABLE tasks ADD COLUMN name TEXT"); err != nil {
+			return fmt.Errorf("failed to add name column to tasks: %w", err)
+		}
+	}
 	return nil
 }
 

@@ -60,7 +60,12 @@ function App() {
         });
         
         if (d.platform && !d.isLoggedIn) {
-          const platformName = d.platform === 'deepseek' ? 'DeepSeek' : d.platform === 'doubao' ? '豆包' : d.platform;
+          const platformName = d.platform === 'deepseek' ? 'DeepSeek' : 
+                             d.platform === 'doubao' ? '豆包' : 
+                             d.platform === 'xiaohongshu' ? '小红书' : 
+                             d.platform === 'yiyan' ? '文心一言' : 
+                             d.platform === 'yuanbao' ? '腾讯元宝' : d.platform;
+                             
           toast.warning(`${platformName} 登录已过期`, {
             description: '请重新登录以继续使用',
             duration: 5000,

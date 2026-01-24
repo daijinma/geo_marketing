@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { RefreshCw, ChevronDown, ChevronRight, Play } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { RefreshCw, ChevronDown, ChevronRight, Play, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { LocalTaskCreator } from '@/components/LocalTaskCreator';
 import { LocalTaskDetail } from '@/components/LocalTaskDetail';
@@ -7,6 +7,8 @@ import { wailsAPI } from '@/utils/wails-api';
 
 interface Task {
   id: number;
+  task_id?: number; // DB field is task_id, but sometimes mapped to id
+  name?: string;
   keywords: string;
   platforms: string;
   query_count: number;
@@ -24,6 +26,13 @@ export default function Tasks() {
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [showCreator, setShowCreator] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [deletingTaskId, setDeletingTaskId] = useState<number | null>(null);
+  const [deleteConfirmationId, setDeleteConfirmationId] = useState<number | null>(null);
+  
+  // Editing state
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const editInputRef = useRef<HTMLInputElement>(null);
 
   const loadTasks = async () => {
     setLoading(true);
@@ -76,6 +85,67 @@ export default function Tasks() {
     }
   };
 
+  const handleContinue = async (taskId: number) => {
+    try {
+      await wailsAPI.task.continueTask(taskId);
+      toast.success('任务已继续执行');
+      loadTasks();
+    } catch (error: any) {
+      toast.error('继续任务失败', { description: error.message });
+    }
+  };
+
+  const handleDelete = async (taskId: number) => {
+    setDeleteConfirmationId(taskId);
+  };
+
+  const confirmDelete = async () => {
+    if (deleteConfirmationId === null) return;
+    const taskId = deleteConfirmationId;
+    setDeleteConfirmationId(null);
+    setDeletingTaskId(taskId);
+    
+    try {
+      await wailsAPI.task.deleteTask(taskId);
+      toast.success('任务已删除');
+      loadTasks();
+    } catch (error: any) {
+      toast.error('删除任务失败', { description: error.message });
+    } finally {
+      setDeletingTaskId(null);
+    }
+  };
+
+  const handleDoubleClick = (task: Task) => {
+    setEditingTaskId(task.id);
+    setEditValue(task.name || `任务 #${task.id}`);
+    setTimeout(() => {
+      editInputRef.current?.focus();
+    }, 0);
+  };
+
+  const handleSaveName = async () => {
+    if (editingTaskId === null) return;
+    
+    try {
+      await wailsAPI.task.updateName(editingTaskId, editValue);
+      toast.success('任务名称已更新');
+      loadTasks();
+    } catch (error: any) {
+      toast.error('更新失败', { description: error.message });
+    } finally {
+      setEditingTaskId(null);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSaveName();
+    } else if (e.key === 'Escape') {
+      setEditingTaskId(null);
+    }
+  };
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -120,8 +190,17 @@ export default function Tasks() {
           {tasks.map((task) => (
             <div
               key={task.id}
-              className="p-4 bg-card border border-border rounded-lg"
+              className="p-4 bg-card border border-border rounded-lg relative"
             >
+              {deletingTaskId === task.id && (
+                <div className="absolute inset-0 bg-background/80 rounded-lg flex items-center justify-center z-10">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>删除中...</span>
+                  </div>
+                </div>
+              )}
+              
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <button
@@ -134,7 +213,28 @@ export default function Tasks() {
                       <ChevronRight className="w-4 h-4" />
                     )}
                   </button>
-                  <span className="font-medium">任务 #{task.id}</span>
+                  <span className="font-medium">
+                    {editingTaskId === task.id ? (
+                      <input
+                        ref={editInputRef}
+                        type="text"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onBlur={handleSaveName}
+                        onKeyDown={handleKeyDown}
+                        className="px-2 py-1 border border-primary rounded text-sm focus:outline-none"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span 
+                        onDoubleClick={() => handleDoubleClick(task)}
+                        className="cursor-pointer hover:bg-accent/50 px-2 py-1 rounded select-none"
+                        title="双击修改名称"
+                      >
+                        {task.name || `任务 #${task.id}`}
+                      </span>
+                    )}
+                  </span>
                   <span className={`text-xs px-2 py-1 rounded ${
                     task.status === 'completed' ? 'bg-green-100 text-green-800' :
                     task.status === 'running' ? 'bg-blue-100 text-blue-800' :
@@ -151,16 +251,28 @@ export default function Tasks() {
                   </span>
                 </div>
                 <div className="flex gap-4 items-center">
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
                     {task.status !== 'running' && (
-                      <button
-                        onClick={() => handleRetry(task.id)}
-                        className="flex items-center gap-1 text-sm text-primary hover:underline"
-                        title="重新执行"
-                      >
-                        <Play className="w-3 h-3" />
-                        重试
-                      </button>
+                      <>
+                        {task.status === 'partial_completed' && (
+                          <button
+                            onClick={() => handleContinue(task.id)}
+                            className="flex items-center gap-1 text-sm text-primary hover:underline"
+                            title="继续执行未完成的部分"
+                          >
+                            <Play className="w-3 h-3" />
+                            继续
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleRetry(task.id)}
+                          className="flex items-center gap-1 text-sm text-primary hover:underline"
+                          title="重新执行"
+                        >
+                          <Play className="w-3 h-3" />
+                          重试
+                        </button>
+                      </>
                     )}
                     <button
                       onClick={() => setSelectedTaskId(task.id)}
@@ -168,12 +280,20 @@ export default function Tasks() {
                     >
                       查看详情
                     </button>
-                    {task.status === 'running' && (
+                    {task.status === 'running' ? (
                       <button
                         onClick={() => handleCancel(task.id)}
                         className="text-sm text-destructive hover:underline"
                       >
                         取消
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleDelete(task.id)}
+                        className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full transition-colors"
+                        title="删除任务"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     )}
                   </div>
@@ -181,6 +301,7 @@ export default function Tasks() {
               </div>
               {expandedTask === task.id && (
                 <div className="mt-4 space-y-2 text-sm text-muted-foreground">
+                  <div>任务ID: {task.id}</div>
                   <div>关键词: {task.keywords}</div>
                   <div>平台: {task.platforms}</div>
                   <div>查询次数: {task.query_count}</div>
@@ -207,6 +328,31 @@ export default function Tasks() {
           taskId={selectedTaskId}
           onClose={() => setSelectedTaskId(null)}
         />
+      )}
+
+      {deleteConfirmationId && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-background border border-border rounded-lg shadow-lg p-6 max-w-sm w-full space-y-4">
+            <h3 className="text-lg font-semibold">确认删除任务?</h3>
+            <p className="text-muted-foreground text-sm">
+              此操作将永久删除任务及其所有搜索记录，且无法恢复。
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeleteConfirmationId(null)}
+                className="px-4 py-2 border border-border rounded-md hover:bg-accent text-sm"
+              >
+                取消
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 text-sm"
+              >
+                确认删除
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

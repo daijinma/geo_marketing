@@ -178,6 +178,79 @@ func (m *Manager) RetryTask(taskID int) error {
 	return nil
 }
 
+// ContinueTask resumes a partially completed or failed task.
+func (m *Manager) ContinueTask(taskID int) error {
+	taskData, err := m.taskRepo.GetByID(taskID)
+	if err != nil {
+		return err
+	}
+
+	var keywords []string
+	var platforms []string
+	var settings map[string]interface{}
+
+	getValue := func(key string) string {
+		for k, v := range taskData {
+			if strings.EqualFold(k, key) {
+				switch val := v.(type) {
+				case string:
+					return val
+				case []byte:
+					return string(val)
+				}
+			}
+		}
+		return ""
+	}
+
+	kStr := getValue("keywords")
+	if kStr != "" {
+		json.Unmarshal([]byte(kStr), &keywords)
+	}
+
+	pStr := getValue("platforms")
+	if pStr != "" {
+		json.Unmarshal([]byte(pStr), &platforms)
+	}
+
+	sStr := getValue("settings")
+	if sStr != "" {
+		json.Unmarshal([]byte(sStr), &settings)
+	}
+
+	queryCount := 1
+	for k, v := range taskData {
+		if strings.EqualFold(k, "query_count") {
+			switch val := v.(type) {
+			case int64:
+				queryCount = int(val)
+			case int:
+				queryCount = val
+			case float64:
+				queryCount = int(val)
+			}
+			break
+		}
+	}
+
+	m.logger.InfoWithContext(m.eventContext, "Continuing task", map[string]interface{}{
+		"taskID":     taskID,
+		"keywords":   keywords,
+		"platforms":  platforms,
+		"queryCount": queryCount,
+	}, &taskID)
+
+	m.taskRepo.UpdateStatus(taskID, "pending", nil)
+
+	go func() {
+		if err := m.executor.ExecuteLocalTask(taskID, keywords, platforms, queryCount, settings); err != nil {
+			m.logger.Error("Task continuation failed", err)
+		}
+	}()
+
+	return nil
+}
+
 // GetStats retrieves task statistics.
 func (m *Manager) GetStats() (map[string]interface{}, error) {
 	return m.taskRepo.GetStats()
@@ -231,4 +304,39 @@ func (m *Manager) SubmitToServer(taskID int, apiBaseURL, token string) error {
 // GetSearchRecords retrieves search records for a task.
 func (m *Manager) GetSearchRecords(taskID int) ([]map[string]interface{}, error) {
 	return m.taskRepo.GetSearchRecordsByTaskID(taskID)
+}
+
+func (m *Manager) GetMergedSearchRecords(taskIDs []int) ([]map[string]interface{}, error) {
+	return m.taskRepo.GetMergedSearchRecords(taskIDs)
+}
+
+// DeleteTask deletes a task if it's not running.
+func (m *Manager) DeleteTask(taskID int) error {
+	task, err := m.taskRepo.GetByID(taskID)
+	if err != nil {
+		return fmt.Errorf("failed to get task: %w", err)
+	}
+
+	status := ""
+	for k, v := range task {
+		if strings.EqualFold(k, "status") {
+			if s, ok := v.(string); ok {
+				status = s
+			} else if b, ok := v.([]byte); ok {
+				status = string(b)
+			}
+			break
+		}
+	}
+
+	if status == "running" || status == "pending" {
+		return fmt.Errorf("cannot delete task with status: %s", status)
+	}
+
+	return m.taskRepo.Delete(taskID)
+}
+
+// UpdateTaskName updates the name of a task.
+func (m *Manager) UpdateTaskName(taskID int, name string) error {
+	return m.taskRepo.UpdateName(taskID, name)
 }

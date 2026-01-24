@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Play, Loader2 } from 'lucide-react';
+import { Play, Loader2, Combine } from 'lucide-react';
 import { toast } from 'sonner';
 import { wailsAPI } from '@/utils/wails-api';
+import { MergedTaskViewer } from '@/components/MergedTaskViewer';
 
 export default function Search() {
   const [keywords, setKeywords] = useState('');
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['deepseek']);
   const [queryCount, setQueryCount] = useState(1);
   const [isSearching, setIsSearching] = useState(false);
+  const [mergeTaskIds, setMergeTaskIds] = useState('');
+  const [showMergedViewer, setShowMergedViewer] = useState(false);
+  const [currentMergedIds, setCurrentMergedIds] = useState<number[]>([]);
 
   const handleSearch = async () => {
     if (!keywords.trim()) {
@@ -22,19 +26,36 @@ export default function Search() {
     setIsSearching(true);
     try {
       const keywordList = keywords.split('\n').map(k => k.trim()).filter(k => k);
-      const result = await wailsAPI.search.createTask({
+      
+      const result = await wailsAPI.task.createLocalSearchTask({
         keywords: keywordList,
         platforms: selectedPlatforms,
-        queryCount,
+        query_count: queryCount,
       });
+      
       if (result.success) {
-        toast.success('搜索任务已创建');
+        toast.success('搜索任务已创建', { description: `任务ID: ${result.taskId}` });
       }
     } catch (error: any) {
       toast.error('创建任务失败', { description: error.message });
     } finally {
       setIsSearching(false);
     }
+  };
+
+  const handleMergeQuery = () => {
+    const ids = mergeTaskIds
+      .split(',')
+      .map(id => parseInt(id.trim()))
+      .filter(id => !isNaN(id) && id > 0);
+    
+    if (ids.length === 0) {
+      toast.error('请输入有效的任务ID');
+      return;
+    }
+
+    setCurrentMergedIds(ids);
+    setShowMergedViewer(true);
   };
 
   return (
@@ -52,8 +73,8 @@ export default function Search() {
         </div>
         <div>
           <label className="block text-sm font-medium mb-2">平台</label>
-          <div className="flex gap-4">
-            {['deepseek', 'doubao'].map((p) => (
+          <div className="flex gap-4 flex-wrap">
+            {['deepseek', 'doubao', 'yiyan', 'yuanbao'].map((p) => (
               <label key={p} className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -66,7 +87,11 @@ export default function Search() {
                     }
                   }}
                 />
-                <span>{p === 'deepseek' ? 'DeepSeek' : '豆包'}</span>
+                <span>
+                  {p === 'deepseek' ? 'DeepSeek' : 
+                   p === 'doubao' ? '豆包' : 
+                   p === 'yiyan' ? '文心一言' : '腾讯元宝'}
+                </span>
               </label>
             ))}
           </div>
@@ -91,6 +116,38 @@ export default function Search() {
           开始搜索
         </button>
       </div>
+
+      <div className="border-t border-border pt-6 mt-8">
+        <h2 className="text-lg font-semibold mb-4">合并查询</h2>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              输入任务ID（多个ID用逗号分隔，如：1,2,3）
+            </label>
+            <input
+              type="text"
+              value={mergeTaskIds}
+              onChange={(e) => setMergeTaskIds(e.target.value)}
+              placeholder="例如: 1,2,3"
+              className="w-full px-3 py-2 border border-border rounded-md bg-background"
+            />
+          </div>
+          <button
+            onClick={handleMergeQuery}
+            className="px-4 py-2 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/90 flex items-center gap-2"
+          >
+            <Combine className="w-4 h-4" />
+            合并查询
+          </button>
+        </div>
+      </div>
+
+      {showMergedViewer && (
+        <MergedTaskViewer
+          taskIds={currentMergedIds}
+          onClose={() => setShowMergedViewer(false)}
+        />
+      )}
     </div>
   );
 }

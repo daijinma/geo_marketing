@@ -145,6 +145,18 @@ func (a *App) RetryTask(taskID int) error {
 	return a.taskManager.RetryTask(taskID)
 }
 
+func (a *App) ContinueTask(taskID int) error {
+	return a.taskManager.ContinueTask(taskID)
+}
+
+func (a *App) DeleteTask(taskID int) error {
+	return a.taskManager.DeleteTask(taskID)
+}
+
+func (a *App) UpdateTaskName(taskID int, name string) error {
+	return a.taskManager.UpdateTaskName(taskID, name)
+}
+
 func (a *App) GetStats() (map[string]interface{}, error) {
 	return a.taskManager.GetStats()
 }
@@ -159,9 +171,9 @@ func (a *App) CheckLoginStatus(platform string) (map[string]interface{}, error) 
 }
 
 // Account methods
-func (a *App) CreateAccount(platform, accountName string) (map[string]interface{}, error) {
-	fmt.Printf("[DEBUG] App.CreateAccount called with: platform=%s, name=%s\n", platform, accountName)
-	acc, err := a.accountSvc.CreateAccount(platform, accountName)
+func (a *App) CreateAccount(platform, accountName, category string) (map[string]interface{}, error) {
+	fmt.Printf("[DEBUG] App.CreateAccount called with: platform=%s, name=%s, category=%s\n", platform, accountName, category)
+	acc, err := a.accountSvc.CreateAccount(platform, accountName, category)
 	if err != nil {
 		fmt.Printf("[DEBUG] App.CreateAccount error: %v\n", err)
 		return nil, err
@@ -176,6 +188,7 @@ func (a *App) CreateAccount(platform, accountName string) (map[string]interface{
 			"account_name":  acc.AccountName,
 			"user_data_dir": acc.UserDataDir,
 			"is_active":     acc.IsActive,
+			"category":      acc.Category,
 			"created_at":    acc.CreatedAt,
 			"updated_at":    acc.UpdatedAt,
 		},
@@ -196,6 +209,7 @@ func (a *App) ListAccounts(platform string) (map[string]interface{}, error) {
 			"account_name":  acc.AccountName,
 			"user_data_dir": acc.UserDataDir,
 			"is_active":     acc.IsActive,
+			"category":      acc.Category,
 			"created_at":    acc.CreatedAt,
 			"updated_at":    acc.UpdatedAt,
 		}
@@ -220,6 +234,7 @@ func (a *App) GetActiveAccount(platform string) (map[string]interface{}, error) 
 			"account_name":  acc.AccountName,
 			"user_data_dir": acc.UserDataDir,
 			"is_active":     acc.IsActive,
+			"category":      acc.Category,
 			"created_at":    acc.CreatedAt,
 			"updated_at":    acc.UpdatedAt,
 		},
@@ -403,6 +418,19 @@ func (a *App) GetVersionInfo() map[string]interface{} {
 
 func (a *App) GetSearchRecords(taskID int) (map[string]interface{}, error) {
 	records, err := a.taskManager.GetSearchRecords(taskID)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{"success": true, "records": records}, nil
+}
+
+func (a *App) GetMergedSearchRecords(taskIDsJSON string) (map[string]interface{}, error) {
+	var taskIDs []int
+	if err := json.Unmarshal([]byte(taskIDsJSON), &taskIDs); err != nil {
+		return nil, fmt.Errorf("invalid task IDs format: %w", err)
+	}
+
+	records, err := a.taskManager.GetMergedSearchRecords(taskIDs)
 	if err != nil {
 		return nil, err
 	}

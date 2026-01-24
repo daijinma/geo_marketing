@@ -12,6 +12,7 @@ func initSchema() error {
 		`CREATE TABLE IF NOT EXISTS tasks (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			task_id INTEGER UNIQUE,
+			name TEXT,
 			keywords TEXT NOT NULL,
 			platforms TEXT NOT NULL,
 			query_count INTEGER NOT NULL DEFAULT 1,
@@ -41,6 +42,7 @@ func initSchema() error {
 			account_name TEXT NOT NULL,
 			user_data_dir TEXT NOT NULL,
 			is_active INTEGER DEFAULT 0,
+			category TEXT DEFAULT 'ai_model',
 			created_at TEXT DEFAULT (datetime('now', 'localtime')),
 			updated_at TEXT DEFAULT (datetime('now', 'localtime')),
 			UNIQUE(platform, account_id)
@@ -144,6 +146,7 @@ func initSchema() error {
 		"CREATE INDEX IF NOT EXISTS idx_ds_domain ON domain_stats(domain)",
 		"CREATE INDEX IF NOT EXISTS idx_accounts_platform ON accounts(platform)",
 		"CREATE INDEX IF NOT EXISTS idx_accounts_active ON accounts(platform, is_active)",
+		"CREATE INDEX IF NOT EXISTS idx_accounts_category ON accounts(category)",
 		"CREATE INDEX IF NOT EXISTS idx_logs_level ON logs(level)",
 		"CREATE INDEX IF NOT EXISTS idx_logs_source ON logs(source)",
 		// "CREATE INDEX IF NOT EXISTS idx_logs_session ON logs(session_id)", // Handled in migration/db.go

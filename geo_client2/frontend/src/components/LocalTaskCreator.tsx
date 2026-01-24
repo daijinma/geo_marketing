@@ -76,8 +76,8 @@ export function LocalTaskCreator({ onClose, onCreated }: LocalTaskCreatorProps) 
           </div>
           <div>
             <label className="block text-sm font-medium mb-2">平台</label>
-            <div className="flex gap-4">
-              {['deepseek', 'doubao'].map((p) => (
+            <div className="flex gap-4 flex-wrap">
+              {['deepseek', 'doubao', 'yiyan', 'yuanbao'].map((p) => (
                 <label key={p} className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -90,7 +90,11 @@ export function LocalTaskCreator({ onClose, onCreated }: LocalTaskCreatorProps) 
                       }
                     }}
                   />
-                  <span>{p === 'deepseek' ? 'DeepSeek' : '豆包'}</span>
+                  <span>
+                    {p === 'deepseek' ? 'DeepSeek' : 
+                     p === 'doubao' ? '豆包' : 
+                     p === 'yiyan' ? '文心一言' : '腾讯元宝'}
+                  </span>
                 </label>
               ))}
             </div>
