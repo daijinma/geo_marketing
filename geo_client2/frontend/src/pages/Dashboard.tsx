@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { LayoutDashboard, ListTodo, CheckCircle2, XCircle } from 'lucide-react';
+import { LayoutDashboard, ListTodo, CheckCircle2, XCircle, Users } from 'lucide-react';
 import { wailsAPI } from '@/utils/wails-api';
 
 export default function Dashboard() {
@@ -8,6 +8,10 @@ export default function Dashboard() {
     running: 0,
     completed: 0,
     failed: 0,
+  });
+  const [accountStats, setAccountStats] = useState({
+    total: 0,
+    byPlatform: {} as Record<string, number>,
   });
 
   useEffect(() => {
@@ -20,6 +24,14 @@ export default function Dashboard() {
             running: (result as any).running || 0,
             completed: (result as any).completed || 0,
             failed: (result as any).failed || 0,
+          });
+        }
+
+        const accResult = await wailsAPI.account.getStats();
+        if (accResult) {
+          setAccountStats({
+            total: accResult.total || 0,
+            byPlatform: accResult.byPlatform || {},
           });
         }
       } catch (err) {
@@ -37,7 +49,16 @@ export default function Dashboard() {
         <h1 className="text-2xl font-bold mb-2">仪表板</h1>
         <p className="text-muted-foreground">任务执行概览</p>
       </div>
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-5 gap-4">
+        <div className="p-4 bg-card border border-border rounded-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">账户总数</p>
+              <p className="text-2xl font-bold">{accountStats.total}</p>
+            </div>
+            <Users className="w-8 h-8 text-blue-500" />
+          </div>
+        </div>
         <div className="p-4 bg-card border border-border rounded-lg">
           <div className="flex items-center justify-between">
             <div>

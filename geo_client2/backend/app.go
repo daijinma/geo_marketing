@@ -2,10 +2,13 @@ package backend
 
 import (
 	"context"
+	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
+	gouruntime "runtime"
 	"strings"
 	"time"
 
@@ -48,8 +51,10 @@ func (a *App) Startup(ctx context.Context) {
 
 	db := database.GetDB()
 
-	// Initialize logger with database connection
 	logger.SetDB(db)
+	l := logger.GetLogger()
+	stdout, _ := l.RedirectStdout()
+	log.SetOutput(stdout)
 
 	// Initialize repositories
 	accountRepo := repositories.NewAccountRepository(db)
@@ -213,13 +218,14 @@ func (a *App) CreateAccount(platform, accountName string) (map[string]interface{
 	if a.accountSvc == nil {
 		return nil, fmt.Errorf("account service not initialized")
 	}
-	fmt.Printf("[DEBUG] App.CreateAccount called with: platform=%s, name=%s\n", platform, accountName)
+	l := logger.GetLogger()
+	l.Debug(fmt.Sprintf("App.CreateAccount called with: platform=%s, name=%s", platform, accountName))
 	acc, err := a.accountSvc.CreateAccount(platform, accountName)
 	if err != nil {
-		fmt.Printf("[DEBUG] App.CreateAccount error: %v\n", err)
+		l.Error("App.CreateAccount error", err)
 		return nil, err
 	}
-	fmt.Printf("[DEBUG] App.CreateAccount success: %v\n", acc.AccountID)
+	l.Debug(fmt.Sprintf("App.CreateAccount success: %v", acc.AccountID))
 	return map[string]interface{}{
 		"success": true,
 		"account": map[string]interface{}{
@@ -307,6 +313,13 @@ func (a *App) UpdateAccountName(accountID, name string) error {
 		return fmt.Errorf("account service not initialized")
 	}
 	return a.accountSvc.UpdateAccountName(accountID, name)
+}
+
+func (a *App) GetAccountStats() (map[string]interface{}, error) {
+	if a.accountSvc == nil {
+		return nil, fmt.Errorf("account service not initialized")
+	}
+	return a.accountSvc.GetStats()
 }
 
 // Auth methods
@@ -405,9 +418,10 @@ func (a *App) GetLogs(limit, offset int, filtersJSON string) (map[string]interfa
 }
 
 func (a *App) AddLog(level, source, message, detailsJSON, sessionID, correlationID, component, userAction string, performanceMS, taskID *int) error {
-	fmt.Printf("[DEBUG] AddLog called: level=%s, message=%s, taskID=%v\n", level, message, taskID)
+	l := logger.GetLogger()
+	l.Debug(fmt.Sprintf("AddLog called: level=%s, message=%s, taskID=%v", level, message, taskID))
 	if a.logRepo == nil {
-		fmt.Printf("[ERROR] App.AddLog called but logRepo is nil. Startup might have failed.\n")
+		l.Error("App.AddLog called but logRepo is nil. Startup might have failed.", nil)
 		return fmt.Errorf("log repository not initialized")
 	}
 
@@ -498,92 +512,6 @@ func (a *App) GetSearchRecords(taskID int) (map[string]interface{}, error) {
 	return map[string]interface{}{"success": true, "records": records}, nil
 }
 
-// ExportLogs exports logs for the specified time range to a text file.
-// timeRange options: "today", "3days", "7days"
-func (a *App) ExportLogs(timeRange string) (map[string]interface{}, error) {
-	if a.logRepo == nil {
-		return nil, fmt.Errorf("log repository not initialized")
-	}
-	now := time.Now()
-	var startTime time.Time
-
-	// Truncate to start of today for consistent logic
-	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-
-	switch timeRange {
-	case "today":
-		startTime = todayStart
-	case "3days":
-		startTime = todayStart.AddDate(0, 0, -3)
-	case "7days":
-		startTime = todayStart.AddDate(0, 0, -7)
-	default:
-		return nil, fmt.Errorf("invalid time range: %s", timeRange)
-	}
-
-	// Format startTime for SQLite (YYYY-MM-DD HH:MM:SS)
-	startTimeStr := startTime.Format("2006-01-02 15:04:05")
-
-	logs, err := a.logRepo.GetLogsSince(startTimeStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch logs: %w", err)
-	}
-
-	if len(logs) == 0 {
-		return map[string]interface{}{
-			"success": false,
-			"message": "No logs found for the selected time range",
-		}, nil
-	}
-
-	// Build content
-	var sb strings.Builder
-	for _, log := range logs {
-		timestamp, _ := log["timestamp"].(string)
-		level, _ := log["level"].(string)
-		source, _ := log["source"].(string)
-		message, _ := log["message"].(string)
-		details, _ := log["details"].(string)
-
-		line := fmt.Sprintf("[%s] [%s] [%s] %s", timestamp, level, source, message)
-		if details != "" && details != "{}" {
-			line += fmt.Sprintf(" Details: %s", details)
-		}
-		sb.WriteString(line + "\n")
-	}
-
-	// Open Save Dialog
-	filename := fmt.Sprintf("geo_client_logs_%s_%s.txt", timeRange, now.Format("20060102_150405"))
-	filepath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
-		DefaultDirectory:     ".",
-		DefaultFilename:      filename,
-		Title:                "Export Logs",
-		Filters:              []runtime.FileFilter{{DisplayName: "Text Files (*.txt)", Pattern: "*.txt"}},
-		CanCreateDirectories: true,
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to open save dialog: %w", err)
-	}
-
-	if filepath == "" {
-		// User cancelled
-		return map[string]interface{}{"success": false, "message": "Export cancelled"}, nil
-	}
-
-	// Write file
-	err = os.WriteFile(filepath, []byte(sb.String()), 0644)
-	if err != nil {
-		return nil, fmt.Errorf("failed to write file: %w", err)
-	}
-
-	return map[string]interface{}{
-		"success": true,
-		"path":    filepath,
-		"count":   len(logs),
-	}, nil
-}
-
 func (a *App) GetMergedSearchRecords(taskIDsJSON string) (map[string]interface{}, error) {
 	if a.taskManager == nil {
 		return nil, fmt.Errorf("task manager not initialized")
@@ -598,4 +526,115 @@ func (a *App) GetMergedSearchRecords(taskIDsJSON string) (map[string]interface{}
 		return nil, err
 	}
 	return map[string]interface{}{"success": true, "records": records}, nil
+}
+
+func (a *App) GetLogFileContent(lines int) (map[string]interface{}, error) {
+	l := logger.GetLogger()
+	content, err := l.ReadLogFile(lines)
+	if err != nil {
+		return map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("Failed to read log file: %v", err),
+		}, nil
+	}
+	return map[string]interface{}{
+		"success": true,
+		"content": content,
+	}, nil
+}
+
+func (a *App) OpenLogsFolder() error {
+	l := logger.GetLogger()
+	logDir := l.GetLogDir()
+
+	var cmd *exec.Cmd
+	switch gouruntime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", logDir)
+	case "windows":
+		cmd = exec.Command("explorer", logDir)
+	case "linux":
+		cmd = exec.Command("xdg-open", logDir)
+	default:
+		return fmt.Errorf("unsupported platform: %s", gouruntime.GOOS)
+	}
+	return cmd.Start()
+}
+
+func (a *App) SaveExcelFile(filename string, base64Content string) (map[string]interface{}, error) {
+	data, err := b64.StdEncoding.DecodeString(base64Content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode base64 content: %w", err)
+	}
+
+	filepath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		DefaultFilename:      filename,
+		Title:                "保存 Excel 文件",
+		Filters:              []runtime.FileFilter{{DisplayName: "Excel Files (*.xlsx)", Pattern: "*.xlsx"}},
+		CanCreateDirectories: true,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to open save dialog: %w", err)
+	}
+
+	if filepath == "" {
+		return map[string]interface{}{"success": false, "message": "Save cancelled"}, nil
+	}
+
+	err = os.WriteFile(filepath, data, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("failed to write file: %w", err)
+	}
+
+	return map[string]interface{}{
+		"success": true,
+		"path":    filepath,
+	}, nil
+}
+
+func (a *App) ExportLogs(timeRange string) (map[string]interface{}, error) {
+	l := logger.GetLogger()
+	now := time.Now()
+
+	content, err := l.ReadLogFile(0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read log file: %w", err)
+	}
+
+	if len(content) == 0 {
+		return map[string]interface{}{
+			"success": false,
+			"message": "Log file is empty",
+		}, nil
+	}
+
+	filename := fmt.Sprintf("geo_client_logs_%s_%s.txt", timeRange, now.Format("20060102_150405"))
+	filepath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		DefaultDirectory:     ".",
+		DefaultFilename:      filename,
+		Title:                "Export Logs",
+		Filters:              []runtime.FileFilter{{DisplayName: "Text Files (*.txt)", Pattern: "*.txt"}},
+		CanCreateDirectories: true,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to open save dialog: %w", err)
+	}
+
+	if filepath == "" {
+		return map[string]interface{}{"success": false, "message": "Export cancelled"}, nil
+	}
+
+	err = os.WriteFile(filepath, []byte(content), 0644)
+	if err != nil {
+		return nil, fmt.Errorf("failed to write file: %w", err)
+	}
+
+	lines := len(strings.Split(content, "\n"))
+	return map[string]interface{}{
+		"success": true,
+		"path":    filepath,
+		"count":   lines,
+	}, nil
 }

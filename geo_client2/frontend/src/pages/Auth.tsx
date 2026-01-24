@@ -1,8 +1,30 @@
 import { useEffect, useState } from 'react';
 import { useAccountStore } from '@/stores/accountStore';
 import { wailsAPI } from '@/utils/wails-api';
-import { Shield, Plus, Trash2, CheckCircle2, Circle, LogIn, ExternalLink, AlertTriangle } from 'lucide-react';
+import { 
+  Shield, 
+  Plus, 
+  Trash2, 
+  CheckCircle2, 
+  Circle, 
+  ExternalLink, 
+  AlertTriangle, 
+  Brain, 
+  Share2, 
+  Pencil, 
+  X, 
+  Check,
+  LayoutGrid
+} from 'lucide-react';
 import { toast } from 'sonner';
+
+type PlatformKey = 'deepseek' | 'doubao' | 'xiaohongshu' | 'yiyan' | 'yuanbao';
+
+interface PlatformConfig {
+  id: PlatformKey;
+  name: string;
+  category: 'ai' | 'platform';
+}
 
 export default function Auth() {
   const { 
@@ -27,25 +49,25 @@ export default function Auth() {
   const [editingAccountID, setEditingAccountID] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
 
+  const platforms: PlatformConfig[] = [
+    { id: 'deepseek', name: 'DeepSeek', category: 'ai' },
+    { id: 'doubao', name: '豆包', category: 'ai' },
+    { id: 'yiyan', name: '文心一言', category: 'ai' },
+    { id: 'yuanbao', name: '腾讯元宝', category: 'ai' },
+    { id: 'xiaohongshu', name: '小红书', category: 'platform' },
+  ];
+
   useEffect(() => {
-    loadAccounts('deepseek');
-    loadActiveAccount('deepseek');
-    loadAccounts('doubao');
-    loadActiveAccount('doubao');
-    loadAccounts('xiaohongshu');
-    loadActiveAccount('xiaohongshu');
-    loadAccounts('yiyan');
-    loadActiveAccount('yiyan');
-    loadAccounts('yuanbao');
-    loadActiveAccount('yuanbao');
+    platforms.forEach(p => {
+      loadAccounts(p.id);
+      loadActiveAccount(p.id);
+    });
   }, []);
 
   const handleLogin = async (platform: string, accountID: string) => {
     try {
-      // Set as active account to ensure verification works correctly
       await setActiveAccount(platform as any, accountID);
       setCurrentLogin({ platform, accountID });
-      
       await startLogin(platform as any, accountID);
       setIsLoginOpen(true);
     } catch (error) {
@@ -56,7 +78,6 @@ export default function Auth() {
   const handleConfirmLogin = async () => {
     try {
       await stopLogin();
-      
       if (currentLogin) {
         toast.info('正在验证登录状态...');
         const result = await wailsAPI.search.checkLoginStatus(currentLogin.platform);
@@ -65,8 +86,6 @@ export default function Auth() {
         } else {
           toast.warning('未检测到登录状态，请确保您已在浏览器中完成登录');
         }
-      } else {
-        toast.success('登录流程结束');
       }
     } catch (error) {
       toast.error('关闭浏览器失败');
@@ -86,8 +105,6 @@ export default function Auth() {
       toast.success('账号创建成功');
       setNewAccountName('');
       setAddingPlatform(null);
-
-      // Auto start login
       if (confirm('账号创建成功，是否立即打开浏览器进行登录？')) {
         handleLogin(platform, account.account_id);
       }
@@ -98,7 +115,6 @@ export default function Auth() {
 
   const handleDelete = async (accountID: string) => {
     if (!deleteConfirm) return;
-    
     try {
       await deleteAccount(accountID);
       toast.success('账号删除成功');
@@ -118,7 +134,6 @@ export default function Auth() {
       setEditingAccountID(null);
       return;
     }
-    
     try {
       await updateAccountName(editingAccountID, editingName);
       toast.success('账号备注更新成功');
@@ -129,219 +144,218 @@ export default function Auth() {
     }
   };
 
-  const handleCancelEdit = () => {
-    setEditingAccountID(null);
-    setEditingName('');
+  const renderPlatformCard = (platform: PlatformConfig) => {
+    const isAI = platform.category === 'ai';
+    const accentClass = isAI ? 'border-l-blue-500' : 'border-l-purple-500';
+    const bgHeaderClass = isAI ? 'bg-blue-50/50 dark:bg-blue-950/20' : 'bg-purple-50/50 dark:bg-purple-950/20';
+    const iconColorClass = isAI ? 'text-blue-500' : 'text-purple-500';
+
+    return (
+      <div key={platform.id} className={`bg-card border border-border rounded-lg overflow-hidden border-l-4 ${accentClass} shadow-sm flex flex-col`}>
+        <div className={`px-3 py-2 ${bgHeaderClass} border-b border-border flex justify-between items-center shrink-0`}>
+          <div className="flex items-center gap-2 overflow-hidden">
+            {isAI ? <Brain className={`w-4 h-4 shrink-0 ${iconColorClass}`} /> : <Share2 className={`w-4 h-4 shrink-0 ${iconColorClass}`} />}
+            <span className="font-bold text-sm truncate">{platform.name}</span>
+            <span className={`hidden sm:inline-block text-[10px] px-1.5 py-0.5 rounded-full uppercase font-bold tracking-wider shrink-0 ${isAI ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'}`}>
+              {isAI ? 'AI' : 'Platform'}
+            </span>
+          </div>
+          <button
+            onClick={() => setAddingPlatform(platform.id)}
+            className="p-1 hover:bg-background rounded-md transition-colors text-muted-foreground hover:text-primary shrink-0"
+            disabled={loading[`${platform.id}_create`]}
+            title="添加账号"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
+        
+        {addingPlatform === platform.id && (
+          <div className="p-2 border-b border-border bg-accent/20">
+            <div className="flex gap-1.5">
+              <input 
+                autoFocus
+                placeholder="账号备注"
+                className="flex-1 min-w-0 px-2 py-1 rounded border border-input bg-background text-xs"
+                value={newAccountName}
+                onChange={e => setNewAccountName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAddAccount(platform.id)}
+              />
+              <button 
+                onClick={() => handleAddAccount(platform.id)}
+                className="p-1 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+              >
+                <Check className="w-3.5 h-3.5" />
+              </button>
+              <button 
+                onClick={() => { setAddingPlatform(null); setNewAccountName(''); }}
+                className="p-1 border border-input rounded hover:bg-accent"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="flex-1 min-h-[60px] max-h-[160px] overflow-y-auto custom-scrollbar">
+          {accountsByPlatform[platform.id as PlatformKey]?.length === 0 ? (
+            <div className="h-full flex items-center justify-center p-4 text-center text-muted-foreground text-xs italic">
+              暂无账号
+            </div>
+          ) : (
+            <div className="divide-y divide-border/50">
+              {accountsByPlatform[platform.id as PlatformKey]?.map(account => {
+                const isActive = activeAccounts[platform.id as PlatformKey]?.account_id === account.account_id;
+                return (
+                  <div key={account.account_id} className={`group px-3 py-1.5 flex items-center justify-between hover:bg-accent/30 transition-colors ${isActive ? 'bg-accent/20' : ''}`}>
+                    <div className="flex items-center gap-2 overflow-hidden flex-1">
+                      <button 
+                        onClick={() => !isActive && setActiveAccount(platform.id as any, account.account_id)}
+                        className={`shrink-0 transition-colors ${isActive ? 'text-green-500' : 'text-muted-foreground hover:text-primary opacity-40 group-hover:opacity-100'}`}
+                      >
+                        {isActive ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+                      </button>
+                      <div className="flex flex-col min-w-0 flex-1">
+                        {editingAccountID === account.account_id ? (
+                          <input 
+                            autoFocus
+                            className="px-1 py-0 rounded border border-input bg-background text-xs w-full"
+                            value={editingName}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            onBlur={handleSaveEdit}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveEdit();
+                              if (e.key === 'Escape') setEditingAccountID(null);
+                            }}
+                          />
+                        ) : (
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className={`text-xs font-medium truncate ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}>
+                              {account.account_name}
+                            </span>
+                            {isActive && <span className="shrink-0 text-[9px] bg-green-500/10 text-green-600 px-1 rounded border border-green-500/20 font-bold">使用中</span>}
+                          </div>
+                        )}
+                        <span className="text-[9px] text-muted-foreground/50 font-mono truncate">
+                          ID: {account.account_id.slice(0, 6)}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2">
+                      <button 
+                        onClick={() => handleLogin(platform.id, account.account_id)}
+                        className="p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition-colors"
+                        title="登录"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </button>
+                      <button 
+                        onClick={() => handleStartEdit(account)}
+                        className="p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition-colors"
+                        title="重命名"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button 
+                        onClick={() => setDeleteConfirm({accountID: account.account_id, accountName: account.account_name})}
+                        className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
+                        title="删除"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
   };
 
-  const largeModelPlatforms = [
-    { id: 'deepseek', name: 'DeepSeek' },
-    { id: 'doubao', name: '豆包' },
-    { id: 'yiyan', name: '文心一言' },
-    { id: 'yuanbao', name: '腾讯元宝' },
-  ];
-
-  const publisherPlatforms = [
-    { id: 'xiaohongshu', name: '小红书' },
-  ];
-
-  const renderPlatformCard = (platform: { id: string, name: string }) => (
-    <div key={platform.id} className="bg-card border border-border rounded-lg overflow-hidden">
-      <div className="p-4 bg-muted/50 border-b border-border flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <Shield className="w-5 h-5" />
-          <span className="font-semibold">{platform.name}</span>
-        </div>
-        <button
-          onClick={() => setAddingPlatform(platform.id)}
-          className="text-sm flex items-center gap-1 hover:text-primary transition-colors"
-          disabled={loading[`${platform.id}_create`]}
-        >
-          <Plus className="w-4 h-4" />
-          添加账号
-        </button>
-      </div>
-      
-      {addingPlatform === platform.id && (
-        <div className="p-4 border-b border-border bg-accent/20 flex gap-2 items-center">
-          <input 
-            autoFocus
-            placeholder="请输入账号备注（如：主账号）"
-            className="flex-1 px-3 py-1.5 rounded-md border border-input bg-background text-sm"
-            value={newAccountName}
-            onChange={e => setNewAccountName(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleAddAccount(platform.id)}
-          />
-          <button 
-            onClick={() => handleAddAccount(platform.id)}
-            className="px-3 py-1.5 bg-primary text-primary-foreground text-sm rounded-md"
-            disabled={loading[`${platform.id}_create`]}
-          >
-            确定
-          </button>
-          <button 
-            onClick={() => { setAddingPlatform(null); setNewAccountName(''); }}
-            className="px-3 py-1.5 border border-input text-sm rounded-md hover:bg-accent"
-          >
-            取消
-          </button>
-        </div>
-      )}
-
-      <div className="divide-y divide-border">
-        {accountsByPlatform[platform.id as PlatformKey]?.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground text-sm">
-            暂无账号，请添加
-          </div>
-        ) : (
-          accountsByPlatform[platform.id as PlatformKey]?.map(account => {
-              const isActive = activeAccounts[platform.id as PlatformKey]?.account_id === account.account_id;
-              return (
-                  <div key={account.account_id} className={`p-4 flex items-center justify-between hover:bg-accent/50 transition-colors ${isActive ? 'bg-accent/10' : ''}`}>
-                      <div className="flex items-center gap-3">
-                          <button 
-                              onClick={() => !isActive && setActiveAccount(platform.id as any, account.account_id)}
-                              className={`transition-colors ${isActive ? 'text-green-500 cursor-default' : 'text-muted-foreground hover:text-primary'}`}
-                              title={isActive ? '当前激活' : '设为激活'}
-                          >
-                              {isActive ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
-                          </button>
-                          <div>
-                              <div 
-                                className="font-medium flex items-center gap-2 cursor-pointer" 
-                                onDoubleClick={() => handleStartEdit(account)}
-                                title="双击修改备注"
-                              >
-                                  {editingAccountID === account.account_id ? (
-                                    <input 
-                                      autoFocus
-                                      className="px-2 py-0.5 rounded border border-input bg-background text-sm w-32"
-                                      value={editingName}
-                                      onChange={(e) => setEditingName(e.target.value)}
-                                      onBlur={handleSaveEdit}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') handleSaveEdit();
-                                        if (e.key === 'Escape') handleCancelEdit();
-                                      }}
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
-                                  ) : (
-                                    <>
-                                      {account.account_name}
-                                      {isActive && <span className="text-xs bg-green-500/10 text-green-600 px-1.5 py-0.5 rounded">使用中</span>}
-                                    </>
-                                  )}
-                              </div>
-                              <div className="text-xs text-muted-foreground font-mono mt-0.5">ID: {account.account_id.slice(0, 8)}...</div>
-                          </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                          <button 
-                              onClick={() => handleLogin(platform.id, account.account_id)}
-                              className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors"
-                              title="打开浏览器登录"
-                              disabled={loading[`login_${account.account_id}`]}
-                          >
-                              <ExternalLink className="w-4 h-4" />
-                          </button>
-                          <button 
-                              onClick={() => setDeleteConfirm({accountID: account.account_id, accountName: account.account_name})}
-                              className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
-                              title="删除账号"
-                          >
-                              <Trash2 className="w-4 h-4" />
-                          </button>
-                      </div>
-                  </div>
-              );
-          })
-        )}
-      </div>
-    </div>
-  );
-
-  type PlatformKey = 'deepseek' | 'doubao' | 'xiaohongshu' | 'yiyan' | 'yuanbao';
+  const aiPlatforms = platforms.filter(p => p.category === 'ai');
+  const socialPlatforms = platforms.filter(p => p.category === 'platform');
 
   return (
-    <div className="p-6 space-y-6 relative">
+    <div className="p-4 md:p-6 space-y-8 max-w-[1600px] mx-auto">
       {deleteConfirm && (
-        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center">
-          <div className="bg-card border border-border p-6 rounded-lg shadow-lg max-w-md w-full space-y-4">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-6 h-6 text-destructive mt-0.5" />
-              <div className="flex-1">
-                <h3 className="text-lg font-bold">确认删除账号</h3>
-                <p className="text-sm text-muted-foreground mt-2">
-                  确定要删除账号 <span className="font-semibold text-foreground">{deleteConfirm.accountName}</span> 吗？
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  此操作将：
-                </p>
-                <ul className="text-sm text-muted-foreground mt-1 list-disc list-inside">
-                  <li>删除账号数据</li>
-                  <li>清除浏览器缓存</li>
-                  <li>清除登录会话</li>
-                </ul>
-                <p className="text-sm text-destructive font-semibold mt-2">
-                  此操作不可恢复！
+        <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-card border border-border p-5 rounded-xl shadow-2xl max-w-sm w-full space-y-4 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-start gap-3 text-destructive">
+              <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
+              <div>
+                <h3 className="font-bold">确认删除账号</h3>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  确认删除 <span className="font-semibold text-foreground">{deleteConfirm.accountName}</span> 吗？此操作将清除该账号的所有本地浏览器数据且无法恢复。
                 </p>
               </div>
             </div>
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                onClick={() => setDeleteConfirm(null)}
-                className="px-4 py-2 border border-input rounded-md hover:bg-accent"
-              >
-                取消
-              </button>
-              <button
-                onClick={() => handleDelete(deleteConfirm.accountID)}
-                className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90"
-              >
-                确认删除
-              </button>
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setDeleteConfirm(null)} className="px-4 py-1.5 text-xs border border-input rounded-md hover:bg-accent transition-colors">取消</button>
+              <button onClick={() => handleDelete(deleteConfirm.accountID)} className="px-4 py-1.5 text-xs bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 transition-colors font-medium">确认删除</button>
             </div>
           </div>
         </div>
       )}
 
       {isLoginOpen && (
-        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center">
-          <div className="bg-card border border-border p-6 rounded-lg shadow-lg max-w-md w-full text-center space-y-4">
-            <h3 className="text-xl font-bold">正在登录...</h3>
-            <p className="text-muted-foreground">
-              请在弹出的浏览器窗口中完成登录操作。登录完成后，请点击下方按钮确认。
-            </p>
-            <div className="flex justify-center gap-4 pt-4">
-              <button
-                onClick={handleConfirmLogin}
-                className="px-6 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-              >
-                我已完成登录，关闭浏览器
-              </button>
+        <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-card border border-border p-8 rounded-2xl shadow-2xl max-w-md w-full text-center space-y-6 animate-in fade-in zoom-in duration-200">
+            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
+              <Shield className="w-8 h-8 text-primary animate-pulse" />
             </div>
+            <div className="space-y-2">
+              <h3 className="text-xl font-bold">账号登录校验中</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed px-4">
+                请在开启的浏览器窗口中完成登录操作。<br/>完成登录后，点击下方按钮关闭浏览器并保存状态。
+              </p>
+            </div>
+            <button
+              onClick={handleConfirmLogin}
+              className="w-full py-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all font-bold shadow-lg shadow-primary/20"
+            >
+              我已完成登录
+            </button>
           </div>
         </div>
       )}
 
-      <div className="flex justify-between items-center">
-         <h1 className="text-2xl font-bold">账号管理</h1>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-primary/10 rounded-lg">
+            <LayoutGrid className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">账号管理</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">管理您的 AI 模型账户与社交媒体发布平台</p>
+          </div>
+        </div>
       </div>
 
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-lg font-semibold mb-3">大模型类</h2>
-          <div className="grid gap-6">
-            {largeModelPlatforms.map(renderPlatformCard)}
+      <div className="space-y-10">
+        <section className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Brain className="w-4 h-4 text-blue-500" />
+            <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em]">大模型智能体 (AI Models)</h2>
+            <div className="h-px flex-1 bg-blue-500/20 ml-2"></div>
           </div>
-        </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+            {aiPlatforms.map(renderPlatformCard)}
+          </div>
+        </section>
 
-        <div>
-          <h2 className="text-lg font-semibold mb-3">平台发布类</h2>
-          <div className="grid gap-6">
-            {publisherPlatforms.map(renderPlatformCard)}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Share2 className="w-4 h-4 text-purple-500" />
+            <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em]">社交媒体平台 (Publishers)</h2>
+            <div className="h-px flex-1 bg-purple-500/20 ml-2"></div>
           </div>
-        </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+            {socialPlatforms.map(renderPlatformCard)}
+          </div>
+        </section>
       </div>
     </div>
   );

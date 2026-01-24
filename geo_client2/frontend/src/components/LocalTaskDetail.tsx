@@ -168,7 +168,7 @@ export function LocalTaskDetail({ taskId, onClose }: LocalTaskDetailProps) {
     );
   };
 
-  const handleExportCitations = () => {
+  const handleExportExcel = () => {
     if (records.length === 0) {
       toast.error('没有可导出的数据');
       return;
@@ -176,7 +176,7 @@ export function LocalTaskDetail({ taskId, onClose }: LocalTaskDetailProps) {
     
     try {
       exportMultipleRecordsCitations(records);
-      toast.success('引用链接已导出为 Excel');
+      toast.success('数据已导出为 Excel');
     } catch (error: any) {
       toast.error('导出失败', { description: error.message });
     }
@@ -354,11 +354,11 @@ export function LocalTaskDetail({ taskId, onClose }: LocalTaskDetailProps) {
                   <h3 className="text-lg font-semibold">搜索记录</h3>
                   {records.length > 0 && (
                     <button
-                      onClick={handleExportCitations}
+                      onClick={handleExportExcel}
                       className="flex items-center gap-2 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
                     >
                       <Download className="w-4 h-4" />
-                      导出引用链接
+                      导出Excel
                     </button>
                   )}
                 </div>

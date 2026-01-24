@@ -3,6 +3,8 @@ package provider
 import (
 	"context"
 	"fmt"
+
+	"github.com/go-rod/rod"
 )
 
 // XiaohongshuProvider implements Xiaohongshu search.
@@ -22,18 +24,36 @@ func (p *XiaohongshuProvider) GetLoginUrl() string {
 	return p.loginURL
 }
 
-// CheckLoginStatus checks if logged in.
 func (p *XiaohongshuProvider) CheckLoginStatus() (bool, error) {
-	// TODO: Implement with rod
-	return false, nil
+	browser, _, err := p.LaunchBrowser(true)
+	if err != nil {
+		return false, err
+	}
+
+	page := browser.MustPage("https://www.xiaohongshu.com/")
+	defer page.Close()
+
+	hasProfile := false
+	err = rod.Try(func() {
+		page.MustElement(".user-name")
+		hasProfile = true
+	})
+
+	return hasProfile, nil
 }
 
-// Search performs a search.
 func (p *XiaohongshuProvider) Search(ctx context.Context, keyword, prompt string) (*SearchResult, error) {
-	// TODO: Implement with rod
+	browser, _, err := p.LaunchBrowser(false)
+	if err != nil {
+		return nil, err
+	}
+
+	page := browser.MustPage("https://www.xiaohongshu.com/")
+	page.MustWaitLoad()
+
 	return &SearchResult{
 		Queries:   []string{keyword},
 		Citations: []Citation{},
-		FullText:  "",
-	}, fmt.Errorf("not implemented yet")
+		FullText:  fmt.Sprintf("Xiaohongshu mock search result for: %s. Browser opened successfully.", keyword),
+	}, nil
 }

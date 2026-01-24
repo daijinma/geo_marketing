@@ -74,7 +74,7 @@ export default function Search() {
         <div>
           <label className="block text-sm font-medium mb-2">平台</label>
           <div className="flex gap-4 flex-wrap">
-            {['deepseek', 'doubao', 'yiyan', 'yuanbao'].map((p) => (
+            {['deepseek', 'doubao', 'yiyan', 'yuanbao', 'xiaohongshu'].map((p) => (
               <label key={p} className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -90,7 +90,8 @@ export default function Search() {
                 <span>
                   {p === 'deepseek' ? 'DeepSeek' : 
                    p === 'doubao' ? '豆包' : 
-                   p === 'yiyan' ? '文心一言' : '腾讯元宝'}
+                   p === 'yiyan' ? '文心一言' : 
+                   p === 'xiaohongshu' ? '小红书' : '腾讯元宝'}
                 </span>
               </label>
             ))}

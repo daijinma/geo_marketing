@@ -32,6 +32,7 @@ interface WailsApp {
   SetActiveAccount(platform: string, accountID: string): Promise<void>;
   DeleteAccount(accountID: string): Promise<void>;
   UpdateAccountName(accountID: string, name: string): Promise<void>;
+  GetAccountStats(): Promise<{ total: number; byPlatform: Record<string, number> }>;
   StartLogin(platform: string, accountID: string): Promise<void>;
   StopLogin(): Promise<void>;
 
@@ -61,9 +62,13 @@ interface WailsApp {
   ClearOldLogs(daysToKeep: number): Promise<{ success: boolean; deleted: number }>;
   DeleteAllLogs(): Promise<{ success: boolean; deleted: number }>;
   ExportLogs(timeRange: string): Promise<{ success: boolean; path?: string; count?: number; message?: string }>;
+  GetLogFileContent(lines: number): Promise<{ success: boolean; content: string; message?: string }>;
+  OpenLogsFolder(): Promise<void>;
 
   // Version
   GetVersionInfo(): Promise<{ version: string; buildTime: string }>;
+
+  SaveExcelFile(filename: string, base64Content: string): Promise<{ success: boolean; path?: string; message?: string }>;
 
   // Test
   Greet(name: string): Promise<string>;
@@ -141,6 +146,11 @@ export const wailsAPI = {
       const app = getApp();
       if (!app) throw new Error('Wails backend not available');
       return app.UpdateAccountName(accountID, name);
+    },
+    getStats: async () => {
+      const app = getApp();
+      if (!app) return { total: 0, byPlatform: {} };
+      return app.GetAccountStats();
     },
     startLogin: async (platform: string, accountID: string) => {
       const app = getApp();
@@ -289,12 +299,29 @@ export const wailsAPI = {
       if (!app) return { success: false, message: 'Wails backend not available' };
       return app.ExportLogs(timeRange);
     },
+    getFileContent: async (lines: number) => {
+      const app = getApp();
+      if (!app) return { success: false, content: '' };
+      return app.GetLogFileContent(lines);
+    },
+    openFolder: async () => {
+      const app = getApp();
+      if (!app) return;
+      return app.OpenLogsFolder();
+    },
   },
   version: {
     get: async () => {
       const app = getApp();
       if (!app) return { version: 'unknown', buildTime: 'unknown' };
       return app.GetVersionInfo();
+    },
+  },
+  fs: {
+    saveExcel: async (filename: string, base64Content: string) => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.SaveExcelFile(filename, base64Content);
     },
   },
 };

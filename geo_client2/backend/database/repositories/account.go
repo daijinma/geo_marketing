@@ -236,6 +236,36 @@ func (r *AccountRepository) DeleteAccount(accountID string) error {
 	return nil
 }
 
+// GetStats retrieves account statistics.
+func (r *AccountRepository) GetStats() (map[string]interface{}, error) {
+	var total int
+	err := r.db.QueryRow("SELECT COUNT(*) FROM accounts").Scan(&total)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get account count: %w", err)
+	}
+
+	rows, err := r.db.Query("SELECT platform, COUNT(*) FROM accounts GROUP BY platform")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get platform distribution: %w", err)
+	}
+	defer rows.Close()
+
+	byPlatform := make(map[string]int)
+	for rows.Next() {
+		var platform string
+		var count int
+		if err := rows.Scan(&platform, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan platform stats: %w", err)
+		}
+		byPlatform[platform] = count
+	}
+
+	return map[string]interface{}{
+		"total":      total,
+		"byPlatform": byPlatform,
+	}, nil
+}
+
 // UpdateAccountName updates an account's display name.
 func (r *AccountRepository) UpdateAccountName(accountID, name string) error {
 	_, err := r.db.Exec(`

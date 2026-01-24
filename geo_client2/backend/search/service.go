@@ -3,6 +3,7 @@ package search
 import (
 	"fmt"
 	"geo_client2/backend/database/repositories"
+	"geo_client2/backend/logger"
 	"geo_client2/backend/provider"
 	"geo_client2/backend/task"
 )
@@ -99,7 +100,7 @@ func (s *Service) CheckLoginStatus(platform string) (bool, error) {
 	// Update login status in DB
 	err = s.loginRepo.UpdateLoginStatus(platform, activeAccount.AccountID, loggedIn)
 	if err != nil {
-		fmt.Printf("Failed to update login status: %v\n", err)
+		logger.GetLogger().Error("Failed to update login status", err)
 	}
 
 	return loggedIn, nil

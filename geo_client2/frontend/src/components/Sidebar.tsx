@@ -15,14 +15,11 @@ export default function Sidebar() {
     { path: '/search', icon: Search, label: '大模型搜索' },
     { path: '/auth', icon: Shield, label: '授权列表' },
     { path: '/tasks', icon: ListTodo, label: '任务列表' },
-    { path: '/logs', icon: FileText, label: '日志列表' },
+    { path: '/logs', icon: FileText, label: '系统控制台' },
   ];
 
   return (
     <div className="w-[280px] border-r border-border bg-card flex flex-col">
-      <div className="p-4 border-b border-border">
-        <h1 className="text-xl font-bold">端界 GEO</h1>
-      </div>
       <div className="flex-1 overflow-auto p-4">
         <nav className="space-y-2">
           {menuItems.map((item) => {

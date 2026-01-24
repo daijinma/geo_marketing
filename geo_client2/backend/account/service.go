@@ -18,7 +18,8 @@ func NewService(accountRepo *repositories.AccountRepository) *Service {
 
 // CreateAccount creates a new account for a platform.
 func (s *Service) CreateAccount(platform, accountName string) (*repositories.Account, error) {
-	fmt.Printf("[DEBUG] Service.CreateAccount called for %s\n", platform)
+	l := logger.GetLogger()
+	l.Debug(fmt.Sprintf("Service.CreateAccount called for %s", platform))
 	if platform == "" {
 		return nil, fmt.Errorf("platform is required")
 	}
@@ -27,8 +28,7 @@ func (s *Service) CreateAccount(platform, accountName string) (*repositories.Acc
 	}
 	acc, err := s.accountRepo.CreateAccount(platform, accountName)
 	if err != nil {
-		fmt.Printf("[DEBUG] Service.CreateAccount error: %v\n", err)
-		logger.GetLogger().Error("Service failed to create account", err)
+		l.Error("Service failed to create account", err)
 		return nil, err
 	}
 	return acc, nil
@@ -74,4 +74,9 @@ func (s *Service) GetAccountByID(accountID string) (*repositories.Account, error
 		return nil, fmt.Errorf("accountID is required")
 	}
 	return s.accountRepo.GetAccountByID(accountID)
+}
+
+// GetStats retrieves account statistics.
+func (s *Service) GetStats() (map[string]interface{}, error) {
+	return s.accountRepo.GetStats()
 }

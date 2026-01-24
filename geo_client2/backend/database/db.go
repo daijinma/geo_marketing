@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"geo_client2/backend/logger"
+
 	"github.com/google/uuid"
 	_ "modernc.org/sqlite"
 )
@@ -48,18 +50,19 @@ func Init() error {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
+	l := logger.GetLogger()
 	// Ensure indexes that might depend on migrations
 	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_login_status_platform_account ON login_status(platform_name, account_id)"); err != nil {
-		fmt.Printf("Warning: failed to create login_status index: %v\n", err)
+		l.Warn(fmt.Sprintf("failed to create login_status index: %v", err))
 	}
 	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_logs_session ON logs(session_id)"); err != nil {
-		fmt.Printf("Warning: failed to create logs session index: %v\n", err)
+		l.Warn(fmt.Sprintf("failed to create logs session index: %v", err))
 	}
 	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_logs_correlation ON logs(correlation_id)"); err != nil {
-		fmt.Printf("Warning: failed to create logs correlation index: %v\n", err)
+		l.Warn(fmt.Sprintf("failed to create logs correlation index: %v", err))
 	}
 	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_accounts_category ON accounts(category)"); err != nil {
-		fmt.Printf("Warning: failed to create accounts category index: %v\n", err)
+		l.Warn(fmt.Sprintf("failed to create accounts category index: %v", err))
 	}
 
 	return nil
@@ -289,7 +292,7 @@ func migrateToV7() error {
 		// Scan existing browser_data directories and create accounts
 		if err := createDefaultAccountsForExistingPlatforms(); err != nil {
 			// Log error but don't fail migration
-			fmt.Printf("Warning: failed to create default accounts: %v\n", err)
+			logger.GetLogger().Warn(fmt.Sprintf("failed to create default accounts: %v", err))
 		}
 	}
 

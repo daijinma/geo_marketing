@@ -110,7 +110,6 @@ func (d *YiyanProvider) Search(ctx context.Context, keyword, prompt string) (*Se
 			return
 		}
 
-		// Yiyan Structure based on user input
 		var packet struct {
 			SearchCitations *struct {
 				List []struct {
@@ -118,13 +117,28 @@ func (d *YiyanProvider) Search(ctx context.Context, keyword, prompt string) (*Se
 					URL          string `json:"url"`
 					Site         string `json:"site"`
 					WildAbstract string `json:"wild_abstract"`
-					Index        string `json:"index"` // string in example "1"
+					Index        string `json:"index"`
 				} `json:"list"`
 			} `json:"searchCitations"`
 
-			// Potential other fields for content
 			Result string `json:"result"`
 			Text   string `json:"text"`
+
+			Data *struct {
+				TokensAll       string `json:"tokens_all"`
+				Answer          string `json:"answer"`
+				Content         string `json:"content"`
+				IsEnd           int    `json:"is_end"`
+				SearchCitations *struct {
+					List []struct {
+						Title        string `json:"title"`
+						URL          string `json:"url"`
+						Site         string `json:"site"`
+						WildAbstract string `json:"wild_abstract"`
+						Index        string `json:"index"`
+					} `json:"list"`
+				} `json:"searchCitations"`
+			} `json:"data"`
 		}
 
 		if err := json.Unmarshal([]byte(jsonStr), &packet); err != nil {
@@ -134,49 +148,71 @@ func (d *YiyanProvider) Search(ctx context.Context, keyword, prompt string) (*Se
 		citationMu.Lock()
 		defer citationMu.Unlock()
 
-		addCitation := func(cit Citation) bool {
-			if cit.URL == "" {
-				return false
-			}
-			for _, e := range capturedCitations {
-				if e.URL == cit.URL {
-					return false
-				}
-			}
-			capturedCitations = append(capturedCitations, cit)
-			return true
-		}
-
-		// Process SearchCitations
-		if packet.SearchCitations != nil && len(packet.SearchCitations.List) > 0 {
-			d.logger.InfoWithContext(ctx, "[YIYAN-SSE] Found search citations", map[string]interface{}{"count": len(packet.SearchCitations.List)}, nil)
-			for _, item := range packet.SearchCitations.List {
-				cit := Citation{
-					URL:     item.URL,
-					Title:   item.Title,
-					Snippet: item.WildAbstract,
-					Domain:  item.Site,
-				}
-
+		addCitations := func(list []struct {
+			Title        string `json:"title"`
+			URL          string `json:"url"`
+			Site         string `json:"site"`
+			WildAbstract string `json:"wild_abstract"`
+			Index        string `json:"index"`
+		}) {
+			for _, item := range list {
 				if item.URL == "" {
 					continue
 				}
-
-				if cit.Domain == "" {
-					if u, err := url.Parse(item.URL); err == nil {
-						cit.Domain = u.Host
+				exists := false
+				for _, e := range capturedCitations {
+					if e.URL == item.URL {
+						exists = true
+						break
 					}
 				}
-				addCitation(cit)
+				if !exists {
+					cit := Citation{
+						URL:     item.URL,
+						Title:   item.Title,
+						Snippet: item.WildAbstract,
+						Domain:  item.Site,
+					}
+					if cit.Domain == "" {
+						if u, err := url.Parse(item.URL); err == nil {
+							cit.Domain = u.Host
+						}
+					}
+					capturedCitations = append(capturedCitations, cit)
+				}
 			}
 		}
 
-		// Process Content
+		if packet.SearchCitations != nil && len(packet.SearchCitations.List) > 0 {
+			addCitations(packet.SearchCitations.List)
+		}
+		if packet.Data != nil && packet.Data.SearchCitations != nil && len(packet.Data.SearchCitations.List) > 0 {
+			addCitations(packet.Data.SearchCitations.List)
+		}
+
 		if packet.Result != "" {
 			fullResponseText += packet.Result
 		}
 		if packet.Text != "" {
 			fullResponseText += packet.Text
+		}
+
+		if packet.Data != nil {
+			if packet.Data.TokensAll != "" {
+				if len(packet.Data.TokensAll) > len(fullResponseText) {
+					fullResponseText = packet.Data.TokensAll
+				}
+			}
+			if packet.Data.Answer != "" {
+				if len(packet.Data.Answer) > len(fullResponseText) {
+					fullResponseText = packet.Data.Answer
+				}
+			}
+			if packet.Data.Content != "" {
+				if len(packet.Data.Content) > len(fullResponseText) {
+					fullResponseText = packet.Data.Content
+				}
+			}
 		}
 	}
 
@@ -453,17 +489,25 @@ func (d *YiyanProvider) waitForResponseComplete(ctx context.Context, page *rod.P
 }
 
 func (d *YiyanProvider) extractResponse(ctx context.Context, page *rod.Page) (string, error) {
-	// Generic extraction
 	selectors := []string{
 		".markdown-body",
+		".answer-content",
+		"div[class*='content_'][class*='markdown']",
+		"div[class*='answer'] div[class*='content']",
 		".answer",
-		"div[class*='content']",
 	}
 
 	for _, sel := range selectors {
 		elems, err := page.Elements(sel)
 		if err == nil && len(elems) > 0 {
-			return elems[len(elems)-1].MustText(), nil
+			text := elems[len(elems)-1].MustText()
+			text = strings.TrimSpace(text)
+			if text == "全选" || text == "复制" || text == "重新生成" {
+				continue
+			}
+			if len(text) > 0 {
+				return text, nil
+			}
 		}
 	}
 
