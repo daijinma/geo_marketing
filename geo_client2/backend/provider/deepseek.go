@@ -73,6 +73,7 @@ func (d *DeepSeekProvider) Search(ctx context.Context, keyword, prompt string) (
 	d.logger.InfoWithContext(ctx, "[DEEPSEEK-RPA] Navigating to home URL", map[string]interface{}{"url": homeURL}, nil)
 
 	page := browser.Context(ctx).MustPage()
+	defer page.Close()
 
 	// 定义数据容器（提前定义，供 Network 和 Console 监听共用）
 	var capturedCitations []Citation
@@ -669,34 +670,45 @@ func (d *DeepSeekProvider) Search(ctx context.Context, keyword, prompt string) (
 
 // 增强版 checkToggleActive (全面检查元素及其上下文的激活状态)
 func (d *DeepSeekProvider) checkToggleActive(ctx context.Context, elem *rod.Element) (bool, error) {
-	// JS 注入检查：遍历元素、父级、子级，检查 class 名和颜色
+	// JS 注入检查：遍历元素、父级、子级、兄弟及其上下文，检查 class 名和颜色
 	isActive, err := elem.Eval(`() => {
 		const el = this;
-		// 检查目标：自身、父级、所有子级
-		const targets = [el, el.parentElement, ...el.querySelectorAll('*')].filter(Boolean);
 		
-		const activeKeywords = ['active', 'checked', 'selected', 'enabled', 'on'];
-		// 蓝色系颜色（DeepSeek 激活色）
+		// 收集检查目标：自身、祖先（3级）、以及这些祖先的所有子孙
+		// 这样可以覆盖同一容器内的所有相关状态元素
+		const targets = new Set();
+		let current = el;
+		for (let i = 0; i < 3 && current; i++) {
+			targets.add(current);
+			// 包含祖先的所有子元素 (通常包含同级的 switch 按钮)
+			current.querySelectorAll('*').forEach(t => targets.add(t));
+			current = current.parentElement;
+		}
+		
+		const activeKeywords = ['active', 'checked', 'selected', 'enabled', 'on', '--checked', '-active'];
+		// 蓝色系/紫色系颜色（DeepSeek 激活色）
 		const activeColors = [
 			'rgb(77, 107, 254)', 
 			'rgb(36, 127, 255)', 
 			'#4d6bfe',
-			'rgb(24, 144, 255)', // AntD Blue
-			'rgb(0, 82, 204)'    // Dark Blue
+			'rgb(24, 144, 255)', 
+			'rgb(0, 82, 204)',
+			'rgb(103, 58, 183)', // DeepThink Purple
+			'rgb(77, 107, 254)'  // DeepSeek Blue
 		]; 
 
 		for (const t of targets) {
-			// 1. 检查 Class
+			// 1. 检查 Class (最可靠)
 			if (t.className && typeof t.className === 'string') {
 				const cls = t.className.toLowerCase();
-				// 忽略 ds-toggle-button 本身，只看状态类
 				if (activeKeywords.some(k => cls.includes(k))) return true;
 			}
 			
 			// 2. 检查属性
 			if (t.getAttribute('aria-checked') === 'true') return true;
 			if (t.getAttribute('data-state') === 'checked') return true;
-			if (t.tagName === 'INPUT' && t.type === 'checkbox' && t.checked) return true;
+			if (t.getAttribute('data-active') === 'true') return true;
+			if (t.tagName === 'INPUT' && (t.type === 'checkbox' || t.type === 'radio') && t.checked) return true;
 
 			// 3. 检查颜色 (Color, Bg, Fill, Stroke)
 			const style = window.getComputedStyle(t);
@@ -704,9 +716,20 @@ func (d *DeepSeekProvider) checkToggleActive(ctx context.Context, elem *rod.Elem
 			
 			for (const p of props) {
 				const val = style[p];
-				if (val && val !== 'none' && val !== 'transparent') {
-					if (activeColors.some(c => val.includes(c) || (val.startsWith('rgb') && val.includes('255')))) { // 包含255通常是亮色/蓝色
-						return true;
+				if (val && val !== 'none' && val !== 'transparent' && val !== 'rgba(0, 0, 0, 0)') {
+					// 检查是否在预定义的激活色列表中
+					if (activeColors.some(c => val.includes(c))) return true;
+					
+					// 泛化检查：如果是蓝色系（R < G < B 且 B 较大）
+					if (val.startsWith('rgb')) {
+						const parts = val.match(/\d+/g);
+						if (parts && parts.length >= 3) {
+							const r = parseInt(parts[0]);
+							const g = parseInt(parts[1]);
+							const b = parseInt(parts[2]);
+							// 典型的 DeepSeek 蓝色是 (77, 107, 254)
+							if (b > 200 && b > r + 50) return true; 
+						}
 					}
 				}
 			}
@@ -724,14 +747,18 @@ func (d *DeepSeekProvider) checkToggleActive(ctx context.Context, elem *rod.Elem
 // 增强版 clickToggleIfInactive
 func (d *DeepSeekProvider) clickToggleIfInactive(ctx context.Context, elem *rod.Element, selector string) bool {
 	isActivated, err := d.checkToggleActive(ctx, elem)
-	if err == nil && isActivated {
+	if err != nil {
+		d.logger.WarnWithContext(ctx, "[DEEPSEEK-RPA] State check error", map[string]interface{}{"error": err.Error()}, nil)
+	}
+
+	if isActivated {
 		d.logger.InfoWithContext(ctx, "[DEEPSEEK-RPA] Toggle ALREADY ACTIVE, skipping click", map[string]interface{}{
 			"selector": selector,
 		}, nil)
 		return true
 	}
 
-	d.logger.InfoWithContext(ctx, "[DEEPSEEK-RPA] Toggle inactive, performing click...", map[string]interface{}{
+	d.logger.InfoWithContext(ctx, "[DEEPSEEK-RPA] Toggle inactive (or state undetected), performing click...", map[string]interface{}{
 		"selector": selector,
 	}, nil)
 

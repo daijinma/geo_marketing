@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { wailsAPI, LogEntry } from '@/utils/wails-api';
-import { Filter, RefreshCw, X, ChevronDown, ChevronRight, Trash2, AlertTriangle } from 'lucide-react';
+import { Filter, RefreshCw, X, ChevronDown, ChevronRight, Trash2, AlertTriangle, Download } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Logs() {
@@ -22,6 +22,10 @@ export default function Logs() {
   const [deleteMode, setDeleteMode] = useState<'old' | 'all' | null>(null);
   const [confirmInput, setConfirmInput] = useState('');
   const [deleting, setDeleting] = useState(false);
+
+  // Export states
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const PAGE_SIZE = 50;
 
@@ -107,6 +111,30 @@ export default function Logs() {
     }
   };
 
+  const handleExport = async (timeRange: string) => {
+    setExporting(true);
+    setShowExportMenu(false);
+    try {
+      const result = await wailsAPI.logs.export(timeRange);
+      if (result.success) {
+        toast.success(`成功导出 ${result.count} 条日志到 ${result.path}`);
+      } else {
+        if (result.message && result.message !== 'Export cancelled') {
+          toast.error(result.message || '导出失败');
+        } else if (result.message === 'Export cancelled') {
+          // ignore
+        } else {
+          toast.error('导出失败');
+        }
+      }
+    } catch (error) {
+      console.error('Export logs error:', error);
+      toast.error('导出操作发生错误');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const getLevelColor = (level: string) => {
     switch (level) {
       case 'ERROR':
@@ -181,6 +209,40 @@ export default function Logs() {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             刷新
           </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              className="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 flex items-center gap-2"
+              disabled={exporting}
+            >
+              <Download className={`w-4 h-4 ${exporting ? 'animate-bounce' : ''}`} />
+              导出
+            </button>
+            {showExportMenu && (
+              <div className="absolute right-0 mt-2 w-48 bg-white border rounded-md shadow-lg z-50">
+                <div className="py-1">
+                  <button
+                    onClick={() => handleExport('today')}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    导出今日日志
+                  </button>
+                  <button
+                    onClick={() => handleExport('3days')}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    导出近3天日志
+                  </button>
+                  <button
+                    onClick={() => handleExport('7days')}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    导出近7天日志
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           <div className="relative">
             <button
               onClick={() => setShowDeleteMenu(!showDeleteMenu)}

@@ -14,7 +14,7 @@ interface AccountState {
   // Actions
   loadAccounts: (platform: PlatformName) => Promise<void>;
   loadActiveAccount: (platform: PlatformName) => Promise<void>;
-  createAccount: (platform: PlatformName, accountName: string, category?: string) => Promise<Account>;
+  createAccount: (platform: PlatformName, accountName: string) => Promise<Account>;
   setActiveAccount: (platform: PlatformName, accountID: string) => Promise<void>;
   deleteAccount: (accountID: string) => Promise<void>;
   updateAccountName: (accountID: string, name: string) => Promise<void>;
@@ -78,10 +78,10 @@ export const useAccountStore = create<AccountState>((set, get) => ({
     }
   },
 
-  createAccount: async (platform: PlatformName, accountName: string, category: string = 'large_model') => {
+  createAccount: async (platform: PlatformName, accountName: string) => {
     set((state) => ({ loading: { ...state.loading, [`${platform}_create`]: true } }));
     try {
-      const response = await wailsAPI.account.create(platform, accountName, category);
+      const response = await wailsAPI.account.create(platform, accountName);
       if (response.success && response.account) {
         // Refresh accounts list
         await get().loadAccounts(platform);

@@ -75,6 +75,16 @@ func NewBaseProvider(platform string, headless bool, timeout int, accountID stri
 	}
 }
 
+// clearChromeLockFiles 删除 Chrome/Chromium 在 UserDataDir 下的单实例锁文件，避免
+// "Failed to get the debug url: 正在现有的浏览器会话中打开"：当存在残留锁或已有实例
+// 占用同一 profile 时，新进程会尝试在现有会话中打开并退出，不输出 ws 调试地址。
+func clearChromeLockFiles(userDataDir string) {
+	for _, name := range []string{"SingletonLock", "SingletonSocket", "SingletonCookie"} {
+		p := filepath.Join(userDataDir, name)
+		_ = os.Remove(p)
+	}
+}
+
 func (b *BaseProvider) LaunchBrowser(headless bool) (*rod.Browser, func(), error) {
 	if b.browser != nil {
 		return b.browser, func() {}, nil
@@ -84,12 +94,12 @@ func (b *BaseProvider) LaunchBrowser(headless bool) (*rod.Browser, func(), error
 		if err := os.MkdirAll(b.userDataDir, 0755); err != nil {
 			return nil, nil, fmt.Errorf("creating user data dir: %w", err)
 		}
+		clearChromeLockFiles(b.userDataDir)
 	}
 
 	l := launcher.New().
 		UserDataDir(b.userDataDir).
 		Headless(headless).
-		Delete("SingletonLock").
 		Set("lang", "zh-CN") // Set language to Chinese
 
 	l.Set("disable-blink-features", "AutomationControlled")

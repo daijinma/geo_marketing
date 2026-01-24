@@ -58,6 +58,9 @@ func Init() error {
 	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_logs_correlation ON logs(correlation_id)"); err != nil {
 		fmt.Printf("Warning: failed to create logs correlation index: %v\n", err)
 	}
+	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_accounts_category ON accounts(category)"); err != nil {
+		fmt.Printf("Warning: failed to create accounts category index: %v\n", err)
+	}
 
 	return nil
 }

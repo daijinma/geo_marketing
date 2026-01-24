@@ -65,9 +65,26 @@ class Logger {
     }
 
     try {
-      const detailsJSON = context?.details ? JSON.stringify(context.details) : '';
+      const details = context?.details;
+      let detailsJSON = '';
+      if (details) {
+        try {
+          detailsJSON = JSON.stringify(details);
+        } catch (e) {
+          detailsJSON = JSON.stringify({ error: 'Failed to stringify details', message: String(e) });
+        }
+      }
       
-      await (window as any).go.backend.App.AddLog(
+      const app = (window as any).go?.main?.App ?? 
+                  (window as any).go?.geo_client2?.App ?? 
+                  (window as any).go?.backend?.App;
+
+      if (!app?.AddLog) {
+        console.error('Wails AddLog method not found in any expected location');
+        return;
+      }
+
+      await app.AddLog(
         level,
         'frontend',
         message,
@@ -76,8 +93,8 @@ class Logger {
         context?.correlationId || '',
         context?.component || '',
         context?.userAction || '',
-        context?.performanceMs || null,
-        context?.taskId || null
+        context?.performanceMs ?? null,
+        context?.taskId ?? null
       );
     } catch (error) {
       console.error('Failed to send log to backend:', error);

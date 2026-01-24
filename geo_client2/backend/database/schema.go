@@ -146,7 +146,7 @@ func initSchema() error {
 		"CREATE INDEX IF NOT EXISTS idx_ds_domain ON domain_stats(domain)",
 		"CREATE INDEX IF NOT EXISTS idx_accounts_platform ON accounts(platform)",
 		"CREATE INDEX IF NOT EXISTS idx_accounts_active ON accounts(platform, is_active)",
-		"CREATE INDEX IF NOT EXISTS idx_accounts_category ON accounts(category)",
+		// "CREATE INDEX IF NOT EXISTS idx_accounts_category ON accounts(category)", // Handled in db.go/migration to avoid failures on older schemas
 		"CREATE INDEX IF NOT EXISTS idx_logs_level ON logs(level)",
 		"CREATE INDEX IF NOT EXISTS idx_logs_source ON logs(source)",
 		// "CREATE INDEX IF NOT EXISTS idx_logs_session ON logs(session_id)", // Handled in migration/db.go

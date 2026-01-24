@@ -88,6 +88,7 @@ func (d *DoubaoProvider) Search(ctx context.Context, keyword, prompt string) (*S
 	d.logger.InfoWithContext(ctx, "[DOUBAO-RPA] Navigating to home URL", map[string]interface{}{"url": homeURL}, nil)
 
 	page := browser.Context(ctx).MustPage()
+	defer page.Close()
 
 	// 定义数据容器（提前定义，供 Network 和 Console 监听共用）
 	var capturedCitations []Citation
@@ -117,15 +118,15 @@ func (d *DoubaoProvider) Search(ctx context.Context, keyword, prompt string) (*S
 				PatchValue  json.RawMessage `json:"patch_value"`
 			} `json:"patch_op"`
 			// 备用字段（向后兼容）
-			SearchQueries  []interface{}   `json:"search_queries"`
-			Queries        []interface{}   `json:"queries"`
-			SearchResults  []interface{}   `json:"search_results"`
-			Results        []interface{}   `json:"results"`
-			Citations      []interface{}   `json:"citations"`
-			Content        string          `json:"content"`
-			Text           string          `json:"text"`
-			Delta          json.RawMessage `json:"delta"`
-			Message        json.RawMessage `json:"message"`
+			SearchQueries []interface{}   `json:"search_queries"`
+			Queries       []interface{}   `json:"queries"`
+			SearchResults []interface{}   `json:"search_results"`
+			Results       []interface{}   `json:"results"`
+			Citations     []interface{}   `json:"citations"`
+			Content       string          `json:"content"`
+			Text          string          `json:"text"`
+			Delta         json.RawMessage `json:"delta"`
+			Message       json.RawMessage `json:"message"`
 		}
 
 		if err := json.Unmarshal([]byte(jsonStr), &packet); err != nil {
@@ -808,9 +809,17 @@ func (d *DoubaoProvider) Search(ctx context.Context, keyword, prompt string) (*S
 func (d *DoubaoProvider) checkToggleActive(ctx context.Context, elem *rod.Element) (bool, error) {
 	isActive, err := elem.Eval(`() => {
 		const el = this;
-		const targets = [el, el.parentElement, ...el.querySelectorAll('*')].filter(Boolean);
 		
-		const activeKeywords = ['active', 'checked', 'selected', 'enabled', 'on'];
+		// 收集检查目标：自身、祖先（3级）、以及这些祖先的所有子孙
+		const targets = new Set();
+		let current = el;
+		for (let i = 0; i < 3 && current; i++) {
+			targets.add(current);
+			current.querySelectorAll('*').forEach(t => targets.add(t));
+			current = current.parentElement;
+		}
+		
+		const activeKeywords = ['active', 'checked', 'selected', 'enabled', 'on', '--checked', '-active'];
 		// 豆包可能使用的激活色
 		const activeColors = [
 			'rgb(77, 107, 254)', 
@@ -840,9 +849,17 @@ func (d *DoubaoProvider) checkToggleActive(ctx context.Context, elem *rod.Elemen
 			
 			for (const p of props) {
 				const val = style[p];
-				if (val && val !== 'none' && val !== 'transparent') {
-					if (activeColors.some(c => val.includes(c) || (val.startsWith('rgb') && val.includes('255')))) {
-						return true;
+				if (val && val !== 'none' && val !== 'transparent' && val !== 'rgba(0, 0, 0, 0)') {
+					if (activeColors.some(c => val.includes(c))) return true;
+					
+					// 泛化检查：蓝色系
+					if (val.startsWith('rgb')) {
+						const parts = val.match(/\d+/g);
+						if (parts && parts.length >= 3) {
+							const b = parseInt(parts[2]);
+							const r = parseInt(parts[0]);
+							if (b > 200 && b > r + 50) return true;
+						}
 					}
 				}
 			}
@@ -860,14 +877,18 @@ func (d *DoubaoProvider) checkToggleActive(ctx context.Context, elem *rod.Elemen
 // clickToggleIfInactive 如果开关未激活则点击
 func (d *DoubaoProvider) clickToggleIfInactive(ctx context.Context, elem *rod.Element, selector string) bool {
 	isActivated, err := d.checkToggleActive(ctx, elem)
-	if err == nil && isActivated {
+	if err != nil {
+		d.logger.WarnWithContext(ctx, "[DOUBAO-RPA] State check error", map[string]interface{}{"error": err.Error()}, nil)
+	}
+
+	if isActivated {
 		d.logger.InfoWithContext(ctx, "[DOUBAO-RPA] Toggle ALREADY ACTIVE, skipping click", map[string]interface{}{
 			"selector": selector,
 		}, nil)
 		return true
 	}
 
-	d.logger.InfoWithContext(ctx, "[DOUBAO-RPA] Toggle inactive, performing click...", map[string]interface{}{
+	d.logger.InfoWithContext(ctx, "[DOUBAO-RPA] Toggle inactive (or state undetected), performing click...", map[string]interface{}{
 		"selector": selector,
 	}, nil)
 

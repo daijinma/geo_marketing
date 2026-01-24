@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>营销引流流程图</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #07C160; /* 微信绿 */
+            --bg-color: #f4f7f9;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            width: 100%;
+            max-width: 1000px;
+        }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+        .legend {
+            margin-top: 30px;
+            display: flex;
+            gap: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <h1>全渠道引流至微信小程序转化路径</h1>
+    
+    <div class="container">
+        <div class="mermaid">
+graph TD
+    %% 节点定义
+    WC(微信/视频号)
+    DK(抖/快)
+    XHS(小红书)
+    
+    MP{微信小程序}
+    
+    SV[短视频]
+    AF[账号关注]
+    JWC[跳微信加好友]
+    X_DM[私信]
+    
+    OA[关注公众号]
+    LI[留资]
+    
+    OAR((后期公众号触达))
+    SMS((短信触达))
+    DK_DM((私信触达))
+
+    %% 样式定义
+    classDef platform fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
+    classDef core fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
+    classDef action fill:#fff3e0,stroke:#ef6c00,stroke-width:1px;
+    classDef result fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,stroke-dasharray: 5 5;
+
+    class WC,DK,XHS platform;
+    class MP core;
+    class SV,AF,JWC,X_DM action;
+    class OAR,SMS,DK_DM result;
+
+    %% 微信路径
+    WC -->|曝光| MP
+    MP -->|关注公众号| OA
+    MP -->|小程序留资| LI
+
+    %% 抖快路径
+    DK -->|曝光| SV
+    DK -->|曝光| AF
+    DK -->|曝光| JWC
+    
+    SV -->|进入| MP
+    AF -->|私信| DK_DM
+    JWC -->|加好友后| MP
+
+    %% 小红书路径
+    XHS -->|曝光| X_DM
+    X_DM -->|引导| MP
+
+    %% 最终触达
+    OA --> OAR
+    LI --> SMS
+
+    %% 汇聚说明
+    LI -.->|所有小程序节点最终汇聚| SMS
+        </div>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item"><span class="dot" style="background-color: #e1f5fe; border: 1px solid #01579b;"></span> 流量平台</div>
+        <div class="legend-item"><span class="dot" style="background-color: #e8f5e9; border: 1px solid #2e7d32;"></span> 核心转化中心</div>
+        <div class="legend-item"><span class="dot" style="background-color: #fff3e0; border: 1px solid #ef6c00;"></span> 过程节点</div>
+        <div class="legend-item"><span class="dot" style="background-color: #f3e5f5; border: 2px dashed #7b1fa2;"></span> 最终触达</div>
+    </div>
+
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#e8f5e9',
+                primaryTextColor: '#2e7d32',
+                primaryBorderColor: '#2e7d32',
+                lineColor: '#666',
+                secondaryColor: '#e1f5fe',
+                tertiaryColor: '#fff'
+            }
+        });
+    </script>
+</body>
+</html>

@@ -113,3 +113,32 @@ func (r *LogRepository) GetAll(limit, offset int, level, source *string, taskID 
 	}
 	return results, nil
 }
+
+// GetLogsSince returns logs created after the specified timestamp.
+func (r *LogRepository) GetLogsSince(startTime string) ([]map[string]interface{}, error) {
+	query := "SELECT * FROM logs WHERE timestamp >= ? ORDER BY timestamp DESC"
+	rows, err := r.db.Query(query, startTime)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []map[string]interface{}
+	cols, _ := rows.Columns()
+	for rows.Next() {
+		values := make([]interface{}, len(cols))
+		valuePtrs := make([]interface{}, len(cols))
+		for i := range values {
+			valuePtrs[i] = &values[i]
+		}
+		if err := rows.Scan(valuePtrs...); err != nil {
+			return nil, err
+		}
+		entry := make(map[string]interface{})
+		for i, col := range cols {
+			entry[col] = values[i]
+		}
+		results = append(results, entry)
+	}
+	return results, nil
+}

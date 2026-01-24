@@ -90,6 +90,7 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 	d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Navigating to home URL", map[string]interface{}{"url": homeURL}, nil)
 
 	page := browser.Context(ctx).MustPage()
+	defer page.Close()
 
 	// Define data containers
 	var capturedCitations []Citation
@@ -120,15 +121,12 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 				WebSiteName string `json:"web_site_name"`
 				Index       int    `json:"index"`
 			} `json:"docs"`
-			// Content related fields - Yuanbao format for text stream is likely different or in different packet types
-			// Assuming generic content field if available, but primarily focusing on docs as requested
-			// If text comes in other packets (e.g. type="message"), we would need example data.
-			// For now, relying on DOM extraction for full text if SSE doesn't clearly provide it in this packet.
 			Content string `json:"content"`
 			Delta   string `json:"delta"`
 		}
 
 		if err := json.Unmarshal([]byte(jsonStr), &packet); err != nil {
+			d.logger.DebugWithContext(ctx, "[YUANBAO-SSE] Unmarshal failed", map[string]interface{}{"error": err.Error(), "raw": jsonStr}, nil)
 			return
 		}
 
@@ -172,7 +170,7 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 			}
 		}
 
-		// Process Content (Best guess based on common patterns if not explicit in example)
+		// Process Content
 		if packet.Content != "" {
 			fullResponseText += packet.Content
 		}
@@ -188,6 +186,7 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 
 	// Start Network Listener
 	go func() {
+		d.logger.InfoWithContext(ctx, "[YUANBAO-NET] Network listener started", nil, nil)
 		page.EachEvent(func(e *proto.NetworkEventSourceMessageReceived) bool {
 			select {
 			case <-ctx.Done():
@@ -195,6 +194,7 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 			default:
 			}
 			// Handle SSE data
+			d.logger.DebugWithContext(ctx, "[YUANBAO-NET] Received SSE data", map[string]interface{}{"data_len": len(e.Data)}, nil)
 			parseSSEData(e.Data)
 			return false
 		})()
@@ -205,20 +205,22 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 		d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] Failed to set bypass service worker", map[string]interface{}{"error": err.Error()}, nil)
 	}
 
-	// Inject Fetch Hijack Script
+	// Inject Fetch/XHR Hijack Script
 	hijackScript := `(() => {
-		console.log('__YB_DEBUG__: Hijack script injected');
+		console.log('__YB_DEBUG__: Hijack script injected v2');
 		
+		// 1. Hijack Fetch
 		const originalFetch = window.fetch;
 		window.fetch = async (...args) => {
 			const response = await originalFetch(...args);
 			
 			try {
 				const urlStr = args[0] instanceof Request ? args[0].url : String(args[0]);
+				console.log('__YB_REQ__:FETCH:' + urlStr);
 				
 				// Match Yuanbao API
-				if (urlStr.includes('/api/chat') || urlStr.includes('yuanbao.tencent.com/api/chat')) {
-					console.log('__YB_REQ__:FETCH:' + urlStr);
+				if (urlStr.includes('/api/') || urlStr.includes('chat') || urlStr.includes('stream')) {
+					console.log('__YB_DEBUG__: Fetch matched, starting stream read');
 					const clone = response.clone();
 					const reader = clone.body.getReader();
 					const decoder = new TextDecoder();
@@ -228,7 +230,10 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 							let buffer = '';
 							while (true) {
 								const { done, value } = await reader.read();
-								if (done) break;
+								if (done) {
+									console.log('__YB_DEBUG__: Fetch stream done');
+									break;
+								}
 								const chunk = decoder.decode(value, { stream: true });
 								buffer += chunk;
 								
@@ -251,6 +256,55 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 			
 			return response;
 		};
+
+		// 2. Hijack XMLHttpRequest
+		const originalXHROpen = XMLHttpRequest.prototype.open;
+		const originalXHRSend = XMLHttpRequest.prototype.send;
+		
+		XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+			this._ybUrl = url;
+			console.log('__YB_REQ__:XHR:' + url);
+			return originalXHROpen.call(this, method, url, ...rest);
+		};
+		
+		XMLHttpRequest.prototype.send = function(...args) {
+			if (this._ybUrl && (this._ybUrl.includes('chat') || this._ybUrl.includes('/api/'))) {
+				console.log('__YB_DEBUG__: XHR matched, attaching listener');
+				this.addEventListener('readystatechange', () => {
+					if (this.readyState === 3 || this.readyState === 4) {
+						try {
+							const text = this.responseText;
+							if (text) {
+								const lines = text.split('\n');
+								for (const line of lines) {
+									if (line.trim() && line.startsWith('data:')) {
+										console.log('__YB_LINE__:' + line);
+									}
+								}
+							}
+						} catch (e) {
+							// ignore
+						}
+					}
+				});
+			}
+			return originalXHRSend.call(this, ...args);
+		};
+
+		// 3. Hijack EventSource
+		const originalEventSource = window.EventSource;
+		if (originalEventSource) {
+			window.EventSource = function(url, config) {
+				console.log('__YB_REQ__:SSE:' + url);
+				const es = new originalEventSource(url, config);
+				es.addEventListener('message', (e) => {
+					console.log('__YB_LINE__:data: ' + e.data);
+				});
+				return es;
+			};
+		}
+		
+		console.log('__YB_DEBUG__: All hijacks installed');
 	})()`
 
 	if _, err := page.EvalOnNewDocument(hijackScript); err != nil {
@@ -270,7 +324,7 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 			default:
 			}
 
-			if e.Type != proto.RuntimeConsoleAPICalledTypeLog {
+			if e.Type != proto.RuntimeConsoleAPICalledTypeLog && e.Type != proto.RuntimeConsoleAPICalledTypeError {
 				return false
 			}
 
@@ -291,6 +345,9 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 				if strings.HasPrefix(logMsg, "__YB_LINE__:") {
 					line := strings.TrimPrefix(logMsg, "__YB_LINE__:")
 					parseSSEData(line)
+				} else if strings.HasPrefix(logMsg, "__YB_") {
+					// Log all other YB prefixes to the Go logger for debugging
+					d.logger.InfoWithContext(ctx, "[YUANBAO-JS] "+logMsg, nil, nil)
 				}
 			}
 			return false
@@ -381,7 +438,7 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 	citationMu.Unlock()
 
 	return &SearchResult{
-		Queries:   []string{}, // Yuanbao SSE example didn't show queries
+		Queries:   []string{keyword},
 		Citations: finalCitations,
 		FullText:  fullText,
 	}, nil
@@ -444,11 +501,70 @@ func (d *YuanbaoProvider) clickSubmit(ctx context.Context, submitBtn *rod.Elemen
 }
 
 func (d *YuanbaoProvider) waitForResponseComplete(ctx context.Context, page *rod.Page) {
-	// Simple wait for now
-	for i := 0; i < 60; i++ {
-		time.Sleep(1 * time.Second)
-		// Detect stop button or content stability
+	const maxRetries = 40
+	lastContent := ""
+	stableCount := 0
+
+	// Selectors that might contain the AI response
+	contentSelectors := []string{
+		".markdown-body",
+		"div[class*='answer']",
+		"div[class*='response']",
+		"article",
 	}
+
+	for i := 0; i < maxRetries; i++ {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		time.Sleep(2 * time.Second)
+
+		// Check for content stability
+		currentContent := ""
+		for _, sel := range contentSelectors {
+			elements, err := page.Elements(sel)
+			if err == nil && len(elements) > 0 {
+				currentContent = elements[len(elements)-1].MustText()
+				break
+			}
+		}
+
+		if currentContent != "" {
+			if currentContent == lastContent {
+				stableCount++
+				// If content is stable and we don't see a "Stop" button, we might be done
+				if stableCount >= 3 {
+					// Check for stop button as a sign that it is still generating
+					hasStop, _, _ := page.HasR("button, div, span", "停止")
+					if !hasStop {
+						d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Response stable and no stop button found. Assuming complete.", nil, nil)
+						return
+					}
+					// If stop button exists, reset stable count to keep waiting
+					stableCount = 0
+				}
+			} else {
+				lastContent = currentContent
+				stableCount = 0
+			}
+		}
+
+		// Also check if the send button has returned to "enabled" state
+		submitBtn, err := d.findSubmitButton(ctx, page)
+		if err == nil && submitBtn != nil {
+			disabled, _ := submitBtn.Attribute("disabled")
+			if disabled == nil {
+				// Button is enabled, check if it's because we are done or just started
+				if len(currentContent) > 50 {
+					d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Submit button enabled and content found. Assuming complete.", nil, nil)
+					return
+				}
+			}
+		}
+	}
+	d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] waitForResponseComplete reached timeout", nil, nil)
 }
 
 func (d *YuanbaoProvider) extractResponse(ctx context.Context, page *rod.Page) (string, error) {

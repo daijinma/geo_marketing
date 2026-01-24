@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"os"
+	"strings"
 	"time"
 
 	"geo_client2/backend/account"
@@ -40,8 +43,7 @@ func (a *App) Startup(ctx context.Context) {
 
 	// Initialize database
 	if err := database.Init(); err != nil {
-		logger.GetLogger().Error("Failed to initialize database", err)
-		return
+		log.Fatalf("Failed to initialize database, application cannot start: %v", err)
 	}
 
 	db := database.GetDB()
@@ -94,11 +96,17 @@ func (a *App) EmitTestEvent() {
 
 // Settings methods
 func (a *App) GetSetting(key string) (string, error) {
+	if a.settingsSvc == nil {
+		return "", fmt.Errorf("settings service not initialized")
+	}
 	return a.settingsSvc.Get(key)
 }
 
 func (a *App) SetSetting(key, value string) error {
-	if key == "browser_headless" {
+	if a.settingsSvc == nil {
+		return fmt.Errorf("settings service not initialized")
+	}
+	if a.providerFact != nil && key == "browser_headless" {
 		a.providerFact.SetHeadless(value != "false")
 	}
 	return a.settingsSvc.Set(key, value)
@@ -106,6 +114,9 @@ func (a *App) SetSetting(key, value string) error {
 
 // Task methods
 func (a *App) CreateLocalSearchTask(keywordsJSON, platformsJSON string, queryCount int) (map[string]interface{}, error) {
+	if a.taskManager == nil {
+		return nil, fmt.Errorf("task manager not initialized")
+	}
 	var keywords, platforms []string
 	json.Unmarshal([]byte(keywordsJSON), &keywords)
 	json.Unmarshal([]byte(platformsJSON), &platforms)
@@ -118,6 +129,9 @@ func (a *App) CreateLocalSearchTask(keywordsJSON, platformsJSON string, queryCou
 }
 
 func (a *App) GetAllTasks(limit, offset int, filtersJSON string) (map[string]interface{}, error) {
+	if a.taskManager == nil {
+		return nil, fmt.Errorf("task manager not initialized")
+	}
 	var filters *repositories.TaskFilters
 	if filtersJSON != "" {
 		json.Unmarshal([]byte(filtersJSON), &filters)
@@ -130,6 +144,9 @@ func (a *App) GetAllTasks(limit, offset int, filtersJSON string) (map[string]int
 }
 
 func (a *App) GetTaskDetail(taskID int) (map[string]interface{}, error) {
+	if a.taskManager == nil {
+		return nil, fmt.Errorf("task manager not initialized")
+	}
 	detail, err := a.taskManager.GetTaskDetail(taskID)
 	if err != nil {
 		return nil, err
@@ -138,31 +155,52 @@ func (a *App) GetTaskDetail(taskID int) (map[string]interface{}, error) {
 }
 
 func (a *App) CancelTask(taskID int) error {
+	if a.taskManager == nil {
+		return fmt.Errorf("task manager not initialized")
+	}
 	return a.taskManager.CancelTask(taskID)
 }
 
 func (a *App) RetryTask(taskID int) error {
+	if a.taskManager == nil {
+		return fmt.Errorf("task manager not initialized")
+	}
 	return a.taskManager.RetryTask(taskID)
 }
 
 func (a *App) ContinueTask(taskID int) error {
+	if a.taskManager == nil {
+		return fmt.Errorf("task manager not initialized")
+	}
 	return a.taskManager.ContinueTask(taskID)
 }
 
 func (a *App) DeleteTask(taskID int) error {
+	if a.taskManager == nil {
+		return fmt.Errorf("task manager not initialized")
+	}
 	return a.taskManager.DeleteTask(taskID)
 }
 
 func (a *App) UpdateTaskName(taskID int, name string) error {
+	if a.taskManager == nil {
+		return fmt.Errorf("task manager not initialized")
+	}
 	return a.taskManager.UpdateTaskName(taskID, name)
 }
 
 func (a *App) GetStats() (map[string]interface{}, error) {
+	if a.taskManager == nil {
+		return nil, fmt.Errorf("task manager not initialized")
+	}
 	return a.taskManager.GetStats()
 }
 
 // Search methods
 func (a *App) CheckLoginStatus(platform string) (map[string]interface{}, error) {
+	if a.searchSvc == nil {
+		return nil, fmt.Errorf("search service not initialized")
+	}
 	loggedIn, err := a.searchSvc.CheckLoginStatus(platform)
 	if err != nil {
 		return nil, err
@@ -171,9 +209,12 @@ func (a *App) CheckLoginStatus(platform string) (map[string]interface{}, error) 
 }
 
 // Account methods
-func (a *App) CreateAccount(platform, accountName, category string) (map[string]interface{}, error) {
-	fmt.Printf("[DEBUG] App.CreateAccount called with: platform=%s, name=%s, category=%s\n", platform, accountName, category)
-	acc, err := a.accountSvc.CreateAccount(platform, accountName, category)
+func (a *App) CreateAccount(platform, accountName string) (map[string]interface{}, error) {
+	if a.accountSvc == nil {
+		return nil, fmt.Errorf("account service not initialized")
+	}
+	fmt.Printf("[DEBUG] App.CreateAccount called with: platform=%s, name=%s\n", platform, accountName)
+	acc, err := a.accountSvc.CreateAccount(platform, accountName)
 	if err != nil {
 		fmt.Printf("[DEBUG] App.CreateAccount error: %v\n", err)
 		return nil, err
@@ -196,6 +237,9 @@ func (a *App) CreateAccount(platform, accountName, category string) (map[string]
 }
 
 func (a *App) ListAccounts(platform string) (map[string]interface{}, error) {
+	if a.accountSvc == nil {
+		return nil, fmt.Errorf("account service not initialized")
+	}
 	accounts, err := a.accountSvc.ListAccounts(platform)
 	if err != nil {
 		return nil, err
@@ -218,6 +262,9 @@ func (a *App) ListAccounts(platform string) (map[string]interface{}, error) {
 }
 
 func (a *App) GetActiveAccount(platform string) (map[string]interface{}, error) {
+	if a.accountSvc == nil {
+		return nil, fmt.Errorf("account service not initialized")
+	}
 	acc, err := a.accountSvc.GetActiveAccount(platform)
 	if err != nil {
 		return nil, err
@@ -242,14 +289,23 @@ func (a *App) GetActiveAccount(platform string) (map[string]interface{}, error) 
 }
 
 func (a *App) SetActiveAccount(platform, accountID string) error {
+	if a.accountSvc == nil {
+		return fmt.Errorf("account service not initialized")
+	}
 	return a.accountSvc.SetActiveAccount(platform, accountID)
 }
 
 func (a *App) DeleteAccount(accountID string) error {
+	if a.accountSvc == nil {
+		return fmt.Errorf("account service not initialized")
+	}
 	return a.accountSvc.DeleteAccount(accountID)
 }
 
 func (a *App) UpdateAccountName(accountID, name string) error {
+	if a.accountSvc == nil {
+		return fmt.Errorf("account service not initialized")
+	}
 	return a.accountSvc.UpdateAccountName(accountID, name)
 }
 
@@ -257,6 +313,9 @@ func (a *App) UpdateAccountName(accountID, name string) error {
 
 // Login performs user authentication and saves the token.
 func (a *App) Login(username, password, apiBaseURL string) (map[string]interface{}, error) {
+	if a.authSvc == nil {
+		return nil, fmt.Errorf("auth service not initialized")
+	}
 	resp, err := a.authSvc.Login(username, password, apiBaseURL)
 	if err != nil {
 		return map[string]interface{}{
@@ -275,6 +334,9 @@ func (a *App) Login(username, password, apiBaseURL string) (map[string]interface
 
 // StartLogin opens a browser for the specified account to login.
 func (a *App) StartLogin(platform, accountID string) error {
+	if a.providerFact == nil {
+		return fmt.Errorf("provider factory not initialized")
+	}
 	if a.loginCancel != nil {
 		a.loginCancel()
 		a.loginCancel = nil
@@ -308,6 +370,9 @@ func (a *App) StopLogin() error {
 
 // Log methods
 func (a *App) GetLogs(limit, offset int, filtersJSON string) (map[string]interface{}, error) {
+	if a.logRepo == nil {
+		return nil, fmt.Errorf("log repository not initialized")
+	}
 	var level, source *string
 	var taskID *int
 
@@ -340,6 +405,12 @@ func (a *App) GetLogs(limit, offset int, filtersJSON string) (map[string]interfa
 }
 
 func (a *App) AddLog(level, source, message, detailsJSON, sessionID, correlationID, component, userAction string, performanceMS, taskID *int) error {
+	fmt.Printf("[DEBUG] AddLog called: level=%s, message=%s, taskID=%v\n", level, message, taskID)
+	if a.logRepo == nil {
+		fmt.Printf("[ERROR] App.AddLog called but logRepo is nil. Startup might have failed.\n")
+		return fmt.Errorf("log repository not initialized")
+	}
+
 	var details *string
 	if detailsJSON != "" {
 		details = &detailsJSON
@@ -417,6 +488,9 @@ func (a *App) GetVersionInfo() map[string]interface{} {
 }
 
 func (a *App) GetSearchRecords(taskID int) (map[string]interface{}, error) {
+	if a.taskManager == nil {
+		return nil, fmt.Errorf("task manager not initialized")
+	}
 	records, err := a.taskManager.GetSearchRecords(taskID)
 	if err != nil {
 		return nil, err
@@ -424,7 +498,96 @@ func (a *App) GetSearchRecords(taskID int) (map[string]interface{}, error) {
 	return map[string]interface{}{"success": true, "records": records}, nil
 }
 
+// ExportLogs exports logs for the specified time range to a text file.
+// timeRange options: "today", "3days", "7days"
+func (a *App) ExportLogs(timeRange string) (map[string]interface{}, error) {
+	if a.logRepo == nil {
+		return nil, fmt.Errorf("log repository not initialized")
+	}
+	now := time.Now()
+	var startTime time.Time
+
+	// Truncate to start of today for consistent logic
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+
+	switch timeRange {
+	case "today":
+		startTime = todayStart
+	case "3days":
+		startTime = todayStart.AddDate(0, 0, -3)
+	case "7days":
+		startTime = todayStart.AddDate(0, 0, -7)
+	default:
+		return nil, fmt.Errorf("invalid time range: %s", timeRange)
+	}
+
+	// Format startTime for SQLite (YYYY-MM-DD HH:MM:SS)
+	startTimeStr := startTime.Format("2006-01-02 15:04:05")
+
+	logs, err := a.logRepo.GetLogsSince(startTimeStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch logs: %w", err)
+	}
+
+	if len(logs) == 0 {
+		return map[string]interface{}{
+			"success": false,
+			"message": "No logs found for the selected time range",
+		}, nil
+	}
+
+	// Build content
+	var sb strings.Builder
+	for _, log := range logs {
+		timestamp, _ := log["timestamp"].(string)
+		level, _ := log["level"].(string)
+		source, _ := log["source"].(string)
+		message, _ := log["message"].(string)
+		details, _ := log["details"].(string)
+
+		line := fmt.Sprintf("[%s] [%s] [%s] %s", timestamp, level, source, message)
+		if details != "" && details != "{}" {
+			line += fmt.Sprintf(" Details: %s", details)
+		}
+		sb.WriteString(line + "\n")
+	}
+
+	// Open Save Dialog
+	filename := fmt.Sprintf("geo_client_logs_%s_%s.txt", timeRange, now.Format("20060102_150405"))
+	filepath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		DefaultDirectory:     ".",
+		DefaultFilename:      filename,
+		Title:                "Export Logs",
+		Filters:              []runtime.FileFilter{{DisplayName: "Text Files (*.txt)", Pattern: "*.txt"}},
+		CanCreateDirectories: true,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to open save dialog: %w", err)
+	}
+
+	if filepath == "" {
+		// User cancelled
+		return map[string]interface{}{"success": false, "message": "Export cancelled"}, nil
+	}
+
+	// Write file
+	err = os.WriteFile(filepath, []byte(sb.String()), 0644)
+	if err != nil {
+		return nil, fmt.Errorf("failed to write file: %w", err)
+	}
+
+	return map[string]interface{}{
+		"success": true,
+		"path":    filepath,
+		"count":   len(logs),
+	}, nil
+}
+
 func (a *App) GetMergedSearchRecords(taskIDsJSON string) (map[string]interface{}, error) {
+	if a.taskManager == nil {
+		return nil, fmt.Errorf("task manager not initialized")
+	}
 	var taskIDs []int
 	if err := json.Unmarshal([]byte(taskIDsJSON), &taskIDs); err != nil {
 		return nil, fmt.Errorf("invalid task IDs format: %w", err)

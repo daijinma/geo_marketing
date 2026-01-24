@@ -60,6 +60,7 @@ interface WailsApp {
   AddLog(level: string, source: string, message: string, detailsJSON: string, sessionID: string, correlationID: string, component: string, userAction: string, performanceMS: number | null, taskID: number | null): Promise<void>;
   ClearOldLogs(daysToKeep: number): Promise<{ success: boolean; deleted: number }>;
   DeleteAllLogs(): Promise<{ success: boolean; deleted: number }>;
+  ExportLogs(timeRange: string): Promise<{ success: boolean; path?: string; count?: number; message?: string }>;
 
   // Version
   GetVersionInfo(): Promise<{ version: string; buildTime: string }>;
@@ -282,6 +283,11 @@ export const wailsAPI = {
       const app = getApp();
       if (!app) return { success: false, deleted: 0 };
       return app.DeleteAllLogs();
+    },
+    export: async (timeRange: string) => {
+      const app = getApp();
+      if (!app) return { success: false, message: 'Wails backend not available' };
+      return app.ExportLogs(timeRange);
     },
   },
   version: {

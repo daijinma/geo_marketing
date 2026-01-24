@@ -90,6 +90,7 @@ func (d *YiyanProvider) Search(ctx context.Context, keyword, prompt string) (*Se
 	d.logger.InfoWithContext(ctx, "[YIYAN-RPA] Navigating to home URL", map[string]interface{}{"url": homeURL}, nil)
 
 	page := browser.Context(ctx).MustPage()
+	defer page.Close()
 
 	// Define data containers
 	var capturedCitations []Citation
