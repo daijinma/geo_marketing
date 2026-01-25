@@ -6,9 +6,9 @@ GO_BIN = $(CURDIR)/$(GO_ENV)/bin
 GO_PATH = $(CURDIR)/$(GO_ENV)
 
 # 版本信息
-VERSION := $(shell grep '"version"' frontend/package.json | head -1 | sed 's/.*"version": "\(.*\)".*/\1/')
-BUILD_TIME := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
-LDFLAGS := -X geo_client2/backend.Version=$(VERSION) -X geo_client2/backend.BuildTime=$(BUILD_TIME)
+VERSION := $(shell grep '"version"' frontend/package.json | head -1 | awk -F'"' '{print $$4}')
+BUILD_TIME := $(shell date +"%Y-%m-%d %H:%M:%S")
+LDFLAGS := -X 'geo_client2/backend.Version=$(VERSION)' -X 'geo_client2/backend.BuildTime=$(BUILD_TIME)'
 
 # 颜色输出
 GREEN = \033[0;32m

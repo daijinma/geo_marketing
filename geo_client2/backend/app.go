@@ -591,7 +591,11 @@ func (a *App) GetVersionInfo() map[string]interface{} {
 	formattedTime := buildTime
 
 	if buildTime != "unknown" && buildTime != "" {
-		if t, err := time.Parse(time.RFC3339, buildTime); err == nil {
+		// Try parsing with the new local time format first
+		if t, err := time.Parse("2006-01-02 15:04:05", buildTime); err == nil {
+			formattedTime = t.Format("2006-01-02 15:04:05")
+		} else if t, err := time.Parse(time.RFC3339, buildTime); err == nil {
+			// Fallback to RFC3339 for backward compatibility
 			formattedTime = t.Format("2006-01-02 15:04:05")
 		}
 	}
