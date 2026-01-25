@@ -41,16 +41,106 @@ func (d *DeepSeekProvider) CheckLoginStatus() (bool, error) {
 	defer cleanup()
 	defer d.Close()
 
-	page := browser.MustPage(d.GetLoginUrl())
+	homeURL := config.GetHomeURL("deepseek")
+	page := browser.MustPage(homeURL)
 	page.MustWaitLoad()
-	time.Sleep(2 * time.Second)
+	time.Sleep(5 * time.Second)
 
-	hasLoginText, _, _ := page.HasR("div", "Sign in|登录")
-	if hasLoginText {
+	// Strategy 1: Check Cookies (highest priority)
+	cookies, err := page.Cookies([]string{homeURL})
+	if err == nil && len(cookies) > 0 {
+		hasAuthCookie := false
+		for _, cookie := range cookies {
+			cookieName := strings.ToLower(cookie.Name)
+			// Common auth cookie names
+			if strings.Contains(cookieName, "session") ||
+				strings.Contains(cookieName, "token") ||
+				strings.Contains(cookieName, "auth") ||
+				strings.Contains(cookieName, "access_token") ||
+				strings.Contains(cookieName, "user_id") ||
+				cookieName == "jsessionid" ||
+				cookieName == "sid" {
+				hasAuthCookie = true
+				d.logger.Debug(fmt.Sprintf("[CheckLoginStatus] DeepSeek: Found auth cookie: %s", cookie.Name))
+				break
+			}
+		}
+		if hasAuthCookie {
+			d.logger.Debug("[CheckLoginStatus] DeepSeek: Valid auth cookie found, likely logged in")
+			// Continue to verify with other strategies
+		} else {
+			d.logger.Debug("[CheckLoginStatus] DeepSeek: No auth cookies found, likely not logged in")
+		}
+	}
+
+	// Strategy 2: URL Redirect Detection
+	finalURL := page.MustInfo().URL
+	d.logger.Debug(fmt.Sprintf("[CheckLoginStatus] DeepSeek: Final URL = %s", finalURL))
+
+	if strings.Contains(finalURL, "sign_in") || strings.Contains(finalURL, "login") {
+		d.logger.Debug("[CheckLoginStatus] DeepSeek: Redirected to login page, not logged in")
 		return false, nil
 	}
 
-	return true, nil
+	// Strategy 3: Page Element Detection (positive indicators first)
+	hasInput, _, _ := page.Has("textarea#chat-input, textarea[placeholder*='Message'], textarea")
+	if hasInput {
+		d.logger.Debug("[CheckLoginStatus] DeepSeek: Found chat input on home page, logged in")
+		return true, nil
+	}
+
+	hasUserAvatar, _, _ := page.Has("img[alt*='avatar'], [class*='avatar'], [class*='user-info']")
+	if hasUserAvatar {
+		d.logger.Debug("[CheckLoginStatus] DeepSeek: Found user avatar, logged in")
+		return true, nil
+	}
+
+	// Strategy 4: Negative Element Detection (login button)
+	hasLoginBtn, btnElem, _ := page.HasR("button", "Sign in|登录|Log in")
+	if hasLoginBtn && btnElem != nil {
+		visible, _ := btnElem.Visible()
+		if visible {
+			d.logger.Debug("[CheckLoginStatus] DeepSeek: Found visible login button, not logged in")
+			return false, nil
+		}
+	}
+
+	// Strategy 5: HTTP Response Check (check page content for auth-related keywords)
+	bodyText, err := page.Element("body")
+	if err == nil {
+		text, _ := bodyText.Text()
+		textLower := strings.ToLower(text)
+
+		// Check for unauthorized keywords
+		unauthorizedKeywords := []string{
+			"unauthorized", "unauthenticated", "login required", "sign in required",
+			"access denied", "invalid session", "token expired",
+			"未登录", "请登录", "需要登录", "登录已过期", "未授权", "会话已过期", "令牌无效",
+		}
+
+		for _, keyword := range unauthorizedKeywords {
+			if strings.Contains(textLower, keyword) {
+				d.logger.Debug(fmt.Sprintf("[CheckLoginStatus] DeepSeek: Found unauthorized keyword '%s', not logged in", keyword))
+				return false, nil
+			}
+		}
+	}
+
+	// If we reach here with auth cookies, assume logged in
+	if err == nil && len(cookies) > 0 {
+		for _, cookie := range cookies {
+			cookieName := strings.ToLower(cookie.Name)
+			if strings.Contains(cookieName, "session") ||
+				strings.Contains(cookieName, "token") ||
+				strings.Contains(cookieName, "auth") {
+				d.logger.Debug("[CheckLoginStatus] DeepSeek: Auth cookie present and no negative indicators found, assuming logged in")
+				return true, nil
+			}
+		}
+	}
+
+	d.logger.Debug("[CheckLoginStatus] DeepSeek: No clear login indicators, assuming not logged in")
+	return false, nil
 }
 
 func (d *DeepSeekProvider) Search(ctx context.Context, keyword, prompt string) (*SearchResult, error) {
@@ -670,6 +760,9 @@ func (d *DeepSeekProvider) Search(ctx context.Context, keyword, prompt string) (
 
 // 增强版 checkToggleActive (全面检查元素及其上下文的激活状态)
 func (d *DeepSeekProvider) checkToggleActive(ctx context.Context, elem *rod.Element) (bool, error) {
+	// 先记录元素的详细属性用于调试
+	d.logElementDetails(ctx, elem, "Checking toggle state")
+
 	// JS 注入检查：遍历元素、父级、子级、兄弟及其上下文，检查 class 名和颜色
 	isActive, err := elem.Eval(`() => {
 		const el = this;
@@ -685,7 +778,7 @@ func (d *DeepSeekProvider) checkToggleActive(ctx context.Context, elem *rod.Elem
 			current = current.parentElement;
 		}
 		
-		const activeKeywords = ['active', 'checked', 'selected', 'enabled', 'on', '--checked', '-active'];
+		const activeKeywords = ['active', 'checked', 'selected', 'enabled', 'on', '--checked', '-active', 'is-active', 'is-checked'];
 		// 蓝色系/紫色系颜色（DeepSeek 激活色）
 		const activeColors = [
 			'rgb(77, 107, 254)', 
@@ -704,14 +797,30 @@ func (d *DeepSeekProvider) checkToggleActive(ctx context.Context, elem *rod.Elem
 				if (activeKeywords.some(k => cls.includes(k))) return true;
 			}
 			
-			// 2. 检查属性
+			// 2. 检查属性 - 扩展更多属性检查
 			if (t.getAttribute('aria-checked') === 'true') return true;
+			if (t.getAttribute('aria-pressed') === 'true') return true;
+			if (t.getAttribute('aria-selected') === 'true') return true;
 			if (t.getAttribute('data-state') === 'checked') return true;
+			if (t.getAttribute('data-state') === 'on') return true;
 			if (t.getAttribute('data-active') === 'true') return true;
+			if (t.getAttribute('data-checked') === 'true') return true;
+			if (t.getAttribute('data-enabled') === 'true') return true;
 			if (t.tagName === 'INPUT' && (t.type === 'checkbox' || t.type === 'radio') && t.checked) return true;
 
-			// 3. 检查颜色 (Color, Bg, Fill, Stroke)
+			// 3. 检查 CSS Transform (滑动开关通常用 translateX)
 			const style = window.getComputedStyle(t);
+			const transform = style.transform;
+			if (transform && transform !== 'none') {
+				// 检查是否有明显的位移（通常激活状态会有正向位移）
+				const match = transform.match(/translate(?:X)?\(([^,)]+)/);
+				if (match) {
+					const translateValue = parseFloat(match[1]);
+					if (translateValue > 5) return true; // 大于5px认为是激活状态
+				}
+			}
+
+			// 4. 检查颜色 (Color, Bg, Fill, Stroke)
 			const props = ['color', 'backgroundColor', 'fill', 'stroke', 'borderColor'];
 			
 			for (const p of props) {
@@ -733,15 +842,51 @@ func (d *DeepSeekProvider) checkToggleActive(ctx context.Context, elem *rod.Elem
 					}
 				}
 			}
+			
+			// 5. 检查 SVG 元素的 fill 属性
+			if (t.tagName === 'svg' || t.tagName === 'path') {
+				const fill = t.getAttribute('fill');
+				if (fill && activeColors.some(c => fill.includes(c))) return true;
+			}
 		}
 		return false;
 	}`)
 
 	if err == nil && isActive.Value.Bool() {
+		d.logger.InfoWithContext(ctx, "[DEEPSEEK-RPA] Toggle state detected as ACTIVE", nil, nil)
 		return true, nil
 	}
 
+	d.logger.InfoWithContext(ctx, "[DEEPSEEK-RPA] Toggle state detected as INACTIVE", nil, nil)
 	return false, nil
+}
+
+// logElementDetails 记录元素的详细属性用于调试
+func (d *DeepSeekProvider) logElementDetails(ctx context.Context, elem *rod.Element, phase string) {
+	details, _ := elem.Eval(`() => {
+		const el = this;
+		return {
+			tagName: el.tagName,
+			id: el.id,
+			className: el.className,
+			textContent: el.textContent ? el.textContent.substring(0, 50) : '',
+			attributes: Array.from(el.attributes).reduce((acc, attr) => {
+				acc[attr.name] = attr.value;
+				return acc;
+			}, {}),
+			computedStyle: {
+				color: window.getComputedStyle(el).color,
+				backgroundColor: window.getComputedStyle(el).backgroundColor,
+				transform: window.getComputedStyle(el).transform,
+			}
+		};
+	}`)
+
+	if details != nil {
+		d.logger.InfoWithContext(ctx, fmt.Sprintf("[DEEPSEEK-RPA] Element details [%s]", phase), map[string]interface{}{
+			"details": details.Value,
+		}, nil)
+	}
 }
 
 // 增强版 clickToggleIfInactive
@@ -758,42 +903,129 @@ func (d *DeepSeekProvider) clickToggleIfInactive(ctx context.Context, elem *rod.
 		return true
 	}
 
-	d.logger.InfoWithContext(ctx, "[DEEPSEEK-RPA] Toggle inactive (or state undetected), performing click...", map[string]interface{}{
+	d.logger.InfoWithContext(ctx, "[DEEPSEEK-RPA] Toggle inactive, performing click...", map[string]interface{}{
 		"selector": selector,
 	}, nil)
 
-	clickErr := rod.Try(func() {
-		elem.ScrollIntoView()
-		elem.MustClick()
-	})
+	maxRetries := 3
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		d.logger.InfoWithContext(ctx, fmt.Sprintf("[DEEPSEEK-RPA] Click attempt %d/%d", attempt, maxRetries), nil, nil)
 
-	if clickErr == nil {
-		// 等待状态变化
+		clickErr := rod.Try(func() {
+			elem.ScrollIntoView()
+			time.Sleep(300 * time.Millisecond)
+			elem.MustClick()
+		})
+
+		if clickErr != nil {
+			d.logger.WarnWithContext(ctx, "[DEEPSEEK-RPA] Click failed", map[string]interface{}{
+				"attempt": attempt,
+				"error":   clickErr.Error(),
+			}, nil)
+			if attempt < maxRetries {
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+			return false
+		}
+
 		time.Sleep(1 * time.Second)
 
-		// 再次检查确认是否成功开启
 		isActivatedNow, _ := d.checkToggleActive(ctx, elem)
 		if isActivatedNow {
-			d.logger.InfoWithContext(ctx, "[DEEPSEEK-RPA] Toggle successfully activated", nil, nil)
+			d.logger.InfoWithContext(ctx, "[DEEPSEEK-RPA] Toggle successfully activated", map[string]interface{}{
+				"attempt": attempt,
+			}, nil)
 			return true
-		} else {
-			d.logger.WarnWithContext(ctx, "[DEEPSEEK-RPA] Toggle clicked but state check returned false (might be false negative)", nil, nil)
-			// 即使检查返回 false，我们也认为已经尽力了，避免死循环点击
-			return true
+		}
+
+		stateAfterClick := d.getToggleStateDescription(ctx, elem)
+		d.logger.WarnWithContext(ctx, "[DEEPSEEK-RPA] Toggle clicked but state still appears inactive", map[string]interface{}{
+			"attempt":     attempt,
+			"stateDetail": stateAfterClick,
+		}, nil)
+
+		if attempt < maxRetries {
+			time.Sleep(1 * time.Second)
 		}
 	}
 
-	d.logger.WarnWithContext(ctx, "[DEEPSEEK-RPA] Toggle click failed", map[string]interface{}{
+	d.logger.ErrorWithContext(ctx, "[DEEPSEEK-RPA] Toggle activation failed after all retries", map[string]interface{}{
 		"selector": selector,
-		"error":    clickErr.Error(),
-	}, nil)
+		"retries":  maxRetries,
+	}, fmt.Errorf("toggle activation failed"), nil)
 	return false
+}
+
+func (d *DeepSeekProvider) getToggleStateDescription(ctx context.Context, elem *rod.Element) string {
+	stateInfo, _ := elem.Eval(`() => {
+		const el = this;
+		const attrs = {};
+		for (const attr of el.attributes) {
+			attrs[attr.name] = attr.value;
+		}
+		return {
+			className: el.className,
+			attributes: attrs,
+			computedColor: window.getComputedStyle(el).backgroundColor,
+		};
+	}`)
+
+	if stateInfo != nil {
+		stateJSON, _ := stateInfo.Value.MarshalJSON()
+		return string(stateJSON)
+	}
+	return "unable to get state"
 }
 
 // 增强版 tryEnableWebSearch
 func (d *DeepSeekProvider) tryEnableWebSearch(ctx context.Context, page *rod.Page) bool {
-	// 1. 文本精准匹配
-	textPatterns := []string{"联网搜索", "Search the web", "Web Search"}
+	d.logger.InfoWithContext(ctx, "[DEEPSEEK-RPA] Starting web search activation with enhanced strategies", nil, nil)
+
+	strategies := []struct {
+		name string
+		fn   func() bool
+	}{
+		{
+			name: "text-based-search",
+			fn: func() bool {
+				return d.tryActivateByText(ctx, page)
+			},
+		},
+		{
+			name: "selector-based-search",
+			fn: func() bool {
+				return d.tryActivateBySelector(ctx, page)
+			},
+		},
+		{
+			name: "aggressive-scan",
+			fn: func() bool {
+				return d.tryActivateByAggressiveScan(ctx, page)
+			},
+		},
+	}
+
+	for _, strategy := range strategies {
+		d.logger.InfoWithContext(ctx, fmt.Sprintf("[DEEPSEEK-RPA] Trying strategy: %s", strategy.name), nil, nil)
+		if strategy.fn() {
+			d.logger.InfoWithContext(ctx, fmt.Sprintf("[DEEPSEEK-RPA] Strategy '%s' succeeded", strategy.name), nil, nil)
+
+			time.Sleep(1 * time.Second)
+			if d.verifyWebSearchEnabled(ctx, page) {
+				d.logger.InfoWithContext(ctx, "[DEEPSEEK-RPA] Web search verified as enabled", nil, nil)
+				return true
+			}
+			d.logger.WarnWithContext(ctx, fmt.Sprintf("[DEEPSEEK-RPA] Strategy '%s' clicked but verification failed", strategy.name), nil, nil)
+		}
+	}
+
+	d.logger.WarnWithContext(ctx, "[DEEPSEEK-RPA] All web search activation strategies failed", nil, nil)
+	return false
+}
+
+func (d *DeepSeekProvider) tryActivateByText(ctx context.Context, page *rod.Page) bool {
+	textPatterns := []string{"联网搜索", "Search the web", "Web Search", "网络搜索", "在线搜索"}
 
 	for _, pattern := range textPatterns {
 		xpath := fmt.Sprintf("//*[self::div or self::button or self::span or self::label][contains(text(), '%s')]", pattern)
@@ -805,7 +1037,6 @@ func (d *DeepSeekProvider) tryEnableWebSearch(ctx context.Context, page *rod.Pag
 					d.logger.InfoWithContext(ctx, "[DEEPSEEK-RPA] Found toggle by text", map[string]interface{}{
 						"pattern": pattern,
 					}, nil)
-					// 文本匹配到的通常是 Label 或按钮本身，可信度高
 					if d.clickToggleIfInactive(ctx, elem, "text:"+pattern) {
 						return true
 					}
@@ -813,16 +1044,24 @@ func (d *DeepSeekProvider) tryEnableWebSearch(ctx context.Context, page *rod.Pag
 			}
 		}
 	}
+	return false
+}
 
-	// 2. 选择器匹配 (更精确的类名)
+func (d *DeepSeekProvider) tryActivateBySelector(ctx context.Context, page *rod.Page) bool {
 	selectors := []string{
-		// 精确 Class
 		".ds-toggle-button",
 		".ds-switch",
-		// 属性
 		"div[class*='search'] input[type='checkbox']",
+		"div[class*='web-search'] input[type='checkbox']",
+		"div[class*='toggle']",
+		"[role='switch']",
 		"[aria-label*='联网']",
+		"[aria-label*='搜索']",
+		"[aria-label*='search']",
 		"[title*='联网']",
+		"[title*='搜索']",
+		"[data-testid*='search']",
+		"[data-testid*='toggle']",
 	}
 
 	for _, sel := range selectors {
@@ -841,8 +1080,92 @@ func (d *DeepSeekProvider) tryEnableWebSearch(ctx context.Context, page *rod.Pag
 			}
 		}
 	}
+	return false
+}
 
-	d.logger.WarnWithContext(ctx, "[DEEPSEEK-RPA] Could not enable web search toggle (no match found)", nil, nil)
+func (d *DeepSeekProvider) tryActivateByAggressiveScan(ctx context.Context, page *rod.Page) bool {
+	d.logger.InfoWithContext(ctx, "[DEEPSEEK-RPA] Running aggressive DOM scan for toggles", nil, nil)
+
+	found, err := page.Eval(`() => {
+		const keywords = ['联网', '搜索', 'search', 'web'];
+		const allElements = document.querySelectorAll('input[type="checkbox"], [role="switch"], button, div');
+		
+		for (const el of allElements) {
+			const text = (el.textContent || '').toLowerCase();
+			const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+			const title = (el.getAttribute('title') || '').toLowerCase();
+			const className = (el.className || '').toLowerCase();
+			
+			const combined = text + ' ' + ariaLabel + ' ' + title + ' ' + className;
+			
+			if (keywords.some(k => combined.includes(k))) {
+				const rect = el.getBoundingClientRect();
+				if (rect.width > 0 && rect.height > 0) {
+					el.setAttribute('data-deepseek-found', 'true');
+					return true;
+				}
+			}
+		}
+		return false;
+	}`)
+
+	if err == nil && found.Value.Bool() {
+		elems, _ := page.Elements("[data-deepseek-found='true']")
+		for _, elem := range elems {
+			if d.clickToggleIfInactive(ctx, elem, "aggressive-scan") {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func (d *DeepSeekProvider) verifyWebSearchEnabled(ctx context.Context, page *rod.Page) bool {
+	verified, err := page.Eval(`() => {
+		const keywords = ['联网', '搜索', 'search', 'web'];
+		const allElements = document.querySelectorAll('*');
+		
+		for (const el of allElements) {
+			const text = (el.textContent || '').toLowerCase();
+			const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+			const className = (el.className || '').toLowerCase();
+			
+			const combined = text + ' ' + ariaLabel + ' ' + className;
+			
+			if (keywords.some(k => combined.includes(k))) {
+				const activeIndicators = [
+					el.getAttribute('aria-checked') === 'true',
+					el.getAttribute('data-state') === 'checked',
+					className.includes('active'),
+					className.includes('checked'),
+					className.includes('enabled'),
+					el.tagName === 'INPUT' && el.type === 'checkbox' && el.checked
+				];
+				
+				if (activeIndicators.some(i => i)) {
+					return true;
+				}
+				
+				const style = window.getComputedStyle(el);
+				const bgColor = style.backgroundColor;
+				if (bgColor && bgColor.includes('rgb')) {
+					const match = bgColor.match(/\d+/g);
+					if (match && match.length >= 3) {
+						const b = parseInt(match[2]);
+						const r = parseInt(match[0]);
+						if (b > 200 && b > r + 50) return true;
+					}
+				}
+			}
+		}
+		return false;
+	}`)
+
+	if err == nil && verified.Value.Bool() {
+		return true
+	}
+
 	return false
 }
 

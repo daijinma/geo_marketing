@@ -14,7 +14,10 @@ import {
   Pencil, 
   X, 
   Check,
-  LayoutGrid
+  LayoutGrid,
+  RefreshCw,
+  XCircle,
+  CheckCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -48,6 +51,11 @@ export default function Auth() {
   const [deleteConfirm, setDeleteConfirm] = useState<{accountID: string, accountName: string} | null>(null);
   const [editingAccountID, setEditingAccountID] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [checkingLogin, setCheckingLogin] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState<Record<string, boolean>>({});
+  const [loginStatus, setLoginStatus] = useState<Record<string, boolean | null>>({});
+  const [batchChecking, setBatchChecking] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ checked: number; total: number }>({ checked: 0, total: 0 });
 
   const platforms: PlatformConfig[] = [
     { id: 'deepseek', name: 'DeepSeek', category: 'ai' },
@@ -62,6 +70,46 @@ export default function Auth() {
       loadAccounts(p.id);
       loadActiveAccount(p.id);
     });
+
+    const unsubStart = wailsAPI.search.onBatchCheckStarted((data) => {
+      setBatchChecking(true);
+      setBatchProgress({ checked: 0, total: 0 });
+      toast.info(data.message);
+    });
+
+    const unsubProgress = wailsAPI.search.onBatchCheckProgress((data) => {
+      setBatchProgress({ checked: data.checked, total: data.total });
+      
+      if (data.skipped) {
+        toast.info(data.message, { duration: 2000 });
+      } else if (data.error) {
+        toast.error(data.message, { duration: 3000 });
+        setLoginStatus(prev => ({ ...prev, [data.platform]: false }));
+      } else if (data.checking) {
+        setCheckingStatus(prev => ({ ...prev, [data.platform]: true }));
+        toast.info(data.message, { duration: 1000 });
+      } else if (data.is_logged_in !== undefined) {
+        setCheckingStatus(prev => ({ ...prev, [data.platform]: false }));
+        setLoginStatus(prev => ({ ...prev, [data.platform]: data.is_logged_in! }));
+        if (data.is_logged_in) {
+          toast.success(data.message, { duration: 2000 });
+        } else {
+          toast.warning(data.message, { duration: 3000 });
+        }
+      }
+    });
+
+    const unsubComplete = wailsAPI.search.onBatchCheckCompleted((data) => {
+      setBatchChecking(false);
+      setBatchProgress({ checked: 0, total: 0 });
+      toast.success(data.message, { duration: 3000 });
+    });
+
+    return () => {
+      unsubStart();
+      unsubProgress();
+      unsubComplete();
+    };
   }, []);
 
   const handleLogin = async (platform: string, accountID: string) => {
@@ -77,19 +125,18 @@ export default function Auth() {
 
   const handleConfirmLogin = async () => {
     try {
-      await stopLogin();
-      if (currentLogin) {
-        toast.info('正在验证登录状态...');
-        const result = await wailsAPI.search.checkLoginStatus(currentLogin.platform);
-        if (result.success && result.isLoggedIn) {
-          toast.success('登录验证成功');
-        } else {
-          toast.warning('未检测到登录状态，请确保您已在浏览器中完成登录');
-        }
+      setCheckingLogin(true);
+      try {
+        await stopLogin();
+      } catch (error) {
+        // 用户可能已经手动关闭浏览器，忽略错误
+        console.log('Browser might already be closed by user');
       }
+      toast.success('登录完成，浏览器状态已保存');
     } catch (error) {
-      toast.error('关闭浏览器失败');
+      toast.error('操作失败');
     } finally {
+      setCheckingLogin(false);
       setIsLoginOpen(false);
       setCurrentLogin(null);
     }
@@ -144,11 +191,56 @@ export default function Auth() {
     }
   };
 
+  const handleCheckLoginStatus = async (platform: string) => {
+    const activeAccount = activeAccounts[platform as PlatformKey];
+    if (!activeAccount) {
+      toast.error('请先设置该平台的活跃账号');
+      return;
+    }
+
+    setCheckingStatus(prev => ({ ...prev, [platform]: true }));
+    setLoginStatus(prev => ({ ...prev, [platform]: null }));
+
+    try {
+      const result = await wailsAPI.search.checkLoginStatus(platform);
+      const isLoggedIn = result.isLoggedIn;
+      setLoginStatus(prev => ({ ...prev, [platform]: isLoggedIn }));
+      
+      if (isLoggedIn) {
+        toast.success(`${platform} 登录状态正常`);
+      } else {
+        toast.error(`${platform} 登录已过期，请重新登录`);
+      }
+    } catch (error) {
+      toast.error('检测登录状态失败');
+      setLoginStatus(prev => ({ ...prev, [platform]: false }));
+    } finally {
+      setCheckingStatus(prev => ({ ...prev, [platform]: false }));
+    }
+  };
+
+  const handleBatchCheckLoginStatus = async () => {
+    const hasAnyActiveAccount = platforms.some(p => activeAccounts[p.id as PlatformKey]);
+    if (!hasAnyActiveAccount) {
+      toast.error('请先至少添加并激活一个账号');
+      return;
+    }
+
+    try {
+      await wailsAPI.search.batchCheckLoginStatus();
+    } catch (error) {
+      toast.error('启动批量检测失败');
+      setBatchChecking(false);
+    }
+  };
+
   const renderPlatformCard = (platform: PlatformConfig) => {
     const isAI = platform.category === 'ai';
     const accentClass = isAI ? 'border-l-blue-500' : 'border-l-purple-500';
     const bgHeaderClass = isAI ? 'bg-blue-50/50 dark:bg-blue-950/20' : 'bg-purple-50/50 dark:bg-purple-950/20';
     const iconColorClass = isAI ? 'text-blue-500' : 'text-purple-500';
+    const isChecking = checkingStatus[platform.id] || false;
+    const status = loginStatus[platform.id];
 
     return (
       <div key={platform.id} className={`bg-card border border-border rounded-lg overflow-hidden border-l-4 ${accentClass} shadow-sm flex flex-col`}>
@@ -159,15 +251,34 @@ export default function Auth() {
             <span className={`hidden sm:inline-block text-[10px] px-1.5 py-0.5 rounded-full uppercase font-bold tracking-wider shrink-0 ${isAI ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'}`}>
               {isAI ? 'AI' : 'Platform'}
             </span>
+            {status !== null && !isChecking && (
+              <span title={status ? "登录状态正常" : "登录已过期"}>
+                {status ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                ) : (
+                  <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                )}
+              </span>
+            )}
           </div>
-          <button
-            onClick={() => setAddingPlatform(platform.id)}
-            className="p-1 hover:bg-background rounded-md transition-colors text-muted-foreground hover:text-primary shrink-0"
-            disabled={loading[`${platform.id}_create`]}
-            title="添加账号"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => handleCheckLoginStatus(platform.id)}
+              className={`p-1 hover:bg-background rounded-md transition-colors text-muted-foreground hover:text-primary ${isChecking ? 'animate-spin' : ''}`}
+              disabled={isChecking || !activeAccounts[platform.id as PlatformKey]}
+              title="检测登录状态"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setAddingPlatform(platform.id)}
+              className="p-1 hover:bg-background rounded-md transition-colors text-muted-foreground hover:text-primary shrink-0"
+              disabled={loading[`${platform.id}_create`]}
+              title="添加账号"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
         </div>
         
         {addingPlatform === platform.id && (
@@ -314,9 +425,17 @@ export default function Auth() {
             </div>
             <button
               onClick={handleConfirmLogin}
-              className="w-full py-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all font-bold shadow-lg shadow-primary/20"
+              disabled={checkingLogin}
+              className="w-full py-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all font-bold shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              我已完成登录
+              {checkingLogin ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin"></div>
+                  <span>保存中...</span>
+                </>
+              ) : (
+                '我已完成登录'
+              )}
             </button>
           </div>
         </div>
@@ -331,6 +450,27 @@ export default function Auth() {
             <h1 className="text-2xl font-bold tracking-tight">账号管理</h1>
             <p className="text-xs text-muted-foreground mt-0.5">管理您的 AI 模型账户与社交媒体发布平台</p>
           </div>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          {batchChecking && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-xs text-blue-700 dark:text-blue-300 font-medium">
+                检测中 {batchProgress.checked}/{batchProgress.total}
+              </span>
+            </div>
+          )}
+          
+          <button
+            onClick={handleBatchCheckLoginStatus}
+            disabled={batchChecking}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium shadow-sm"
+            title="一键检测所有已登录账号"
+          >
+            <CheckCheck className="w-4 h-4" />
+            <span>批量检测登录状态</span>
+          </button>
         </div>
       </div>
 

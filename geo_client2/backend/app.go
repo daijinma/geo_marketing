@@ -213,6 +213,109 @@ func (a *App) CheckLoginStatus(platform string) (map[string]interface{}, error) 
 	return map[string]interface{}{"success": true, "isLoggedIn": loggedIn}, nil
 }
 
+func (a *App) BatchCheckLoginStatus() error {
+	if a.accountSvc == nil {
+		return fmt.Errorf("account service not initialized")
+	}
+	if a.providerFact == nil {
+		return fmt.Errorf("provider factory not initialized")
+	}
+
+	go func() {
+		l := logger.GetLogger()
+		l.Info("[BATCH-CHECK] Starting batch login status check")
+
+		runtime.EventsEmit(a.ctx, "batch-check:started", map[string]interface{}{
+			"message": "开始批量检测登录状态",
+		})
+
+		platforms := []string{"deepseek", "doubao", "yiyan", "yuanbao", "xiaohongshu"}
+		totalPlatforms := len(platforms)
+		checked := 0
+
+		for _, platform := range platforms {
+			activeAccount, err := a.accountSvc.GetActiveAccount(platform)
+			if err != nil || activeAccount == nil {
+				l.Info(fmt.Sprintf("[BATCH-CHECK] Skipping %s: no active account", platform))
+				checked++
+				runtime.EventsEmit(a.ctx, "batch-check:progress", map[string]interface{}{
+					"platform": platform,
+					"checked":  checked,
+					"total":    totalPlatforms,
+					"skipped":  true,
+					"message":  fmt.Sprintf("跳过 %s (无活跃账号)", platform),
+				})
+				continue
+			}
+
+			l.Info(fmt.Sprintf("[BATCH-CHECK] Checking %s (account: %s)", platform, activeAccount.AccountID))
+
+			runtime.EventsEmit(a.ctx, "batch-check:progress", map[string]interface{}{
+				"platform":   platform,
+				"account_id": activeAccount.AccountID,
+				"checked":    checked,
+				"total":      totalPlatforms,
+				"checking":   true,
+				"message":    fmt.Sprintf("正在检测 %s...", platform),
+			})
+
+			prov, err := a.providerFact.GetProvider(platform, true, 60000, activeAccount.AccountID)
+			if err != nil {
+				l.Error(fmt.Sprintf("[BATCH-CHECK] Failed to get provider for %s", platform), err)
+				checked++
+				runtime.EventsEmit(a.ctx, "batch-check:progress", map[string]interface{}{
+					"platform":   platform,
+					"account_id": activeAccount.AccountID,
+					"checked":    checked,
+					"total":      totalPlatforms,
+					"error":      true,
+					"message":    fmt.Sprintf("%s 检测失败: %s", platform, err.Error()),
+				})
+				continue
+			}
+
+			isLoggedIn, err := prov.CheckLoginStatus()
+			prov.Close()
+
+			if err != nil {
+				l.Error(fmt.Sprintf("[BATCH-CHECK] Error checking %s", platform), err)
+				checked++
+				runtime.EventsEmit(a.ctx, "batch-check:progress", map[string]interface{}{
+					"platform":   platform,
+					"account_id": activeAccount.AccountID,
+					"checked":    checked,
+					"total":      totalPlatforms,
+					"error":      true,
+					"message":    fmt.Sprintf("%s 检测出错: %s", platform, err.Error()),
+				})
+				continue
+			}
+
+			checked++
+			l.Info(fmt.Sprintf("[BATCH-CHECK] %s result: %v", platform, isLoggedIn))
+
+			runtime.EventsEmit(a.ctx, "batch-check:progress", map[string]interface{}{
+				"platform":     platform,
+				"account_id":   activeAccount.AccountID,
+				"checked":      checked,
+				"total":        totalPlatforms,
+				"is_logged_in": isLoggedIn,
+				"message":      fmt.Sprintf("%s: %s", platform, map[bool]string{true: "登录正常", false: "登录已过期"}[isLoggedIn]),
+			})
+		}
+
+		runtime.EventsEmit(a.ctx, "batch-check:completed", map[string]interface{}{
+			"checked": checked,
+			"total":   totalPlatforms,
+			"message": "批量检测完成",
+		})
+
+		l.Info("[BATCH-CHECK] Batch check completed")
+	}()
+
+	return nil
+}
+
 // Account methods
 func (a *App) CreateAccount(platform, accountName string) (map[string]interface{}, error) {
 	if a.accountSvc == nil {
@@ -487,11 +590,9 @@ func (a *App) GetVersionInfo() map[string]interface{} {
 	buildTime := BuildTime
 	formattedTime := buildTime
 
-	// Parse and format build time if it's a valid timestamp
 	if buildTime != "unknown" && buildTime != "" {
 		if t, err := time.Parse(time.RFC3339, buildTime); err == nil {
-			// Format as "Jan 23, 2026 10:30"
-			formattedTime = t.Format("Jan 02, 2006 15:04")
+			formattedTime = t.Format("2006-01-02 15:04:05")
 		}
 	}
 

@@ -55,6 +55,7 @@ interface WailsApp {
 
   // Search
   CheckLoginStatus(platform: string): Promise<{ success: boolean; isLoggedIn: boolean }>;
+  BatchCheckLoginStatus(): Promise<void>;
 
   // Logs
   GetLogs(limit: number, offset: number, filtersJSON: string): Promise<{ success: boolean; logs: LogEntry[]; total: number }>;
@@ -176,8 +177,32 @@ export const wailsAPI = {
       if (!app) return { success: false, isLoggedIn: false };
       return app.CheckLoginStatus(platform);
     },
+    batchCheckLoginStatus: async () => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.BatchCheckLoginStatus();
+    },
     onTaskUpdated: (callback: (data: unknown) => void) => {
       return EventsOn('search:taskUpdated', callback);
+    },
+    onBatchCheckStarted: (callback: (data: { message: string }) => void) => {
+      return EventsOn('batch-check:started', callback as (...args: unknown[]) => void);
+    },
+    onBatchCheckProgress: (callback: (data: {
+      platform: string;
+      account_id?: string;
+      checked: number;
+      total: number;
+      is_logged_in?: boolean;
+      checking?: boolean;
+      skipped?: boolean;
+      error?: boolean;
+      message: string;
+    }) => void) => {
+      return EventsOn('batch-check:progress', callback as (...args: unknown[]) => void);
+    },
+    onBatchCheckCompleted: (callback: (data: { checked: number; total: number; message: string }) => void) => {
+      return EventsOn('batch-check:completed', callback as (...args: unknown[]) => void);
     },
   },
   task: {

@@ -18,9 +18,8 @@ interface OverviewStats {
 
 interface SearchStatsItem {
   keyword: string;
-  platform: string;
-  subQueryCount: number;
-  citationCount: number;
+  subQueries: string[];
+  urlCount: number;
 }
 
 interface DomainStatsItem {
@@ -44,17 +43,13 @@ function computeStats(records: any[]): {
   searchStats: SearchStatsItem[];
   domainStats: { domains: DomainStatsItem[]; keywords: string[] };
 } {
-  // 总体统计
   let subQueryCount = 0;
   let citationCount = 0;
   const allDomains = new Set<string>();
-  
-  // 按关键词+平台聚合
-  const searchStatsMap = new Map<string, SearchStatsItem>();
-  
-  // 域名统计
   const domainStatsMap = new Map<string, { total: number; byKeyword: Record<string, number> }>();
   const allKeywords = new Set<string>();
+  
+  const searchStatsMap = new Map<string, { keyword: string; subQueries: string[]; urlCount: number }>();
   
   records.forEach(record => {
     const queriesLen = record.queries?.length || 0;
@@ -63,7 +58,6 @@ function computeStats(records: any[]): {
     subQueryCount += queriesLen;
     citationCount += citationsLen;
     
-    // 收集域名
     record.citations?.forEach((cite: any) => {
       const domain = getDomainFromUrl(cite.url) || cite.domain;
       if (domain) {
@@ -71,23 +65,30 @@ function computeStats(records: any[]): {
       }
     });
     
-    // 按关键词+平台聚合
-    const key = `${record.keyword}|${record.platform}`;
-    if (!searchStatsMap.has(key)) {
-      searchStatsMap.set(key, {
-        keyword: record.keyword,
-        platform: record.platform,
-        subQueryCount: 0,
-        citationCount: 0,
-      });
-    }
-    const item = searchStatsMap.get(key)!;
-    item.subQueryCount += queriesLen;
-    item.citationCount += citationsLen;
-    
-    // 域名按关键词统计
     const keyword = record.keyword || '(未知)';
     allKeywords.add(keyword);
+    
+    const subQueries = (record.queries || [])
+      .map((q: any) => q.query)
+      .filter((q: string) => q && q.trim())
+      .map((q: string) => q.trim())
+      .sort();
+    
+    const subQueryKey = subQueries.length === 0 ? '__EMPTY__' : subQueries.join('|||');
+    const groupKey = `${keyword}::${subQueryKey}`;
+    
+    const recordCitationCount = record.citations?.length || 0;
+    
+    if (!searchStatsMap.has(groupKey)) {
+      searchStatsMap.set(groupKey, {
+        keyword,
+        subQueries: subQueries.slice(),
+        urlCount: 0,
+      });
+    }
+    
+    const item = searchStatsMap.get(groupKey)!;
+    item.urlCount += recordCitationCount;
     
     record.citations?.forEach((cite: any) => {
       const domain = getDomainFromUrl(cite.url) || cite.domain;
@@ -102,8 +103,15 @@ function computeStats(records: any[]): {
     });
   });
   
-  // 转换为数组并排序
-  const searchStats = Array.from(searchStatsMap.values());
+  const searchStats = Array.from(searchStatsMap.values()).sort((a, b) => {
+    if (a.keyword !== b.keyword) {
+      return a.keyword.localeCompare(b.keyword);
+    }
+    if (a.subQueries.length === 0 && b.subQueries.length === 0) return 0;
+    if (a.subQueries.length === 0) return -1;
+    if (b.subQueries.length === 0) return 1;
+    return a.subQueries.join(',').localeCompare(b.subQueries.join(','));
+  });
   
   const domains = Array.from(domainStatsMap.entries())
     .map(([domain, data]) => ({ domain, ...data }))
@@ -297,21 +305,32 @@ export function LocalTaskDetail({ taskId, onClose }: LocalTaskDetailProps) {
                       <table className="w-full text-sm text-left">
                         <thead className="bg-accent/20 border-b border-border sticky top-0">
                           <tr>
-                            <th className="px-4 py-2 font-medium">关键词</th>
-                            <th className="px-4 py-2 font-medium">平台</th>
-                            <th className="px-4 py-2 font-medium text-right">Sub Query 数</th>
-                            <th className="px-4 py-2 font-medium text-right">引用链接数</th>
+                            <th className="px-4 py-2 font-medium">原始搜索词</th>
+                            <th className="px-4 py-2 font-medium">Sub Query</th>
+                            <th className="px-4 py-2 font-medium text-right">URL 数</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
-                          {stats.searchStats.map((item, idx) => (
-                            <tr key={idx} className="hover:bg-accent/10">
-                              <td className="px-4 py-2 font-medium">{item.keyword}</td>
-                              <td className="px-4 py-2 capitalize">{item.platform}</td>
-                              <td className="px-4 py-2 text-right">{item.subQueryCount}</td>
-                              <td className="px-4 py-2 text-right">{item.citationCount}</td>
-                            </tr>
-                          ))}
+                          {stats.searchStats.map((item, idx) => {
+                            let displayText: string;
+                            if (item.subQueries.length === 0) {
+                              displayText = '--';
+                            } else if (item.subQueries.length === 1) {
+                              displayText = item.subQueries[0];
+                            } else {
+                              displayText = `[${item.subQueries.map(q => `'${q}'`).join(', ')}]`;
+                            }
+                            
+                            return (
+                              <tr key={idx} className="hover:bg-accent/10">
+                                <td className="px-4 py-2 font-medium">{item.keyword}</td>
+                                <td className="px-4 py-2 font-mono text-xs" title={displayText}>
+                                  {displayText.length > 60 ? displayText.slice(0, 60) + '...' : displayText}
+                                </td>
+                                <td className="px-4 py-2 text-right">{item.urlCount}</td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

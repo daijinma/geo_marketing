@@ -36,9 +36,8 @@ func (d *YiyanProvider) GetLoginUrl() string {
 	return d.loginURL
 }
 
-// CheckLoginStatus checks if logged in.
 func (d *YiyanProvider) CheckLoginStatus() (bool, error) {
-	browser, cleanup, err := d.LaunchBrowser(true) // Headless
+	browser, cleanup, err := d.LaunchBrowser(true)
 	if err != nil {
 		return false, err
 	}
@@ -47,26 +46,95 @@ func (d *YiyanProvider) CheckLoginStatus() (bool, error) {
 
 	page := browser.MustPage(d.GetLoginUrl())
 	page.MustWaitLoad()
+	time.Sleep(5 * time.Second)
 
-	// Wait a bit for dynamic content
-	time.Sleep(3 * time.Second)
+	// Strategy 1: Check Cookies
+	cookies, err := page.Cookies([]string{d.GetLoginUrl()})
+	if err == nil && len(cookies) > 0 {
+		hasAuthCookie := false
+		for _, cookie := range cookies {
+			cookieName := strings.ToLower(cookie.Name)
+			if strings.Contains(cookieName, "session") ||
+				strings.Contains(cookieName, "token") ||
+				strings.Contains(cookieName, "auth") ||
+				strings.Contains(cookieName, "access_token") ||
+				strings.Contains(cookieName, "user_id") ||
+				cookieName == "jsessionid" ||
+				cookieName == "sid" ||
+				strings.Contains(cookieName, "bduss") {
+				hasAuthCookie = true
+				d.logger.Debug(fmt.Sprintf("[CheckLoginStatus] Yiyan: Found auth cookie: %s", cookie.Name))
+				break
+			}
+		}
+		if hasAuthCookie {
+			d.logger.Debug("[CheckLoginStatus] Yiyan: Valid auth cookie found, likely logged in")
+		} else {
+			d.logger.Debug("[CheckLoginStatus] Yiyan: No auth cookies found, likely not logged in")
+		}
+	}
 
-	// Check for "登录" (Login) button. If it exists, we are NOT logged in.
-	hasLoginBtn, _, _ := page.HasR("button, div, span, a", "登录")
+	// Strategy 2: URL Redirect Detection
+	finalURL := page.MustInfo().URL
+
+	if strings.Contains(finalURL, "yiyan.baidu.com") && !strings.Contains(finalURL, "login") {
+		hasInput, _, _ := page.Has("div[class*='inputArea'], .editorContainer__U2vI65Bv, div[role='textbox'][contenteditable='true']")
+		if hasInput {
+			d.logger.Debug("[CheckLoginStatus] Yiyan: Found input area, logged in")
+			return true, nil
+		}
+	}
+
+	// Strategy 3: Negative Element Detection (login button)
+	hasLoginBtn, _, _ := page.HasR("button, div, span, a", "登录|Login|Sign")
 	if hasLoginBtn {
+		d.logger.Debug("[CheckLoginStatus] Yiyan: Found login button, not logged in")
 		return false, nil
 	}
 
-	// Check for specific input area that only appears when logged in
-	// Based on user provided HTML
-	hasInput, _, _ := page.Has("div[class*='inputArea'], .editorContainer__U2vI65Bv")
+	// Strategy 4: Positive Element Detection (input area)
+	hasInput, _, _ := page.Has("div[class*='inputArea'], .editorContainer__U2vI65Bv, div[role='textbox'][contenteditable='true']")
 	if hasInput {
+		d.logger.Debug("[CheckLoginStatus] Yiyan: Found input area, logged in")
 		return true, nil
 	}
 
-	// If no login button found but can't find input, might be loading or different page structure.
-	// But usually if logged in, we see the chat interface.
-	return true, nil
+	// Strategy 5: HTTP Response Check
+	bodyText, err := page.Element("body")
+	if err == nil {
+		text, _ := bodyText.Text()
+		textLower := strings.ToLower(text)
+
+		unauthorizedKeywords := []string{
+			"unauthorized", "unauthenticated", "login required", "sign in required",
+			"access denied", "invalid session", "token expired",
+			"未登录", "请登录", "需要登录", "登录已过期", "未授权", "会话已过期", "令牌无效",
+		}
+
+		for _, keyword := range unauthorizedKeywords {
+			if strings.Contains(textLower, keyword) {
+				d.logger.Debug(fmt.Sprintf("[CheckLoginStatus] Yiyan: Found unauthorized keyword '%s', not logged in", keyword))
+				return false, nil
+			}
+		}
+	}
+
+	// If we reach here with auth cookies, assume logged in
+	if err == nil && len(cookies) > 0 {
+		for _, cookie := range cookies {
+			cookieName := strings.ToLower(cookie.Name)
+			if strings.Contains(cookieName, "session") ||
+				strings.Contains(cookieName, "token") ||
+				strings.Contains(cookieName, "auth") ||
+				strings.Contains(cookieName, "bduss") {
+				d.logger.Debug("[CheckLoginStatus] Yiyan: Auth cookie present and no negative indicators found, assuming logged in")
+				return true, nil
+			}
+		}
+	}
+
+	d.logger.Debug("[CheckLoginStatus] Yiyan: Unclear state, assuming not logged in")
+	return false, nil
 }
 
 // Search performs a search with full network interception and citation extraction.

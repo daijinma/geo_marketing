@@ -85,7 +85,7 @@ export default function Search() {
           <div className="space-y-4">
             <label className="text-base font-semibold block">目标平台</label>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-              {['deepseek', 'doubao', 'yiyan', 'yuanbao', 'xiaohongshu'].map((p) => {
+              {['deepseek', 'doubao', 'yiyan', 'yuanbao'].map((p) => {
                 const isSelected = selectedPlatforms.includes(p);
                 return (
                   <label 

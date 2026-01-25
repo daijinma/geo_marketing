@@ -7,7 +7,7 @@ import (
 
 // AppName is the name of the application, used for directory naming.
 // This can be changed to white-label the application.
-var AppName = "geo_client2"
+var AppName = "duanjiegeo"
 
 // GetAppDir returns the root directory for the application configuration and data.
 // Default: ~/.geo_client2/

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"geo_client2/backend/config"
 
@@ -130,29 +131,32 @@ func (b *BaseProvider) Close() error {
 	if b.browser != nil {
 		err := b.browser.Close()
 		b.browser = nil
-		return err
+		if err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
+			return err
+		}
 	}
 	return nil
 }
 
-// StartLogin opens a non-headless browser for the user to login.
-// Returns a cleanup function that closes the browser.
 func (b *BaseProvider) StartLogin() (func(), error) {
 	if b.loginURL == "" {
 		return nil, fmt.Errorf("login URL not defined for platform %s", b.platform)
 	}
 
-	// Always non-headless for login
-	browser, cleanup, err := b.LaunchBrowser(false)
+	browser, _, err := b.LaunchBrowser(false)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create a new page and navigate to login URL
 	page := browser.MustPage(b.loginURL)
 	page.MustWaitLoad()
 
-	// Return the cleanup function
+	cleanup := func() {
+		if b.browser != nil {
+			_ = b.Close()
+		}
+	}
+
 	return cleanup, nil
 }
 
