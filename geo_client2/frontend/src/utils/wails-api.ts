@@ -4,7 +4,7 @@
  */
 
 import { Greet, EmitTestEvent } from '@/wailsjs/go/main/App';
-import { EventsOn } from '@/wailsjs/runtime/runtime';
+import { EventsOn, BrowserOpenURL } from '@/wailsjs/runtime/runtime';
 
 // Get the Wails App instance (will be set when Wails loads)
 declare global {
@@ -322,6 +322,11 @@ export const wailsAPI = {
       const app = getApp();
       if (!app) throw new Error('Wails backend not available');
       return app.SaveExcelFile(filename, base64Content);
+    },
+  },
+  browser: {
+    openURL: (url: string) => {
+      BrowserOpenURL(url);
     },
   },
 };

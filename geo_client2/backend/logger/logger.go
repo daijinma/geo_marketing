@@ -11,6 +11,8 @@ import (
 	"runtime"
 	"sync"
 	"time"
+
+	"geo_client2/backend/config"
 )
 
 type Logger struct {
@@ -43,8 +45,7 @@ func SetDB(database *sql.DB) {
 
 func GetLogger() *Logger {
 	if loggerInstance == nil {
-		homeDir, _ := os.UserHomeDir()
-		logDir := filepath.Join(homeDir, ".geo_client2", "logs")
+		logDir := config.GetLogDir()
 		os.MkdirAll(logDir, 0755)
 
 		loggerInstance = &Logger{logDir: logDir}

@@ -41,11 +41,7 @@ func (r *AccountRepository) CreateAccount(platform, accountName string) (*Accoun
 	category := config.GetPlatformCategory(platform)
 
 	// Generate user_data_dir path
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get home dir: %w", err)
-	}
-	userDataDir := filepath.Join(homeDir, ".geo_client2", "browser_data", platform, accountID)
+	userDataDir := filepath.Join(config.GetBrowserDataDir(), platform, accountID)
 
 	// Create directory
 	if err := os.MkdirAll(userDataDir, 0755); err != nil {
@@ -56,7 +52,7 @@ func (r *AccountRepository) CreateAccount(platform, accountName string) (*Accoun
 	// If this is the first account for the platform, set it as active
 	var isActive int = 0
 	var existingCount int
-	err = r.db.QueryRow("SELECT COUNT(*) FROM accounts WHERE platform = ?", platform).Scan(&existingCount)
+	err := r.db.QueryRow("SELECT COUNT(*) FROM accounts WHERE platform = ?", platform).Scan(&existingCount)
 	if err == nil && existingCount == 0 {
 		isActive = 1
 	}

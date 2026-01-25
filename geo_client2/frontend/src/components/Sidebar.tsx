@@ -6,6 +6,7 @@ import {
   FileText,
   Search,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export default function Sidebar() {
   const location = useLocation();
@@ -19,9 +20,9 @@ export default function Sidebar() {
   ];
 
   return (
-    <div className="w-[280px] border-r border-border bg-card flex flex-col">
+    <div className="w-[280px] border-r bg-card flex flex-col h-full shadow-sm">
       <div className="flex-1 overflow-auto p-4">
-        <nav className="space-y-2">
+        <nav className="space-y-1">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
@@ -29,14 +30,15 @@ export default function Sidebar() {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-3 px-4 py-3 rounded-md transition-colors ${
-                  isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'hover:bg-accent'
-                }`}
+                className={cn(
+                  "flex items-center w-full gap-3 h-11 px-4 font-normal rounded-md transition-colors",
+                  isActive 
+                    ? "bg-secondary text-secondary-foreground font-medium" 
+                    : "hover:bg-accent hover:text-accent-foreground"
+                )}
               >
-                <Icon className="w-5 h-5" />
-                <span className="font-medium">{item.label}</span>
+                <Icon className="w-4 h-4" />
+                <span>{item.label}</span>
               </Link>
             );
           })}

@@ -29,6 +29,16 @@ interface DomainStatsItem {
   byKeyword: Record<string, number>;
 }
 
+function getDomainFromUrl(urlStr: string): string {
+  if (!urlStr) return '';
+  try {
+    const url = new URL(urlStr);
+    return url.hostname;
+  } catch (e) {
+    return '';
+  }
+}
+
 function computeStats(records: any[]): {
   overview: OverviewStats;
   searchStats: SearchStatsItem[];
@@ -55,8 +65,9 @@ function computeStats(records: any[]): {
     
     // 收集域名
     record.citations?.forEach((cite: any) => {
-      if (cite.domain) {
-        allDomains.add(cite.domain);
+      const domain = getDomainFromUrl(cite.url) || cite.domain;
+      if (domain) {
+        allDomains.add(domain);
       }
     });
     
@@ -79,12 +90,13 @@ function computeStats(records: any[]): {
     allKeywords.add(keyword);
     
     record.citations?.forEach((cite: any) => {
-      if (!cite.domain) return;
+      const domain = getDomainFromUrl(cite.url) || cite.domain;
+      if (!domain) return;
       
-      if (!domainStatsMap.has(cite.domain)) {
-        domainStatsMap.set(cite.domain, { total: 0, byKeyword: {} });
+      if (!domainStatsMap.has(domain)) {
+        domainStatsMap.set(domain, { total: 0, byKeyword: {} });
       }
-      const domainItem = domainStatsMap.get(cite.domain)!;
+      const domainItem = domainStatsMap.get(domain)!;
       domainItem.total += 1;
       domainItem.byKeyword[keyword] = (domainItem.byKeyword[keyword] || 0) + 1;
     });
@@ -316,6 +328,7 @@ export function LocalTaskDetail({ taskId, onClose }: LocalTaskDetailProps) {
                           <thead className="bg-accent/20 border-b border-border sticky top-0">
                             <tr>
                               <th className="px-4 py-2 font-medium sticky left-0 bg-accent/20 z-10 min-w-[200px]">Domain</th>
+                              <th className="px-4 py-2 font-medium text-left min-w-[200px]">链接</th>
                               <th className="px-4 py-2 font-medium text-right min-w-[60px]">总计</th>
                               {stats.domainStats.keywords.map(kw => (
                                 <th key={kw} className="px-4 py-2 font-medium text-right min-w-[80px] truncate" title={kw}>
@@ -329,6 +342,15 @@ export function LocalTaskDetail({ taskId, onClose }: LocalTaskDetailProps) {
                               <tr key={idx} className="hover:bg-accent/10">
                                 <td className="px-4 py-2 font-medium sticky left-0 bg-card z-10 truncate max-w-[200px]" title={item.domain}>
                                   {item.domain}
+                                </td>
+                                <td className="px-4 py-2 text-left">
+                                  <button 
+                                    onClick={() => wailsAPI.browser.openURL(`https://${item.domain}`)}
+                                    className="flex items-center gap-1 text-primary hover:underline truncate max-w-[200px]"
+                                  >
+                                    https://{item.domain}
+                                    <ExternalLink className="w-3 h-3" />
+                                  </button>
                                 </td>
                                 <td className="px-4 py-2 text-right font-semibold">{item.total}</td>
                                 {stats.domainStats.keywords.map(kw => (
@@ -459,19 +481,19 @@ export function LocalTaskDetail({ taskId, onClose }: LocalTaskDetailProps) {
                                                 <li key={idx} className="text-sm border-b border-border/50 last:border-0 pb-2 last:pb-0 mb-2 last:mb-0">
                                                   <div className="flex items-start gap-2 p-1.5 hover:bg-accent/50 rounded group">
                                                     <span className="text-muted-foreground min-w-[1.5rem] text-xs pt-0.5">[{cite.cite_index}]</span>
-                                                    <div className="flex-1 overflow-hidden">
-                                                      <div className="font-medium truncate mb-0.5" title={cite.title}>{cite.title || '无标题'}</div>
-                                                      <a 
-                                                        href={cite.url} 
-                                                        target="_blank" 
-                                                        rel="noopener noreferrer" 
-                                                        className="text-primary hover:underline text-xs flex items-center gap-1 truncate"
-                                                        onClick={(e) => e.stopPropagation()}
-                                                      >
-                                                        {cite.domain || cite.url}
-                                                        <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                      </a>
-                                                      {cite.snippet && (
+                                                      <div className="flex-1 overflow-hidden">
+                                                        <div className="font-medium truncate mb-0.5" title={cite.title}>{cite.title || '无标题'}</div>
+                                                        <button 
+                                                          onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            wailsAPI.browser.openURL(cite.url);
+                                                          }}
+                                                          className="text-primary hover:underline text-xs flex items-center gap-1 truncate"
+                                                        >
+                                                          {cite.domain || cite.url}
+                                                          <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                        </button>
+                                                        {cite.snippet && (
                                                         <div className="text-xs text-muted-foreground mt-1 line-clamp-2" title={cite.snippet}>
                                                           {cite.snippet}
                                                         </div>

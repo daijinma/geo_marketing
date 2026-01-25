@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"geo_client2/backend/config"
 	"geo_client2/backend/logger"
 
 	"github.com/google/uuid"
@@ -18,17 +19,12 @@ var db *sql.DB
 
 // Init initializes the database connection and runs migrations.
 func Init() error {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get home dir: %w", err)
-	}
-
-	dbDir := filepath.Join(homeDir, ".geo_client2")
+	dbDir := config.GetAppDir()
 	if err := os.MkdirAll(dbDir, 0755); err != nil {
 		return fmt.Errorf("failed to create db dir: %w", err)
 	}
 
-	dbPath := filepath.Join(dbDir, "cache.db")
+	dbPath := config.GetDBPath()
 
 	conn, err := sql.Open("sqlite", dbPath)
 	if err != nil {
@@ -302,10 +298,6 @@ func migrateToV7() error {
 // createDefaultAccountsForExistingPlatforms creates default accounts for existing platforms.
 func createDefaultAccountsForExistingPlatforms() error {
 	db := GetDB()
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
 
 	platforms := []string{"deepseek", "doubao"}
 
@@ -322,7 +314,7 @@ func createDefaultAccountsForExistingPlatforms() error {
 		}
 
 		// Check if browser_data directory exists
-		browserDataDir := filepath.Join(homeDir, ".geo_client2", "browser_data", platform)
+		browserDataDir := filepath.Join(config.GetBrowserDataDir(), platform)
 		if _, err := os.Stat(browserDataDir); os.IsNotExist(err) {
 			continue // No existing browser data
 		}

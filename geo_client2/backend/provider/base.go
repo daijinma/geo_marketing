@@ -53,14 +53,13 @@ type BaseProvider struct {
 // NewBaseProvider creates a new base provider.
 // If accountID is empty, uses the old structure (for backward compatibility during migration).
 func NewBaseProvider(platform string, headless bool, timeout int, accountID string) *BaseProvider {
-	homeDir, _ := os.UserHomeDir()
 	var userDataDir string
 	if accountID != "" {
-		// New structure: ~/.geo_client2/browser_data/{platform}/{account_id}/
-		userDataDir = filepath.Join(homeDir, ".geo_client2", "browser_data", platform, accountID)
+		// New structure: {AppDir}/browser_data/{platform}/{account_id}/
+		userDataDir = filepath.Join(config.GetBrowserDataDir(), platform, accountID)
 	} else {
-		// Old structure (for backward compatibility): ~/.geo_client2/browser_data/{platform}/
-		userDataDir = filepath.Join(homeDir, ".geo_client2", "browser_data", platform)
+		// Old structure (for backward compatibility): {AppDir}/browser_data/{platform}/
+		userDataDir = filepath.Join(config.GetBrowserDataDir(), platform)
 	}
 
 	loginURL := config.GetLoginURL(platform)

@@ -28,18 +28,47 @@ export default function Settings() {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold">设置</h1>
-      <div className="space-y-4">
-        <div className="p-4 bg-card border border-border rounded-lg">
-          <h2 className="text-lg font-semibold mb-4">浏览器设置</h2>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-medium">无头模式</div>
-              <div className="text-sm text-muted-foreground">启用后浏览器将在后台运行</div>
-            </div>
-            <Switch checked={headless} onCheckedChange={handleHeadlessChange} />
+    <div className="p-8 space-y-8 max-w-4xl mx-auto">
+      <div className="space-y-2">
+        <h2 className="text-3xl font-bold tracking-tight">系统设置</h2>
+        <p className="text-muted-foreground">管理应用行为和偏好设置。</p>
+      </div>
+      
+      <div className="space-y-6">
+        <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
+          <div className="flex flex-col space-y-1.5 p-6">
+            <h3 className="text-2xl font-semibold leading-none tracking-tight">浏览器配置</h3>
+            <p className="text-sm text-muted-foreground">控制后台浏览器的运行方式。</p>
           </div>
+          <div className="p-6 pt-0 space-y-6">
+            <div className="flex items-center justify-between space-x-2">
+                <div className="space-y-1">
+                    <label htmlFor="headless-mode" className="text-base font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">无头模式 (Headless)</label>
+                    <p className="text-sm text-muted-foreground">
+                        启用后浏览器将在后台静默运行，不会显示操作界面。
+                        <br/>
+                        <span className="text-xs opacity-70">注: 部分平台登录可能需要关闭此选项。</span>
+                    </p>
+                </div>
+                <Switch 
+                    id="headless-mode"
+                    checked={headless} 
+                    onCheckedChange={handleHeadlessChange} 
+                />
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
+            <div className="flex flex-col space-y-1.5 p-6">
+                <h3 className="text-2xl font-semibold leading-none tracking-tight">关于应用</h3>
+            </div>
+            <div className="p-6 pt-0">
+                <div className="text-sm text-muted-foreground">
+                    <p>当前版本: v0.1.0</p>
+                    <p>Powered by Wails + React</p>
+                </div>
+            </div>
         </div>
       </div>
     </div>

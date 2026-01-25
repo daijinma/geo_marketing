@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { RefreshCw, ChevronDown, ChevronRight, Play, Trash2 } from 'lucide-react';
+import { RefreshCw, ChevronDown, ChevronRight, Play, Trash2, MoreHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 import { LocalTaskCreator } from '@/components/LocalTaskCreator';
 import { LocalTaskDetail } from '@/components/LocalTaskDetail';
@@ -7,7 +7,7 @@ import { wailsAPI } from '@/utils/wails-api';
 
 interface Task {
   id: number;
-  task_id?: number; // DB field is task_id, but sometimes mapped to id
+  task_id?: number;
   name?: string;
   keywords: string;
   platforms: string;
@@ -29,7 +29,6 @@ export default function Tasks() {
   const [deletingTaskId, setDeletingTaskId] = useState<number | null>(null);
   const [deleteConfirmationId, setDeleteConfirmationId] = useState<number | null>(null);
   
-  // Editing state
   const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -56,7 +55,6 @@ export default function Tasks() {
     loadTasks();
     
     const unlisten = wailsAPI.search.onTaskUpdated((data: any) => {
-      // Reload tasks whenever we get an update to ensure status changes are reflected
       loadTasks();
     });
     
@@ -147,30 +145,34 @@ export default function Tasks() {
   };
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-8 space-y-8 max-w-6xl mx-auto">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">任务列表</h1>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowCreator(true)}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-          >
-            创建任务
-          </button>
-          <button
-            onClick={loadTasks}
-            className="p-2 border border-border rounded-md hover:bg-accent"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">任务列表</h2>
+          <p className="text-muted-foreground mt-1">管理和监控您的所有搜索任务</p>
+        </div>
+        <div className="flex items-center gap-3">
+            <button 
+                onClick={() => setShowCreator(true)}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 shadow-sm transition-all font-medium text-sm"
+            >
+                创建任务
+            </button>
+            <button 
+                onClick={loadTasks}
+                className="p-2 border border-input rounded-lg hover:bg-accent hover:text-accent-foreground transition-colors"
+                title="刷新列表"
+            >
+                <RefreshCw className="h-4 w-4" />
+            </button>
         </div>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2">
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-2 border border-border rounded-md bg-background"
+          className="h-10 w-[180px] rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 cursor-pointer"
         >
           <option value="all">全部状态</option>
           <option value="pending">待执行</option>
@@ -182,132 +184,160 @@ export default function Tasks() {
       </div>
 
       {loading && tasks.length === 0 ? (
-        <div className="text-center py-8 text-muted-foreground">加载中...</div>
+        <div className="text-center py-20 text-muted-foreground animate-pulse">加载中...</div>
       ) : tasks.length === 0 ? (
-        <div className="text-center py-8 text-muted-foreground">暂无任务</div>
-      ) : (
-        <div className="space-y-2">
-          {tasks.map((task) => (
-            <div
-              key={task.id}
-              className="p-4 bg-card border border-border rounded-lg relative"
+        <div className="text-center py-20 border-2 border-dashed border-border/50 rounded-xl bg-card/30">
+            <p className="text-muted-foreground text-lg mb-2">暂无任务</p>
+            <button 
+                onClick={() => setShowCreator(true)}
+                className="text-primary hover:underline font-medium"
             >
+                立即创建第一个任务
+            </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {tasks.map((task) => (
+            <div key={task.id} className="relative group bg-card border border-border/50 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden">
               {deletingTaskId === task.id && (
-                <div className="absolute inset-0 bg-background/80 rounded-lg flex items-center justify-center z-10">
+                <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10 backdrop-blur-sm">
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>删除中...</span>
+                    <span>正在删除...</span>
                   </div>
                 </div>
               )}
               
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setExpandedTask(expandedTask === task.id ? null : task.id)}
-                    className="p-1 hover:bg-accent rounded"
-                  >
-                    {expandedTask === task.id ? (
-                      <ChevronDown className="w-4 h-4" />
-                    ) : (
-                      <ChevronRight className="w-4 h-4" />
-                    )}
-                  </button>
-                  <span className="font-medium">
-                    {editingTaskId === task.id ? (
-                      <input
-                        ref={editInputRef}
-                        type="text"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        onBlur={handleSaveName}
-                        onKeyDown={handleKeyDown}
-                        className="px-2 py-1 border border-primary rounded text-sm focus:outline-none"
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    ) : (
-                      <span 
-                        onDoubleClick={() => handleDoubleClick(task)}
-                        className="cursor-pointer hover:bg-accent/50 px-2 py-1 rounded select-none"
-                        title="双击修改名称"
-                      >
-                        {task.name || `任务 #${task.id}`}
-                      </span>
-                    )}
-                  </span>
-                  <span className={`text-xs px-2 py-1 rounded ${
-                    task.status === 'completed' ? 'bg-green-100 text-green-800' :
-                    task.status === 'running' ? 'bg-blue-100 text-blue-800' :
-                    task.status === 'failed' ? 'bg-red-100 text-red-800' :
-                    task.status === 'partial_completed' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {task.status === 'partial_completed' ? '部分完成' : 
-                     task.status === 'completed' ? '已完成' :
-                     task.status === 'running' ? '运行中' :
-                     task.status === 'failed' ? '失败' :
-                     task.status === 'pending' ? '等待中' :
-                     task.status === 'cancelled' ? '已取消' : task.status}
-                  </span>
-                </div>
-                <div className="flex gap-4 items-center">
-                  <div className="flex gap-2 items-center">
+              <div className="p-5">
+                <div className="flex items-center justify-between gap-6">
+                  <div className="flex items-center gap-4 flex-1 min-w-0">
+                    <button 
+                        className="h-8 w-8 shrink-0 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => setExpandedTask(expandedTask === task.id ? null : task.id)}
+                    >
+                        {expandedTask === task.id ? (
+                            <ChevronDown className="h-4 w-4" />
+                        ) : (
+                            <ChevronRight className="h-4 w-4" />
+                        )}
+                    </button>
+                    
+                    <div className="flex flex-col min-w-0 space-y-1">
+                        <div className="flex items-center gap-3">
+                             {editingTaskId === task.id ? (
+                                <input
+                                    ref={editInputRef}
+                                    type="text"
+                                    value={editValue}
+                                    onChange={(e) => setEditValue(e.target.value)}
+                                    onBlur={handleSaveName}
+                                    onKeyDown={handleKeyDown}
+                                    className="h-6 py-0 px-2 text-sm w-[240px] border border-primary rounded bg-background focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                    onClick={(e) => e.stopPropagation()}
+                                />
+                            ) : (
+                                <span 
+                                    onDoubleClick={() => handleDoubleClick(task)}
+                                    className="font-semibold text-lg truncate cursor-text hover:text-primary transition-colors select-none"
+                                    title={task.name || `任务 #${task.id}`}
+                                >
+                                    {task.name || `任务 #${task.id}`}
+                                </span>
+                            )}
+                            
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors
+                                ${task.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                                  task.status === 'running' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                                  task.status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                  task.status === 'partial_completed' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                                  'bg-secondary text-secondary-foreground'
+                                }`
+                            }>
+                                {task.status === 'partial_completed' ? '部分完成' : 
+                                 task.status === 'completed' ? '已完成' :
+                                 task.status === 'running' ? '运行中' :
+                                 task.status === 'failed' ? '失败' :
+                                 task.status === 'pending' ? '等待中' :
+                                 task.status === 'cancelled' ? '已取消' : task.status}
+                            </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground flex items-center gap-2">
+                            <span className="font-mono">ID: {task.id}</span>
+                            <span>•</span>
+                            <span>{new Date(task.created_at).toLocaleString()}</span>
+                        </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                     {task.status !== 'running' && (
                       <>
                         {task.status === 'partial_completed' && (
-                          <button
+                          <button 
                             onClick={() => handleContinue(task.id)}
-                            className="flex items-center gap-1 text-sm text-primary hover:underline"
-                            title="继续执行未完成的部分"
+                            className="h-9 px-3 text-sm font-medium border border-input rounded-lg hover:bg-accent hover:text-accent-foreground flex items-center gap-1.5 transition-colors"
                           >
-                            <Play className="w-3 h-3" />
+                            <Play className="h-3.5 w-3.5" />
                             继续
                           </button>
                         )}
-                        <button
-                          onClick={() => handleRetry(task.id)}
-                          className="flex items-center gap-1 text-sm text-primary hover:underline"
-                          title="重新执行"
+                        <button 
+                            onClick={() => handleRetry(task.id)}
+                            className="h-9 px-3 text-sm font-medium border border-input rounded-lg hover:bg-accent hover:text-accent-foreground flex items-center gap-1.5 transition-colors"
                         >
-                          <Play className="w-3 h-3" />
-                          重试
+                            <Play className="h-3.5 w-3.5" />
+                            重试
                         </button>
                       </>
                     )}
-                    <button
-                      onClick={() => setSelectedTaskId(task.id)}
-                      className="text-sm text-primary hover:underline"
+                    
+                    <button 
+                        onClick={() => setSelectedTaskId(task.id)}
+                        className="h-9 px-4 text-sm font-medium bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
                     >
-                      查看详情
+                        详情
                     </button>
+
                     {task.status === 'running' ? (
-                      <button
+                      <button 
                         onClick={() => handleCancel(task.id)}
-                        className="text-sm text-destructive hover:underline"
+                        className="h-9 px-3 text-sm font-medium border border-destructive/20 text-destructive bg-destructive/5 rounded-lg hover:bg-destructive hover:text-destructive-foreground transition-colors"
                       >
                         取消
                       </button>
                     ) : (
                       <button
                         onClick={() => handleDelete(task.id)}
-                        className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full transition-colors"
+                        className="h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                         title="删除任务"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     )}
                   </div>
                 </div>
+
+                {expandedTask === task.id && (
+                  <div className="mt-5 pt-5 border-t border-border/50 grid grid-cols-1 md:grid-cols-2 gap-6 text-sm animate-in slide-in-from-top-2 duration-200">
+                    <div>
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">关键词</span>
+                        <div className="font-mono bg-secondary/50 p-3 rounded-lg text-xs overflow-x-auto border border-border/50">
+                            {task.keywords}
+                        </div>
+                    </div>
+                    <div className="space-y-3">
+                        <div>
+                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1">目标平台</span>
+                            <div className="font-medium">{task.platforms}</div>
+                        </div>
+                        <div>
+                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1">查询设置</span>
+                            <div className="font-medium">深度: {task.query_count} 轮</div>
+                        </div>
+                    </div>
+                  </div>
+                )}
               </div>
-              {expandedTask === task.id && (
-                <div className="mt-4 space-y-2 text-sm text-muted-foreground">
-                  <div>任务ID: {task.id}</div>
-                  <div>关键词: {task.keywords}</div>
-                  <div>平台: {task.platforms}</div>
-                  <div>查询次数: {task.query_count}</div>
-                  <div>创建时间: {new Date(task.created_at).toLocaleString()}</div>
-                </div>
-              )}
             </div>
           ))}
         </div>
@@ -331,25 +361,29 @@ export default function Tasks() {
       )}
 
       {deleteConfirmationId && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-background border border-border rounded-lg shadow-lg p-6 max-w-sm w-full space-y-4">
-            <h3 className="text-lg font-semibold">确认删除任务?</h3>
-            <p className="text-muted-foreground text-sm">
-              此操作将永久删除任务及其所有搜索记录，且无法恢复。
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setDeleteConfirmationId(null)}
-                className="px-4 py-2 border border-border rounded-md hover:bg-accent text-sm"
-              >
-                取消
-              </button>
-              <button
-                onClick={confirmDelete}
-                className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 text-sm"
-              >
-                确认删除
-              </button>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-background border border-border rounded-xl shadow-lg max-w-sm w-full overflow-hidden">
+            <div className="p-6 space-y-4">
+                <div className="space-y-2 text-center">
+                    <h3 className="text-lg font-semibold">确认删除任务?</h3>
+                    <p className="text-muted-foreground text-sm">
+                        此操作将永久删除任务及其所有搜索记录，且无法恢复。
+                    </p>
+                </div>
+                <div className="flex justify-center gap-3 pt-2">
+                    <button 
+                        onClick={() => setDeleteConfirmationId(null)}
+                        className="px-4 py-2 border border-input rounded-lg hover:bg-accent font-medium text-sm transition-colors"
+                    >
+                        取消
+                    </button>
+                    <button 
+                        onClick={confirmDelete}
+                        className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 font-medium text-sm transition-colors"
+                    >
+                        确认删除
+                    </button>
+                </div>
             </div>
           </div>
         </div>

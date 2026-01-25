@@ -84,11 +84,6 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 	}
 	defer cleanup()
 
-	d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Browser launched successfully", nil, nil)
-
-	homeURL := config.GetHomeURL("yuanbao")
-	d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Navigating to home URL", map[string]interface{}{"url": homeURL}, nil)
-
 	page := browser.Context(ctx).MustPage()
 	defer page.Close()
 
@@ -97,58 +92,58 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 	var fullResponseText string
 	var citationMu sync.Mutex
 
-	// SSE Data Parsing Function
-	parseSSEData := func(data string) {
-		// Clean prefix
-		jsonStr := data
-		if strings.HasPrefix(data, "data:") {
-			jsonStr = strings.TrimPrefix(data, "data:")
-		}
-		jsonStr = strings.TrimSpace(jsonStr)
-
-		if jsonStr == "" || jsonStr == "[DONE]" || jsonStr == "null" {
+	// Helper to add citations without duplication
+	addCitation := func(cit Citation) {
+		if cit.URL == "" {
 			return
 		}
-
-		// Yuanbao Structure
-		// data: {"type":"searchGuid", "docs":[{"title":"...", "url":"...", "quote":"...", "web_site_name":"..."}], ...}
-		var packet struct {
-			Type string `json:"type"`
-			Docs []struct {
-				Title       string `json:"title"`
-				URL         string `json:"url"`
-				Quote       string `json:"quote"`
-				WebSiteName string `json:"web_site_name"`
-				Index       int    `json:"index"`
-			} `json:"docs"`
-			Content string `json:"content"`
-			Delta   string `json:"delta"`
-		}
-
-		if err := json.Unmarshal([]byte(jsonStr), &packet); err != nil {
-			d.logger.DebugWithContext(ctx, "[YUANBAO-SSE] Unmarshal failed", map[string]interface{}{"error": err.Error(), "raw": jsonStr}, nil)
-			return
-		}
-
 		citationMu.Lock()
 		defer citationMu.Unlock()
+		for _, e := range capturedCitations {
+			if e.URL == cit.URL {
+				return
+			}
+		}
+		capturedCitations = append(capturedCitations, cit)
+	}
 
-		addCitation := func(cit Citation) bool {
-			if cit.URL == "" {
-				return false
-			}
-			for _, e := range capturedCitations {
-				if e.URL == cit.URL {
-					return false
-				}
-			}
-			capturedCitations = append(capturedCitations, cit)
-			return true
+	// SSE Data Parsing Function - handles CDP-parsed SSE data directly
+	// CDP gives us e.Data without "event:" or "data:" prefixes
+	// Yuanbao sends: type indicators ("search_with_text", "text") and JSON objects
+	parseSSEData := func(data string) {
+		data = strings.TrimSpace(data)
+		if data == "" || data == "[DONE]" || data == "null" {
+			return
 		}
 
-		// Process Docs (Citations)
-		if packet.Type == "searchGuid" && len(packet.Docs) > 0 {
-			d.logger.InfoWithContext(ctx, "[YUANBAO-SSE] Found search citations", map[string]interface{}{"count": len(packet.Docs)}, nil)
+		// Skip non-JSON type indicators (e.g., "search_with_text", "text", "status")
+		if !strings.HasPrefix(data, "{") {
+			return
+		}
+
+		// Try to parse as JSON and dispatch based on "type" field
+		var typeCheck struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal([]byte(data), &typeCheck); err != nil {
+			return
+		}
+
+		switch typeCheck.Type {
+		case "searchGuid":
+			// Citation data: {"type":"searchGuid","docs":[...]}
+			var packet struct {
+				Docs []struct {
+					Title       string `json:"title"`
+					URL         string `json:"url"`
+					Quote       string `json:"quote"`
+					WebSiteName string `json:"web_site_name"`
+				} `json:"docs"`
+			}
+			if err := json.Unmarshal([]byte(data), &packet); err != nil {
+				d.logger.WarnWithContext(ctx, "[YUANBAO-SSE] Citation unmarshal failed", map[string]interface{}{"error": err.Error(), "raw_len": len(data)}, nil)
+				return
+			}
 			for _, item := range packet.Docs {
 				cit := Citation{
 					URL:     item.URL,
@@ -156,26 +151,26 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 					Snippet: item.Quote,
 					Domain:  item.WebSiteName,
 				}
-
-				if item.URL == "" {
-					continue
-				}
-
-				if cit.Domain == "" {
-					if u, err := url.Parse(item.URL); err == nil {
-						cit.Domain = u.Host
-					}
+				if u, err := url.Parse(item.URL); err == nil && cit.Domain == "" {
+					cit.Domain = u.Host
 				}
 				addCitation(cit)
 			}
-		}
+			d.logger.DebugWithContext(ctx, "[YUANBAO-SSE] Captured citations", map[string]interface{}{"count": len(packet.Docs)}, nil)
 
-		// Process Content
-		if packet.Content != "" {
-			fullResponseText += packet.Content
-		}
-		if packet.Delta != "" {
-			fullResponseText += packet.Delta
+		case "text":
+			// Text content: {"type":"text","msg":"..."}
+			var packet struct {
+				Msg string `json:"msg"`
+			}
+			if err := json.Unmarshal([]byte(data), &packet); err != nil {
+				return
+			}
+			if packet.Msg != "" {
+				citationMu.Lock()
+				fullResponseText += packet.Msg
+				citationMu.Unlock()
+			}
 		}
 	}
 
@@ -186,15 +181,12 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 
 	// Start Network Listener
 	go func() {
-		d.logger.InfoWithContext(ctx, "[YUANBAO-NET] Network listener started", nil, nil)
 		page.EachEvent(func(e *proto.NetworkEventSourceMessageReceived) bool {
 			select {
 			case <-ctx.Done():
 				return true
 			default:
 			}
-			// Handle SSE data
-			d.logger.DebugWithContext(ctx, "[YUANBAO-NET] Received SSE data", map[string]interface{}{"data_len": len(e.Data)}, nil)
 			parseSSEData(e.Data)
 			return false
 		})()
@@ -207,7 +199,7 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 
 	// Inject Fetch/XHR Hijack Script
 	hijackScript := `(() => {
-		console.log('__YB_DEBUG__: Hijack script injected v2');
+		// console.log('__YB_DEBUG__: Hijack script injected v3');
 		
 		// 1. Hijack Fetch
 		const originalFetch = window.fetch;
@@ -216,11 +208,9 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 			
 			try {
 				const urlStr = args[0] instanceof Request ? args[0].url : String(args[0]);
-				console.log('__YB_REQ__:FETCH:' + urlStr);
 				
 				// Match Yuanbao API
 				if (urlStr.includes('/api/') || urlStr.includes('chat') || urlStr.includes('stream')) {
-					console.log('__YB_DEBUG__: Fetch matched, starting stream read');
 					const clone = response.clone();
 					const reader = clone.body.getReader();
 					const decoder = new TextDecoder();
@@ -231,7 +221,6 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 							while (true) {
 								const { done, value } = await reader.read();
 								if (done) {
-									console.log('__YB_DEBUG__: Fetch stream done');
 									break;
 								}
 								const chunk = decoder.decode(value, { stream: true });
@@ -263,19 +252,22 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 		
 		XMLHttpRequest.prototype.open = function(method, url, ...rest) {
 			this._ybUrl = url;
-			console.log('__YB_REQ__:XHR:' + url);
 			return originalXHROpen.call(this, method, url, ...rest);
 		};
 		
 		XMLHttpRequest.prototype.send = function(...args) {
 			if (this._ybUrl && (this._ybUrl.includes('chat') || this._ybUrl.includes('/api/'))) {
-				console.log('__YB_DEBUG__: XHR matched, attaching listener');
+				let lastSeenLength = 0;
 				this.addEventListener('readystatechange', () => {
 					if (this.readyState === 3 || this.readyState === 4) {
 						try {
 							const text = this.responseText;
 							if (text) {
-								const lines = text.split('\n');
+								// Only process new content
+								const newContent = text.substring(lastSeenLength);
+								lastSeenLength = text.length;
+								
+								const lines = newContent.split('\n');
 								for (const line of lines) {
 									if (line.trim() && line.startsWith('data:')) {
 										console.log('__YB_LINE__:' + line);
@@ -295,16 +287,16 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 		const originalEventSource = window.EventSource;
 		if (originalEventSource) {
 			window.EventSource = function(url, config) {
-				console.log('__YB_REQ__:SSE:' + url);
 				const es = new originalEventSource(url, config);
 				es.addEventListener('message', (e) => {
 					console.log('__YB_LINE__:data: ' + e.data);
 				});
+				// Also listen to specific events if needed
+				es.addEventListener('text', (e) => console.log('__YB_LINE__:event: text\n' + '__YB_LINE__:data: ' + e.data));
+				es.addEventListener('searchGuid', (e) => console.log('__YB_LINE__:event: searchGuid\n' + '__YB_LINE__:data: ' + e.data));
 				return es;
 			};
 		}
-		
-		console.log('__YB_DEBUG__: All hijacks installed');
 	})()`
 
 	if _, err := page.EvalOnNewDocument(hijackScript); err != nil {
@@ -344,10 +336,20 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 
 				if strings.HasPrefix(logMsg, "__YB_LINE__:") {
 					line := strings.TrimPrefix(logMsg, "__YB_LINE__:")
-					parseSSEData(line)
+					for _, subLine := range strings.Split(line, "\n") {
+						subLine = strings.TrimSpace(subLine)
+						if subLine == "" {
+							continue
+						}
+						// JS hijack sends raw SSE lines with "data:" prefix
+						if strings.HasPrefix(subLine, "data:") {
+							data := strings.TrimSpace(strings.TrimPrefix(subLine, "data:"))
+							parseSSEData(data)
+						}
+					}
 				} else if strings.HasPrefix(logMsg, "__YB_") {
 					// Log all other YB prefixes to the Go logger for debugging
-					d.logger.InfoWithContext(ctx, "[YUANBAO-JS] "+logMsg, nil, nil)
+					d.logger.DebugWithContext(ctx, "[YUANBAO-JS] "+logMsg, nil, nil)
 				}
 			}
 			return false
@@ -355,13 +357,14 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 	}()
 
 	// Navigate Home
-	page.MustNavigate(homeURL)
-	page.MustWaitLoad()
-
-	d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Waiting for page stability...", nil, nil)
-	rod.Try(func() {
-		page.Timeout(5 * time.Second).WaitStable(1 * time.Second)
-	})
+	homeURL := config.GetHomeURL("yuanbao")
+	if err := page.Navigate(homeURL); err != nil {
+		return nil, fmt.Errorf("navigating to home url: %w", err)
+	}
+	if err := page.WaitLoad(); err != nil {
+		return nil, fmt.Errorf("waiting for page load: %w", err)
+	}
+	rod.Try(func() { _ = page.Timeout(5 * time.Second).WaitStable(1 * time.Second) })
 
 	// STEP 0: Enable Web Search (Toggle)
 	d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Checking Web Search Toggle...", nil, nil)
@@ -377,7 +380,7 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 			isActive = true
 		}
 
-		d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Toggle found", map[string]interface{}{"class": class, "isActive": isActive}, nil)
+		d.logger.DebugWithContext(ctx, "[YUANBAO-RPA] Toggle found", map[string]interface{}{"class": class, "isActive": isActive}, nil)
 
 		if !isActive {
 			d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Toggle inactive, clicking to enable...", nil, nil)
@@ -387,7 +390,7 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 				time.Sleep(1 * time.Second)
 			}
 		} else {
-			d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Toggle already active", nil, nil)
+			d.logger.DebugWithContext(ctx, "[YUANBAO-RPA] Toggle already active", nil, nil)
 		}
 	} else {
 		d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] Toggle button not found", nil, nil)
@@ -419,7 +422,6 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 
 	// STEP 5: Wait for Response
 	d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Waiting for AI response...", nil, nil)
-	time.Sleep(5 * time.Second)
 	d.waitForResponseComplete(ctx, page)
 
 	// STEP 6: Extract Response
@@ -436,6 +438,12 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 	finalCitations := make([]Citation, len(capturedCitations))
 	copy(finalCitations, capturedCitations)
 	citationMu.Unlock()
+
+	d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Search complete", map[string]interface{}{
+		"query":           keyword,
+		"citations_found": len(finalCitations),
+		"full_text_len":   len(fullText),
+	}, nil)
 
 	return &SearchResult{
 		Queries:   []string{keyword},
