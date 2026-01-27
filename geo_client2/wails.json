@@ -1,0 +1,17 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "端界GEO",
+  "outputfilename": "端界GEO",
+  "frontend:install": "pnpm install",
+  "frontend:build": "pnpm run build",
+  "frontend:dev:watcher": "pnpm run dev",
+  "frontend:dev:serverUrl": "http://localhost:5173",
+  "author": {
+    "name": "duanjieai",
+    "email": ""
+  },
+  "info": {
+    "productName": "端界GEO",
+    "icon": "build/appicon.png"
+  }
+}

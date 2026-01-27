@@ -1,0 +1,287 @@
+[2026-01-24 14:01:27] [INFO] [frontend] Navigation: /auth → /logs Details: {"from":"/auth","to":"/logs"}
+[2026-01-24 14:00:59] [INFO] [frontend] Navigation: /search → /auth Details: {"from":"/search","to":"/auth"}
+[2026-01-24 14:00:58] [INFO] [frontend] Navigation: / → /search Details: {"from":"/","to":"/search"}
+[2026-01-24 13:58:57] [INFO] [frontend] Application started
+[2026-01-24 13:58:57] [INFO] [frontend] Application started
+[2026-01-24 13:58:53] [INFO] [frontend] Application started
+[2026-01-24 13:58:53] [INFO] [frontend] Application started
+[2026-01-24 13:58:50] [INFO] [frontend] Application started
+[2026-01-24 13:58:43] [INFO] [frontend] Navigation: / → /auth Details: {"from":"/","to":"/auth"}
+[2026-01-24 13:58:40] [INFO] [frontend] Application started
+[2026-01-24 13:58:35] [INFO] [frontend] Navigation: / → /auth Details: {"from":"/","to":"/auth"}
+[2026-01-24 13:58:33] [INFO] [frontend] Application started
+[2026-01-24 13:58:19] [INFO] [frontend] Navigation: / → /search Details: {"from":"/","to":"/search"}
+[2026-01-24 13:56:54] [INFO] [frontend] Navigation: /search → / Details: {"from":"/search","to":"/"}
+[2026-01-24 13:39:09] [INFO] [frontend] Navigation: /auth → /search Details: {"from":"/auth","to":"/search"}
+[2026-01-24 13:39:09] [INFO] [frontend] Navigation: /tasks → /auth Details: {"from":"/tasks","to":"/auth"}
+[2026-01-24 13:38:40] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":1},"taskId":24}}
+[2026-01-24 13:36:42] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 12:32:13] [INFO] [frontend] Application started
+[2026-01-24 12:32:01] [INFO] [frontend] Application started
+[2026-01-24 12:31:53] [INFO] [frontend] Application started
+[2026-01-24 12:31:53] [INFO] [frontend] Application started
+[2026-01-24 12:31:46] [INFO] [frontend] Application started
+[2026-01-24 12:28:49] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":1},"taskId":24}}
+[2026-01-24 12:27:30] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 12:12:39] [INFO] [frontend] Application started
+[2026-01-24 12:12:39] [INFO] [frontend] Application started
+[2026-01-24 12:12:35] [INFO] [frontend] Application started
+[2026-01-24 12:02:46] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":1},"taskId":24}}
+[2026-01-24 12:00:27] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":8,"failed":0,"success":8,"total":8},"taskId":23}}
+[2026-01-24 11:59:11] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":7,"failed":0,"success":7,"total":8},"taskId":23}}
+[2026-01-24 11:57:56] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":6,"failed":0,"success":6,"total":8},"taskId":23}}
+[2026-01-24 11:56:39] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":5,"failed":0,"success":5,"total":8},"taskId":23}}
+[2026-01-24 11:55:18] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":4,"failed":0,"success":4,"total":8},"taskId":23}}
+[2026-01-24 11:53:59] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":3,"failed":0,"success":3,"total":8},"taskId":23}}
+[2026-01-24 11:52:41] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":2,"failed":0,"success":2,"total":8},"taskId":23}}
+[2026-01-24 11:51:21] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":8},"taskId":23}}
+[2026-01-24 11:50:21] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":8},"taskId":23}}
+[2026-01-24 11:50:16] [INFO] [frontend] Navigation: /auth → /tasks Details: {"from":"/auth","to":"/tasks"}
+[2026-01-24 11:49:29] [INFO] [frontend] Navigation: /tasks → /auth Details: {"from":"/tasks","to":"/auth"}
+[2026-01-24 11:49:27] [INFO] [frontend] Navigation: /auth → /tasks Details: {"from":"/auth","to":"/tasks"}
+[2026-01-24 11:49:26] [INFO] [frontend] Navigation: /search → /auth Details: {"from":"/search","to":"/auth"}
+[2026-01-24 11:49:26] [INFO] [frontend] Navigation: / → /search Details: {"from":"/","to":"/search"}
+[2026-01-24 11:49:22] [INFO] [frontend] Navigation: /settings → / Details: {"from":"/settings","to":"/"}
+[2026-01-24 11:49:20] [INFO] [frontend] Navigation: / → /settings Details: {"from":"/","to":"/settings"}
+[2026-01-24 11:49:18] [INFO] [frontend] Application started
+[2026-01-24 11:49:18] [INFO] [frontend] Application started
+[2026-01-24 11:49:11] [INFO] [frontend] Application started
+[2026-01-24 11:49:11] [INFO] [frontend] Application started
+[2026-01-24 11:48:57] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":0},"taskId":23}}
+[2026-01-24 11:48:44] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 11:48:43] [INFO] [frontend] Application started
+[2026-01-24 11:43:28] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":1,"success":0,"total":8},"taskId":23}}
+[2026-01-24 11:43:02] [INFO] [frontend] Navigation: /auth → /search Details: {"from":"/auth","to":"/search"}
+[2026-01-24 11:43:01] [INFO] [frontend] Navigation: /tasks → /auth Details: {"from":"/tasks","to":"/auth"}
+[2026-01-24 11:42:59] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 11:40:32] [INFO] [frontend] Application started
+[2026-01-24 11:40:28] [INFO] [frontend] Application started
+[2026-01-24 11:40:28] [INFO] [frontend] Application started
+[2026-01-24 11:40:11] [INFO] [frontend] Application started
+[2026-01-24 11:35:55] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":4,"failed":1,"success":3,"total":4},"taskId":22}}
+[2026-01-24 11:35:47] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":3,"failed":0,"success":3,"total":4},"taskId":22}}
+[2026-01-24 11:34:29] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":2,"failed":0,"success":2,"total":4},"taskId":22}}
+[2026-01-24 11:33:50] [INFO] [frontend] Navigation: /search → /tasks Details: {"from":"/search","to":"/tasks"}
+[2026-01-24 11:33:08] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":4},"taskId":22}}
+[2026-01-24 11:31:43] [INFO] [frontend] Navigation: /auth → /search Details: {"from":"/auth","to":"/search"}
+[2026-01-24 11:30:41] [INFO] [frontend] Navigation: /tasks → /auth Details: {"from":"/tasks","to":"/auth"}
+[2026-01-24 11:30:32] [INFO] [frontend] Navigation: /logs → /tasks Details: {"from":"/logs","to":"/tasks"}
+[2026-01-24 11:29:51] [INFO] [frontend] Navigation: / → /logs Details: {"from":"/","to":"/logs"}
+[2026-01-24 11:29:33] [INFO] [frontend] Application started
+[2026-01-24 11:29:33] [INFO] [frontend] Application started
+[2026-01-24 11:29:30] [INFO] [frontend] Application started
+[2026-01-24 10:55:31] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":4,"failed":1,"success":3,"total":5},"taskId":21}}
+[2026-01-24 10:54:13] [INFO] [frontend] Navigation: /auth → /tasks Details: {"from":"/auth","to":"/tasks"}
+[2026-01-24 10:52:04] [INFO] [frontend] Navigation: /search → /auth Details: {"from":"/search","to":"/auth"}
+[2026-01-24 10:51:15] [INFO] [frontend] Navigation: /tasks → /search Details: {"from":"/tasks","to":"/search"}
+[2026-01-24 10:51:14] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 10:51:13] [INFO] [frontend] Application started
+[2026-01-24 10:51:13] [INFO] [frontend] Application started
+[2026-01-24 10:51:03] [INFO] [frontend] Navigation: /auth → /search Details: {"from":"/auth","to":"/search"}
+[2026-01-24 10:51:02] [INFO] [frontend] Navigation: /tasks → /auth Details: {"from":"/tasks","to":"/auth"}
+[2026-01-24 10:50:57] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 10:50:56] [INFO] [frontend] Application started
+[2026-01-24 10:50:56] [INFO] [frontend] Application started
+[2026-01-24 10:50:51] [INFO] [frontend] Application started
+[2026-01-24 10:50:51] [INFO] [frontend] Application started
+[2026-01-24 10:50:14] [INFO] [frontend] Application started
+[2026-01-24 10:50:08] [INFO] [frontend] Application started
+[2026-01-24 10:45:08] [INFO] [frontend] Navigation: /tasks → /auth Details: {"from":"/tasks","to":"/auth"}
+[2026-01-24 10:40:11] [INFO] [debug_db] Test log
+[2026-01-24 10:38:58] [INFO] [frontend] Navigation: /logs → /tasks Details: {"from":"/logs","to":"/tasks"}
+[2026-01-24 10:38:43] [INFO] [frontend] Navigation: /search → /logs Details: {"from":"/search","to":"/logs"}
+[2026-01-24 10:38:19] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":2,"failed":0,"success":2,"total":5},"taskId":21}}
+[2026-01-24 10:37:28] [INFO] [frontend] Navigation: /tasks → /search Details: {"from":"/tasks","to":"/search"}
+[2026-01-24 10:36:57] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":5},"taskId":21}}
+[2026-01-24 10:35:55] [INFO] [frontend] Navigation: /search → /tasks Details: {"from":"/search","to":"/tasks"}
+[2026-01-24 10:35:37] [INFO] [frontend] Navigation: /tasks → /search Details: {"from":"/tasks","to":"/search"}
+[2026-01-24 10:35:33] [INFO] [frontend] Navigation: /auth → /tasks Details: {"from":"/auth","to":"/tasks"}
+[2026-01-24 10:35:12] [INFO] [frontend] Navigation: /tasks → /auth Details: {"from":"/tasks","to":"/auth"}
+[2026-01-24 10:33:09] [INFO] [frontend] Application started
+[2026-01-24 10:32:38] [INFO] [frontend] Navigation: /auth → /tasks Details: {"from":"/auth","to":"/tasks"}
+[2026-01-24 10:31:35] [INFO] [frontend] Navigation: /tasks → /auth Details: {"from":"/tasks","to":"/auth"}
+[2026-01-24 10:31:34] [INFO] [frontend] Navigation: /auth → /tasks Details: {"from":"/auth","to":"/tasks"}
+[2026-01-24 10:31:34] [INFO] [frontend] Navigation: /logs → /auth Details: {"from":"/logs","to":"/auth"}
+[2026-01-24 10:31:00] [INFO] [frontend] Navigation: /tasks → /logs Details: {"from":"/tasks","to":"/logs"}
+[2026-01-24 10:30:59] [INFO] [frontend] Navigation: /auth → /tasks Details: {"from":"/auth","to":"/tasks"}
+[2026-01-24 10:30:57] [INFO] [frontend] Navigation: / → /auth Details: {"from":"/","to":"/auth"}
+[2026-01-24 10:30:42] [INFO] [frontend] Application started
+[2026-01-24 10:27:22] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":0},"taskId":5}}
+[2026-01-24 10:27:22] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":0},"taskId":6}}
+[2026-01-24 10:27:21] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":0},"taskId":10}}
+[2026-01-24 10:27:20] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":0},"taskId":11}}
+[2026-01-24 10:27:19] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":0},"taskId":12}}
+[2026-01-24 10:26:45] [INFO] [frontend] Navigation: /auth → /tasks Details: {"from":"/auth","to":"/tasks"}
+[2026-01-24 10:26:40] [INFO] [frontend] Navigation: /search → /auth Details: {"from":"/search","to":"/auth"}
+[2026-01-24 10:26:38] [INFO] [frontend] Navigation: / → /search Details: {"from":"/","to":"/search"}
+[2026-01-24 10:26:35] [INFO] [frontend] Application started
+[2026-01-24 10:07:56] [ERROR] [frontend] React Error Boundary caught an error Details: {"error":"Can't find variable: pressedTaskId","stack":"@wails://wails.localhost:34115/src/pages/Tasks.tsx:400:38\nmap@[native code]\nTasks@wails://wails.localhost:34115/src/pages/Tasks.tsx:231:91\nrenderWithHooks@wails://wails.localhost:34115/node_modules/.vite/deps/chunk-NLPANMJC.js:11548:35\nupdateFunctionComponent@wails://wails.localhost:34115/node_modules/.vite/deps/chunk-NLPANMJC.js:14582:43\nbeginWork$1@wails://wails.localhost:34115/node_modules/.vite/deps/chunk-NLPANMJC.js:19753:31\nperformUnitOfWork@wails://wails.localhost:34115/node_modules/.vite/deps/chunk-NLPANMJC.js:19198:31\nworkLoopSync@wails://wails.localhost:34115/node_modules/.vite/deps/chunk-NLPANMJC.js:19137:30\nrenderRootSync@wails://wails.localhost:34115/node_modules/.vite/deps/chunk-NLPANMJC.js:19116:27\nrecoverFromConcurrentError@wails://wails.localhost:34115/node_modules/.vite/deps/chunk-NLPANMJC.js:18736:42\nperformConcurrentWorkOnRoot@wails://wails.localhost:34115/node_modules/.vite/deps/chunk-NLPANMJC.js:18684:56\nworkLoop@wails://wails.localhost:34115/node_modules/.vite/deps/chunk-NLPANMJC.js:197:50\nflushWork@wails://wails.localhost:34115/node_modules/.vite/deps/chunk-NLPANMJC.js:176:30\nperformWorkUntilDeadline@wails://wails.localhost:34115/node_modules/.vite/deps/chunk-NLPANMJC.js:384:50","componentStack":"\nTasks@wails://wails.localhost:34115/src/pages/Tasks.tsx:26:37\nRenderedRoute@wails://wails.localhost:34115/node_modules/.vite/deps/react-router-dom.js:4135:32\nOutlet@wails://wails.localhost:34115/node_modules/.vite/deps/react-router-dom.js:4537:25\nmain\ndiv\ndiv\nLayout\nRenderedRoute@wails://wails.localhost:34115/node_modules/.vite/deps/react-router-dom.js:4135:32\nRoutes@wails://wails.localhost:34115/node_modules/.vite/deps/react-router-dom.js:4604:19\nRouter@wails://wails.localhost:34115/node_modules/.vite/deps/react-router-dom.js:4547:28\nBrowserRouter@wails://wails.localhost:34115/node_modules/.vite/deps/react-router-dom.js:5292:11\nErrorBoundary@wails://wails.localhost:34115/src/components/ErrorBoundary.tsx:8:10\nApp@wails://wails.localhost:34115/src/App.tsx:49:12"}
+[2026-01-24 10:07:56] [ERROR] [frontend] Unhandled error Details: {"message":"ReferenceError: Can't find variable: pressedTaskId","filename":"wails://wails.localhost:34115/src/pages/Tasks.tsx?t=1769249276225","lineno":400,"colno":38}
+[2026-01-24 10:07:56] [ERROR] [frontend] Unhandled error Details: {"message":"ReferenceError: Can't find variable: pressedTaskId","filename":"wails://wails.localhost:34115/src/pages/Tasks.tsx?t=1769249276225","lineno":400,"colno":38}
+[2026-01-24 10:07:53] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 10:07:51] [INFO] [frontend] Application started
+[2026-01-24 10:07:33] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 10:07:30] [INFO] [frontend] Application started
+[2026-01-24 10:07:30] [INFO] [frontend] Application started
+[2026-01-24 10:07:28] [INFO] [frontend] Application started
+[2026-01-24 10:07:23] [INFO] [frontend] Application started
+[2026-01-24 10:00:08] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 10:00:00] [INFO] [frontend] Application started
+[2026-01-24 09:59:39] [INFO] [frontend] Navigation: /auth → /tasks Details: {"from":"/auth","to":"/tasks"}
+[2026-01-24 09:59:39] [INFO] [frontend] Navigation: /tasks → /auth Details: {"from":"/tasks","to":"/auth"}
+[2026-01-24 09:56:53] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":0},"taskId":9}}
+[2026-01-24 09:56:52] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":0},"taskId":8}}
+[2026-01-24 09:56:51] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":0},"taskId":7}}
+[2026-01-24 09:56:47] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":0},"taskId":4}}
+[2026-01-24 09:56:41] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":0},"taskId":3}}
+[2026-01-24 09:56:38] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":0},"taskId":13}}
+[2026-01-24 09:56:37] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":0},"taskId":14}}
+[2026-01-24 09:56:27] [INFO] [frontend] Navigation: /logs → /tasks Details: {"from":"/logs","to":"/tasks"}
+[2026-01-24 09:56:27] [INFO] [frontend] Navigation: /tasks → /logs Details: {"from":"/tasks","to":"/logs"}
+[2026-01-24 09:53:53] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 09:51:35] [INFO] [frontend] Application started
+[2026-01-24 09:51:35] [INFO] [frontend] Application started
+[2026-01-24 09:51:27] [INFO] [frontend] Application started
+[2026-01-24 09:51:03] [INFO] [frontend] Application started
+[2026-01-24 09:50:45] [INFO] [frontend] Application started
+[2026-01-24 09:50:27] [INFO] [frontend] Navigation: /search → /auth Details: {"from":"/search","to":"/auth"}
+[2026-01-24 09:50:27] [INFO] [frontend] Navigation: / → /search Details: {"from":"/","to":"/search"}
+[2026-01-24 09:49:58] [INFO] [frontend] Application started
+[2026-01-24 09:49:31] [INFO] [frontend] Navigation: /auth → /tasks Details: {"from":"/auth","to":"/tasks"}
+[2026-01-24 09:49:30] [INFO] [frontend] Navigation: /search → /auth Details: {"from":"/search","to":"/auth"}
+[2026-01-24 09:49:30] [INFO] [frontend] Navigation: / → /search Details: {"from":"/","to":"/search"}
+[2026-01-24 09:49:27] [INFO] [frontend] Navigation: /search → / Details: {"from":"/search","to":"/"}
+[2026-01-24 09:49:27] [INFO] [frontend] Navigation: /auth → /search Details: {"from":"/auth","to":"/search"}
+[2026-01-24 09:49:27] [INFO] [frontend] Navigation: /tasks → /auth Details: {"from":"/tasks","to":"/auth"}
+[2026-01-24 09:48:54] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 09:48:50] [INFO] [frontend] Navigation: /search → / Details: {"from":"/search","to":"/"}
+[2026-01-24 09:48:50] [INFO] [frontend] Navigation: /auth → /search Details: {"from":"/auth","to":"/search"}
+[2026-01-24 09:48:48] [INFO] [frontend] Navigation: /tasks → /auth Details: {"from":"/tasks","to":"/auth"}
+[2026-01-24 09:48:47] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 09:48:42] [INFO] [frontend] Navigation: /tasks → / Details: {"from":"/tasks","to":"/"}
+[2026-01-24 09:48:35] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 09:48:31] [INFO] [frontend] Navigation: /auth → / Details: {"from":"/auth","to":"/"}
+[2026-01-24 09:48:31] [INFO] [frontend] Navigation: /search → /auth Details: {"from":"/search","to":"/auth"}
+[2026-01-24 09:48:30] [INFO] [frontend] Navigation: /tasks → /search Details: {"from":"/tasks","to":"/search"}
+[2026-01-24 09:46:40] [INFO] [frontend] Navigation: /logs → /tasks Details: {"from":"/logs","to":"/tasks"}
+[2026-01-24 09:46:36] [INFO] [frontend] Navigation: /tasks → /logs Details: {"from":"/tasks","to":"/logs"}
+[2026-01-24 09:44:44] [ERROR] [frontend] React Error Boundary caught an error Details: {"error":"Can't find variable: statsExpanded","stack":"LocalTaskDetail@wails://wails.localhost:34115/src/components/LocalTaskDetail.tsx:368:30\nrenderWithHooks@wails://wails.localhost:34115/node_modules/.vite/deps/chunk-NLPANMJC.js:11548:35\nupdateFunctionComponent@wails://wails.localhost:34115/node_modules/.vite/deps/chunk-NLPANMJC.js:14582:43\nbeginWork$1@wails://wails.localhost:34115/node_modules/.vite/deps/chunk-NLPANMJC.js:19753:31\nperformUnitOfWork@wails://wails.localhost:34115/node_modules/.vite/deps/chunk-NLPANMJC.js:19198:31\nworkLoopSync@wails://wails.localhost:34115/node_modules/.vite/deps/chunk-NLPANMJC.js:19137:30\nrenderRootSync@wails://wails.localhost:34115/node_modules/.vite/deps/chunk-NLPANMJC.js:19116:27\nrecoverFromConcurrentError@wails://wails.localhost:34115/node_modules/.vite/deps/chunk-NLPANMJC.js:18736:42\nperformConcurrentWorkOnRoot@wails://wails.localhost:34115/node_modules/.vite/deps/chunk-NLPANMJC.js:18684:56\nworkLoop@wails://wails.localhost:34115/node_modules/.vite/deps/chunk-NLPANMJC.js:197:50\nflushWork@wails://wails.localhost:34115/node_modules/.vite/deps/chunk-NLPANMJC.js:176:30\nperformWorkUntilDeadline@wails://wails.localhost:34115/node_modules/.vite/deps/chunk-NLPANMJC.js:384:50","componentStack":"\nLocalTaskDetail@wails://wails.localhost:34115/src/components/LocalTaskDetail.tsx:77:41\ndiv\nTasks@wails://wails.localhost:34115/src/pages/Tasks.tsx:26:37\nRenderedRoute@wails://wails.localhost:34115/node_modules/.vite/deps/react-router-dom.js:4135:32\nOutlet@wails://wails.localhost:34115/node_modules/.vite/deps/react-router-dom.js:4537:25\nmain\ndiv\ndiv\nLayout\nRenderedRoute@wails://wails.localhost:34115/node_modules/.vite/deps/react-router-dom.js:4135:32\nRoutes@wails://wails.localhost:34115/node_modules/.vite/deps/react-router-dom.js:4604:19\nRouter@wails://wails.localhost:34115/node_modules/.vite/deps/react-router-dom.js:4547:28\nBrowserRouter@wails://wails.localhost:34115/node_modules/.vite/deps/react-router-dom.js:5292:11\nErrorBoundary@wails://wails.localhost:34115/src/components/ErrorBoundary.tsx:8:10\nApp@wails://wails.localhost:34115/src/App.tsx:49:12"}
+[2026-01-24 09:44:44] [ERROR] [frontend] Unhandled error Details: {"message":"ReferenceError: Can't find variable: statsExpanded","filename":"wails://wails.localhost:34115/src/components/LocalTaskDetail.tsx?t=1769247884371","lineno":368,"colno":30}
+[2026-01-24 09:44:44] [ERROR] [frontend] Unhandled error Details: {"message":"ReferenceError: Can't find variable: statsExpanded","filename":"wails://wails.localhost:34115/src/components/LocalTaskDetail.tsx?t=1769247884371","lineno":368,"colno":30}
+[2026-01-24 09:43:33] [INFO] [frontend] Navigation: /auth → /tasks Details: {"from":"/auth","to":"/tasks"}
+[2026-01-24 09:43:21] [INFO] [frontend] Navigation: /search → /auth Details: {"from":"/search","to":"/auth"}
+[2026-01-24 09:43:18] [INFO] [frontend] Navigation: / → /search Details: {"from":"/","to":"/search"}
+[2026-01-24 09:42:20] [INFO] [frontend] Application started
+[2026-01-24 09:42:02] [INFO] [frontend] Application started
+[2026-01-24 09:39:40] [INFO] [frontend] Application started
+[2026-01-24 09:32:28] [INFO] [frontend] Navigation: /search → /auth Details: {"from":"/search","to":"/auth"}
+[2026-01-24 09:32:24] [INFO] [frontend] Navigation: / → /search Details: {"from":"/","to":"/search"}
+[2026-01-24 09:30:33] [INFO] [frontend] Application started
+[2026-01-24 09:24:05] [INFO] [frontend] Navigation: /search → /tasks Details: {"from":"/search","to":"/tasks"}
+[2026-01-24 09:23:53] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":2,"failed":0,"success":2,"total":2},"taskId":20}}
+[2026-01-24 09:22:30] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":2},"taskId":20}}
+[2026-01-24 09:21:07] [INFO] [frontend] Navigation: / → /search Details: {"from":"/","to":"/search"}
+[2026-01-24 09:20:53] [INFO] [frontend] Application started
+[2026-01-24 09:20:53] [INFO] [frontend] Application started
+[2026-01-24 04:09:31] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":2},"taskId":19}}
+[2026-01-24 04:08:29] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":2},"taskId":19}}
+[2026-01-24 04:07:33] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":2,"failed":0,"success":2,"total":2},"taskId":19}}
+[2026-01-24 04:06:12] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":2},"taskId":19}}
+[2026-01-24 04:04:37] [INFO] [frontend] Navigation: /search → /tasks Details: {"from":"/search","to":"/tasks"}
+[2026-01-24 04:03:53] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":1},"taskId":18}}
+[2026-01-24 04:02:20] [INFO] [frontend] Navigation: / → /search Details: {"from":"/","to":"/search"}
+[2026-01-24 04:00:59] [INFO] [frontend] Application started
+[2026-01-24 04:00:59] [INFO] [frontend] Application started
+[2026-01-24 03:52:38] [INFO] [frontend] Application started
+[2026-01-24 03:52:38] [INFO] [frontend] Application started
+[2026-01-24 03:51:56] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":1},"taskId":16}}
+[2026-01-24 03:50:47] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":1},"taskId":16}}
+[2026-01-24 03:50:47] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":0},"taskId":16}}
+[2026-01-24 03:50:44] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 03:50:14] [INFO] [frontend] Application started
+[2026-01-24 03:50:11] [INFO] [frontend] Application started
+[2026-01-24 03:48:12] [INFO] [frontend] Application started
+[2026-01-24 03:48:05] [INFO] [frontend] Application started
+[2026-01-24 03:48:05] [INFO] [frontend] Application started
+[2026-01-24 03:42:58] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":1},"taskId":17}}
+[2026-01-24 03:41:39] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":1},"taskId":17}}
+[2026-01-24 03:41:38] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 03:41:36] [INFO] [frontend] Application started
+[2026-01-24 03:39:05] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":1},"taskId":17}}
+[2026-01-24 03:37:56] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":1},"taskId":17}}
+[2026-01-24 03:37:55] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 03:37:51] [INFO] [frontend] Application started
+[2026-01-24 03:37:15] [INFO] [frontend] Application started
+[2026-01-24 03:37:11] [INFO] [frontend] Application started
+[2026-01-24 03:36:46] [INFO] [frontend] Application started
+[2026-01-24 03:35:49] [INFO] [frontend] Application started
+[2026-01-24 03:35:49] [INFO] [frontend] Application started
+[2026-01-24 03:33:47] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":1},"taskId":17}}
+[2026-01-24 03:32:43] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":1},"taskId":17}}
+[2026-01-24 03:32:43] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":0},"taskId":17}}
+[2026-01-24 03:32:41] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 03:32:34] [INFO] [frontend] Application started
+[2026-01-24 03:31:42] [INFO] [frontend] Application started
+[2026-01-24 03:31:29] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":1},"taskId":17}}
+[2026-01-24 03:31:27] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 03:31:23] [INFO] [frontend] Application started
+[2026-01-24 03:29:24] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":1},"taskId":17}}
+[2026-01-24 03:28:09] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":1},"taskId":17}}
+[2026-01-24 03:28:08] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 03:28:04] [INFO] [frontend] Application started
+[2026-01-24 03:27:47] [INFO] [frontend] Application started
+[2026-01-24 03:24:21] [INFO] [frontend] Navigation: /tasks → /logs Details: {"from":"/tasks","to":"/logs"}
+[2026-01-24 03:15:48] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":1},"taskId":17}}
+[2026-01-24 03:14:38] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":1},"taskId":17}}
+[2026-01-24 03:14:37] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 03:14:24] [INFO] [frontend] Application started
+[2026-01-24 03:14:03] [INFO] [frontend] Application started
+[2026-01-24 03:11:45] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":1},"taskId":17}}
+[2026-01-24 03:10:31] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":1},"taskId":17}}
+[2026-01-24 03:10:29] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 03:10:17] [INFO] [frontend] Application started
+[2026-01-24 03:10:11] [INFO] [frontend] Application started
+[2026-01-24 03:08:04] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":1},"taskId":17}}
+[2026-01-24 03:06:47] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":1},"taskId":17}}
+[2026-01-24 03:06:46] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 03:06:31] [INFO] [frontend] Application started
+[2026-01-24 03:04:02] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":1},"taskId":17}}
+[2026-01-24 03:02:47] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":1},"taskId":17}}
+[2026-01-24 03:02:46] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 03:02:45] [INFO] [frontend] Application started
+[2026-01-24 03:00:32] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":1},"taskId":17}}
+[2026-01-24 02:59:24] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":1},"taskId":17}}
+[2026-01-24 02:59:23] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 02:58:47] [INFO] [frontend] Application started
+[2026-01-24 02:58:47] [INFO] [frontend] Application started
+[2026-01-24 02:54:44] [INFO] [frontend] Application started
+[2026-01-24 02:53:19] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":1},"taskId":17}}
+[2026-01-24 02:52:10] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":1},"taskId":17}}
+[2026-01-24 02:52:08] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 02:52:03] [INFO] [frontend] Application started
+[2026-01-24 02:52:03] [INFO] [frontend] Application started
+[2026-01-24 02:51:07] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":1,"success":0,"total":1},"taskId":17}}
+[2026-01-24 02:51:04] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":1},"taskId":17}}
+[2026-01-24 02:51:03] [INFO] [frontend] Navigation: /auth → /tasks Details: {"from":"/auth","to":"/tasks"}
+[2026-01-24 02:41:45] [ERROR] [frontend] Unhandled error Details: {"message":"Error: Invalid JSON passed to callback: JSON Parse error: Unexpected EOF. Message: ","filename":"wails://wails.localhost:34115/wails/runtime.js","lineno":236,"colno":29}
+[2026-01-24 02:41:16] [INFO] [frontend] Navigation: / → /auth Details: {"from":"/","to":"/auth"}
+[2026-01-24 02:41:16] [INFO] [frontend] Navigation: /search → / Details: {"from":"/search","to":"/"}
+[2026-01-24 02:41:15] [INFO] [frontend] Navigation: /auth → /search Details: {"from":"/auth","to":"/search"}
+[2026-01-24 02:41:11] [INFO] [frontend] Navigation: /tasks → /auth Details: {"from":"/tasks","to":"/auth"}
+[2026-01-24 02:41:10] [INFO] [frontend] Navigation: /logs → /tasks Details: {"from":"/logs","to":"/tasks"}
+[2026-01-24 02:41:06] [INFO] [frontend] Navigation: /tasks → /logs Details: {"from":"/tasks","to":"/logs"}
+[2026-01-24 02:36:16] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":1},"taskId":17}}
+[2026-01-24 02:35:03] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":1},"taskId":17}}
+[2026-01-24 02:35:02] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 02:34:27] [INFO] [frontend] Application started
+[2026-01-24 02:34:27] [INFO] [frontend] Application started
+[2026-01-24 02:32:15] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":1,"failed":0,"success":1,"total":1},"taskId":17}}
+[2026-01-24 02:30:57] [DEBUG] [frontend] Task update received Details: {"data":{"progress":{"completed":0,"failed":0,"success":0,"total":1},"taskId":17}}
+[2026-01-24 02:30:56] [INFO] [frontend] Navigation: / → /tasks Details: {"from":"/","to":"/tasks"}
+[2026-01-24 02:29:29] [INFO] [frontend] Application started
+[2026-01-24 02:29:29] [INFO] [frontend] Application started
+[2026-01-24 02:29:22] [INFO] [frontend] Application started
+[2026-01-24 02:24:49] [INFO] [frontend] Navigation: /search → /auth Details: {"from":"/search","to":"/auth"}
+[2026-01-24 02:24:48] [INFO] [frontend] Navigation: /auth → /search Details: {"from":"/auth","to":"/search"}
+[2026-01-24 02:24:47] [INFO] [frontend] Navigation: /tasks → /auth Details: {"from":"/tasks","to":"/auth"}
+[2026-01-24 02:24:43] [INFO] [frontend] Navigation: /logs → /tasks Details: {"from":"/logs","to":"/tasks"}

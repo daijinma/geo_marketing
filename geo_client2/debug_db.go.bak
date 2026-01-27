@@ -1,0 +1,49 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"geo_client2/backend/database"
+)
+
+func main() {
+	// Setup log file
+	f, err := os.OpenFile("db_debug.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	log := func(msg string) {
+		fmt.Println(msg)
+		f.WriteString(msg + "\n")
+	}
+
+	log("Starting DB Debug")
+    
+    // Check DB file
+    homeDir, _ := os.UserHomeDir()
+    dbPath := filepath.Join(homeDir, ".geo_client2", "cache.db")
+    if _, err := os.Stat(dbPath); err == nil {
+        log(fmt.Sprintf("DB file exists at %s", dbPath))
+    } else {
+        log(fmt.Sprintf("DB file does NOT exist at %s", dbPath))
+    }
+
+	err = database.Init()
+	if err != nil {
+		log(fmt.Sprintf("DB Init Failed: %v", err))
+	} else {
+		log("DB Init Success!")
+        
+        db := database.GetDB()
+        // Try inserting a log
+        _, err = db.Exec("INSERT INTO logs (level, source, message) VALUES ('INFO', 'debug_db', 'Test log')")
+        if err != nil {
+            log(fmt.Sprintf("Failed to write test log: %v", err))
+        } else {
+            log("Successfully wrote test log to DB")
+        }
+	}
+}
