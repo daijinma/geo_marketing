@@ -32,7 +32,7 @@ def save_to_db(keyword, platform, prompt, result, prompt_type="default", respons
         task_query_id: task_query 表的 ID（可选，用于关联 executor_sub_query_log）
     """
     try:
-        from providers.doubao_web import ensure_utf8_string
+        from utils.encoding import ensure_utf8_string
         
         with get_db_connection() as conn:
             cur = conn.cursor()

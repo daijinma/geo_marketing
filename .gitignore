@@ -105,3 +105,8 @@ packages/*/dist/
 packages/*/build/
 packages/*/.venv/
 
+
+_doc/
+_docs/
+**/_doc/
+**/_docs/

@@ -17,7 +17,7 @@ import argparse
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.db import get_db_connection
-from providers.doubao_web import ensure_utf8_string
+from utils.encoding import ensure_utf8_string
 
 
 def detect_garbled_text(text):

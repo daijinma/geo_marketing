@@ -208,7 +208,7 @@ if __name__ == "__main__":
         import uvicorn
         port = int(os.getenv("API_PORT", "8000"))
         logger.info(f"启动 API 服务器，端口: {port}")
-        uvicorn.run("api:app", host="0.0.0.0", port=port, reload=False)
+        uvicorn.run("api.app:app", host="0.0.0.0", port=port, reload=False)
     else:
         # 默认行为：运行配置文件中的任务
         run_tasks()

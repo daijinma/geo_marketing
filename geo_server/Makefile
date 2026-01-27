@@ -61,7 +61,7 @@ dev:
 	@echo "  → 使用 .env.development 配置"
 	@echo ""
 	@lsof -ti:8000 | xargs kill -9 2>/dev/null || true
-	@ENV_FILE=.env.development PYTHONPATH=. uv run python api.py
+	@ENV_FILE=.env.development PYTHONPATH=. uv run uvicorn api.app:app --host 0.0.0.0 --port 8000 --reload
 
 run:
 	@echo "${GREEN}🚀 执行 GEO 监测任务（配置文件模式）${NC}"
