@@ -4,6 +4,8 @@
 
 `LLM Sentry` 是一个专为 **GEO (Generative Engine Optimization)** 设计的自动化监测与分析平台。它能够实时追踪品牌或内容在主流 AI 搜索引擎（如 DeepSeek、豆包）回答中的曝光情况，并量化分析其引用来源。
 
+> 💻 **桌面客户端**: 项目提供 `geo_client2` 桌面应用（基于 Wails + Go + React），提供图形化界面进行任务管理、搜索监测、登录授权等功能，支持本地 SQLite 数据存储，无需部署后端服务即可使用。
+
 ## 📦 项目结构 (Monorepo)
 
 本仓库采用 monorepo 架构，包含以下独立子项目：
@@ -23,18 +25,60 @@ GEO/ (Root Monorepo)
 │   ├── core/                # 域名清洗与引用解析引擎
 │   └── README.md
 │
-├── scripts/                 # 共享脚本工具
-├── pyproject.toml           # 工作区配置
-├── .workspace.json          # 工作区元数据
-├── Makefile                 # 统一构建与运行指令
-├── README.md                # 本文件
-└── MONOREPO.md              # Monorepo 架构说明
+├── geo_client2/             # 【桌面客户端】Wails + Go + React 桌面应用
+│   ├── main.go              # Wails 入口
+│   ├── backend/              # Go 后端（认证、任务、搜索、Provider）
+│   ├── frontend/             # React 前端（React 18 + Vite + TypeScript）
+│   ├── go.mod                # Go 依赖
+│   └── README.md             # 客户端文档
+│
+├── scripts/                  # 共享脚本工具
+├── pyproject.toml            # 工作区配置
+├── .workspace.json           # 工作区元数据
+├── Makefile                  # 统一构建与运行指令
+├── README.md                 # 本文件
+└── MONOREPO.md               # Monorepo 架构说明
 ```
 
 ### 子项目说明
 
 - **`geo_db/`**: PostgreSQL 数据库服务模块，提供数据持久化能力
 - **`llm_sentry_monitor/`**: 监控抓取服务，负责模拟用户行为并解析 AI 回答
+- **`geo_client2/`**: 桌面客户端应用，基于 Wails v2 + Go + React 构建，提供图形化界面进行 GEO 监测任务管理
+
+#### geo_client2 桌面客户端
+
+`geo_client2` 是一个轻量级桌面应用，提供以下功能：
+
+**核心功能**：
+- ✅ **任务管理**：创建、执行、取消、重试监测任务
+- ✅ **搜索监测**：支持 DeepSeek、豆包等平台的 AI 搜索监测
+- ✅ **登录授权**：管理各平台的登录状态，支持持久化登录
+- ✅ **本地存储**：使用 SQLite 本地数据库，无需外部数据库服务
+- ✅ **设置管理**：配置无头模式、超时时间等运行参数
+- ✅ **日志查看**：实时查看任务执行日志
+
+**技术特点**：
+- 🚀 **轻量级**：包体积约 10-20MB（相比 Electron 版本减少 85%+）
+- ⚡ **高性能**：Go 后端 + 系统原生 WebView，启动速度快
+- 🔒 **本地优先**：数据存储在本地，保护隐私
+- 🎨 **现代 UI**：React + Tailwind + shadcn/ui，界面美观
+
+**快速开始**：
+```bash
+cd geo_client2
+# 安装依赖
+cd frontend && pnpm install
+cd .. && go mod tidy
+
+# 开发模式
+wails dev
+
+# 构建应用
+wails build
+```
+
+详细使用说明请参阅 [geo_client2/README.md](./geo_client2/README.md)
 
 > 📖 关于 Monorepo 架构的详细说明，请参阅 [MONOREPO.md](./MONOREPO.md)
 
