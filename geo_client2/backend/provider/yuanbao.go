@@ -180,6 +180,12 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 	// Yuanbao sends: type indicators ("search_with_text", "text") and JSON objects
 	parseSSEData := func(data string) {
 		data = strings.TrimSpace(data)
+		if strings.HasPrefix(data, "event:") {
+			return
+		}
+		if strings.HasPrefix(data, "data:") {
+			data = strings.TrimSpace(strings.TrimPrefix(data, "data:"))
+		}
 		if data == "" || data == "[DONE]" || data == "null" {
 			return
 		}
@@ -507,6 +513,17 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 	copy(finalCitations, capturedCitations)
 	citationMu.Unlock()
 
+	if len(finalCitations) == 0 {
+		d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] JS injection missed citations, trying DOM fallback...", nil, nil)
+		domCitations := d.extractCitationsFromDOM(ctx, page)
+		if len(domCitations) > 0 {
+			finalCitations = domCitations
+			d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] DOM fallback success", map[string]interface{}{"count": len(finalCitations)}, nil)
+		} else {
+			d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] DOM fallback also failed", nil, nil)
+		}
+	}
+
 	d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Search complete", map[string]interface{}{
 		"query":           keyword,
 		"citations_found": len(finalCitations),
@@ -518,6 +535,311 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 		Citations: finalCitations,
 		FullText:  fullText,
 	}, nil
+}
+
+func (d *YuanbaoProvider) extractCitationsFromDOM(ctx context.Context, page *rod.Page) []Citation {
+	// Enhanced JS-based citation extraction that scopes to the last response
+	// and looks for specific citation patterns (lists, reference headers)
+	citationsJS := `() => {
+		// 1. Locate the container of the LAST AI response
+		// Heuristic: The last element with a specific message/markdown class
+		const potentialContainers = Array.from(document.querySelectorAll('.markdown-body, div[class*="answer"], div[class*="response"]'));
+		if (!potentialContainers.length) return [];
+		
+		// Get the last one (most recent response)
+		const lastContainer = potentialContainers[potentialContainers.length - 1];
+		
+		// 2. Strategy A: Find Explicit Reference Lists (Ordered Lists with Links)
+		// Look for <ol> or <ul> that contains links, usually at the bottom
+		const lists = Array.from(lastContainer.querySelectorAll('ol, ul'));
+		
+		// Filter for lists that look like citations (contain external links)
+		const citationLinks = [];
+		
+		for (const list of lists) {
+			// Check if previous sibling is a header "References/Sources"
+			// Common in Chinese UIs: "参考资料", "搜索结果", "引用"
+			let isCitationSection = false;
+			let sibling = list.previousElementSibling;
+			let lookbackCount = 0;
+			while (sibling && lookbackCount < 3) { // Look back a few elements
+				if (['H3', 'H4', 'H5', 'P', 'DIV', 'SPAN'].includes(sibling.tagName)) {
+					const text = (sibling.innerText || '').trim();
+					if (text.includes('参考') || text.includes('来源') || text.includes('引用') || text.includes('Sources') || text.includes('Search')) {
+						isCitationSection = true;
+						break;
+					}
+				}
+				sibling = sibling.previousElementSibling;
+				if (!sibling || sibling.tagName === 'OL' || sibling.tagName === 'UL') break; // Stop at next list
+				lookbackCount++;
+			}
+
+			// Gather links if it's a citation section OR if links have numeric pattern "[1]"
+			const links = Array.from(list.querySelectorAll('a[href^="http"]'));
+			if (links.length > 0) {
+				// Heuristic: If list items start with numbers or brackets [1], it's likely citations
+				const listText = list.innerText;
+				const hasNumbering = /\[\d+\]/.test(listText) || /^\d+\./m.test(listText);
+				
+				if (isCitationSection || hasNumbering) {
+					citationLinks.push(...links);
+				}
+			}
+		}
+
+		// 3. Strategy B: Class Name Scavenge (within container only)
+		// If explicit lists failed, look for elements with specific classes
+		if (citationLinks.length === 0) {
+			const labeledLinks = lastContainer.querySelectorAll('a[class*="ref"], a[class*="source"], a[class*="citation"], div[class*="ref"] a, span[class*="ref"] a');
+			citationLinks.push(...labeledLinks);
+		}
+		
+		// 4. Strategy C: Sup/Footnote links
+		// Common in some UIs: <sup>[1]</sup> or similar inline citations
+		if (citationLinks.length === 0) {
+			const supLinks = lastContainer.querySelectorAll('sup a, a[href*="#ref"], a[href*="#cite"]');
+			citationLinks.push(...supLinks);
+		}
+
+		// Deduplicate and Format
+		const seen = new Set();
+		return citationLinks.map(a => {
+			const href = a.href;
+			if (seen.has(href)) return null;
+			seen.add(href);
+			
+			// Clean title: remove leading "[1] " or "1. "
+			let title = (a.innerText || a.getAttribute('title') || '').trim();
+			title = title.replace(/^\[\d+\]\s*/, '').replace(/^\d+\.\s*/, '');
+			
+			if (!title || title.length < 2) return null; // Skip empty titles
+
+			return {
+				title: title,
+				url: href,
+				snippet: "", // DOM usually doesn't have snippet
+				domain: new URL(href).hostname
+			};
+		}).filter(Boolean);
+	}`
+
+	// Execute the JS
+	res, err := page.Eval(citationsJS)
+	if err != nil {
+		d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] Enhanced DOM extraction failed, falling back to basic scan", map[string]interface{}{"error": err.Error()}, nil)
+		return d.extractCitationsBasic(ctx, page) // Fallback to original method
+	}
+
+	// Parse JSON results
+	var citations []Citation
+	if err := json.Unmarshal([]byte(res.Value.String()), &citations); err != nil {
+		// If unmarshal fails (or if result is not JSON), fallback
+		d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] Failed to unmarshal DOM citations", map[string]interface{}{"error": err.Error()}, nil)
+		return d.extractCitationsBasic(ctx, page)
+	}
+
+	if len(citations) > 0 {
+		return citations
+	}
+
+	return d.extractCitationsBasic(ctx, page)
+}
+
+func (d *YuanbaoProvider) extractCitationsBasic(ctx context.Context, page *rod.Page) []Citation {
+	var citations []Citation
+
+	results, err := page.Eval(`() => {
+		const containers = Array.from(document.querySelectorAll('.markdown-body, div[class*="answer"], div[class*="response"], article'));
+		if (!containers.length) return [];
+		const last = containers[containers.length - 1];
+
+		const keywordMatches = (text) => {
+			const t = (text || '').trim();
+			if (!t) return false;
+			return t.includes('参考') || t.includes('来源') || t.includes('引用') || t.toLowerCase().includes('sources');
+		};
+
+		const links = [];
+		const lists = Array.from(last.querySelectorAll('ol, ul'));
+		for (const list of lists) {
+			let isCitationSection = false;
+			let sibling = list.previousElementSibling;
+			for (let i = 0; i < 3 && sibling; i++) {
+				const text = sibling.innerText || '';
+				if (keywordMatches(text)) {
+					isCitationSection = true;
+					break;
+				}
+				sibling = sibling.previousElementSibling;
+			}
+
+			const listLinks = Array.from(list.querySelectorAll('a[href^="http"]'));
+			const hasNumbering = listLinks.some(a => {
+				const text = a.innerText || '';
+				const parentText = a.parentElement ? (a.parentElement.innerText || '') : '';
+				return /^\s*\[?\d+\]?/.test(text) || /^\s*\[?\d+\]?/.test(parentText);
+			});
+
+			if (listLinks.length > 0 && (isCitationSection || hasNumbering)) {
+				links.push(...listLinks);
+			}
+		}
+
+		if (links.length === 0) {
+			const labeled = last.querySelectorAll('a[class*="ref"], a[class*="source"], a[class*="citation"], div[class*="ref"] a');
+			links.push(...Array.from(labeled));
+		}
+
+		const seen = new Set();
+		return links.map(a => {
+			const href = a.href;
+			if (!href || seen.has(href)) return null;
+			seen.add(href);
+			const title = (a.innerText || a.getAttribute('title') || '').trim();
+			return { url: href, title };
+		}).filter(Boolean);
+	}`)
+
+	if err == nil && results != nil {
+		payload, marshalErr := results.Value.MarshalJSON()
+		if marshalErr == nil {
+			var items []struct {
+				URL   string `json:"url"`
+				Title string `json:"title"`
+			}
+			if jsonErr := json.Unmarshal(payload, &items); jsonErr == nil {
+				for _, item := range items {
+					if item.URL == "" {
+						continue
+					}
+					cit := Citation{
+						URL:          item.URL,
+						Title:        strings.TrimSpace(item.Title),
+						Snippet:      "",
+						QueryIndexes: []int{},
+					}
+					if u, parseErr := url.Parse(item.URL); parseErr == nil {
+						cit.Domain = u.Host
+					}
+					if cit.Title == "" {
+						cit.Title = cit.Domain
+					}
+					exists := false
+					for _, c := range citations {
+						if c.URL == cit.URL {
+							exists = true
+							break
+						}
+					}
+					if !exists {
+						citations = append(citations, cit)
+					}
+				}
+			}
+		}
+	}
+
+	if len(citations) > 0 {
+		return citations
+	}
+
+	elements, err := page.Elements("a[href^='http']")
+	if err != nil {
+		return citations
+	}
+
+	noiseDomains := []string{
+		"yuanbao.tencent.com",
+		"tencent.com",
+		"qq.com",
+		"weixin.qq.com",
+		"beian.miit.gov.cn",
+		"twitter.com",
+		"facebook.com",
+		"linkedin.com",
+		"instagram.com",
+		"discord.com",
+		"tiktok.com",
+		"weibo.com",
+		"gov.cn",
+	}
+
+	noiseKeywords := []string{
+		"privacy", "terms", "policy", "agreement", "about", "contact",
+		"隐私", "条款", "协议", "关于", "联系", "备案",
+		"login", "sign up", "登录", "注册",
+	}
+
+	for i, el := range elements {
+		href, _ := el.Attribute("href")
+		if href == nil {
+			continue
+		}
+
+		hrefStr := strings.ToLower(*href)
+		isNoise := false
+		for _, nd := range noiseDomains {
+			if strings.Contains(hrefStr, nd) {
+				isNoise = true
+				break
+			}
+		}
+		if isNoise {
+			continue
+		}
+
+		title, _ := el.Text()
+		titleLower := strings.ToLower(title)
+		for _, nk := range noiseKeywords {
+			if strings.Contains(hrefStr, nk) || strings.Contains(titleLower, nk) {
+				isNoise = true
+				break
+			}
+		}
+		if isNoise {
+			continue
+		}
+
+		if len(strings.TrimSpace(title)) < 2 {
+			continue
+		}
+
+		isSearchResult := false
+		class, _ := el.Attribute("class")
+		if class != nil && (strings.Contains(*class, "search") || strings.Contains(*class, "result") || strings.Contains(*class, "source") || strings.Contains(*class, "reference") || strings.Contains(*class, "citation")) {
+			isSearchResult = true
+		}
+
+		if isSearchResult || i < 15 {
+			cit := Citation{
+				URL:          *href,
+				Title:        strings.TrimSpace(title),
+				Snippet:      "",
+				QueryIndexes: []int{},
+			}
+			if u, err := url.Parse(*href); err == nil {
+				cit.Domain = u.Host
+			}
+
+			exists := false
+			for _, c := range citations {
+				if c.URL == cit.URL {
+					exists = true
+					break
+				}
+			}
+			if !exists {
+				citations = append(citations, cit)
+			}
+		}
+
+		if len(citations) >= 15 {
+			break
+		}
+	}
+
+	return citations
 }
 
 func (d *YuanbaoProvider) findTextarea(ctx context.Context, page *rod.Page) (*rod.Element, error) {
@@ -586,54 +908,67 @@ func (d *YuanbaoProvider) waitForResponseComplete(ctx context.Context, page *rod
 		"div[class*='answer']",
 		"div[class*='response']",
 		"article",
+		"div[class*='message']",
 	}
 
 	for i := 0; i < maxRetries; i++ {
 		select {
 		case <-ctx.Done():
+			d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Context cancelled, stopping wait", nil, nil)
 			return
 		default:
 		}
+
 		time.Sleep(2 * time.Second)
 
+		// 尝试获取当前内容
 		currentContent := ""
 		for _, sel := range contentSelectors {
 			elements, err := page.Elements(sel)
 			if err == nil && len(elements) > 0 {
 				currentContent = elements[len(elements)-1].MustText()
-				break
+				if len(currentContent) > 0 {
+					break
+				}
 			}
 		}
 
-		if currentContent != "" {
+		// 内容稳定性检测
+		if len(currentContent) > 50 {
 			if currentContent == lastContent {
 				stableCount++
-				if stableCount >= 3 {
-					hasStop, _, _ := page.HasR("button, div, span", "停止")
-					if !hasStop {
-						d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Response stable and no stop button found. Assuming complete.", nil, nil)
+				d.logger.DebugWithContext(ctx, "[YUANBAO-RPA] Content stable", map[string]interface{}{
+					"stableCount": stableCount,
+					"contentLen":  len(currentContent),
+				}, nil)
+
+				// 连续 2 次内容不变，检查停止按钮
+				if stableCount >= 2 {
+					// 检查是否有"停止"按钮（元宝通常显示"停止"）
+					hasStopBtn, _, _ := page.HasR("button, div, span, a", "停止")
+					if !hasStopBtn {
+						d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Response stable and no stop button, assuming complete", map[string]interface{}{
+							"contentLen": len(currentContent),
+							"retries":    i + 1,
+						}, nil)
 						return
 					}
+					// 如果还有停止按钮，重置计数继续等
+					d.logger.DebugWithContext(ctx, "[YUANBAO-RPA] Stop button still present, continuing wait", nil, nil)
 					stableCount = 0
 				}
 			} else {
+				// 内容变化，重置计数
 				lastContent = currentContent
 				stableCount = 0
 			}
 		}
-
-		submitBtn, err := d.findSubmitButton(ctx, page)
-		if err == nil && submitBtn != nil {
-			disabled, _ := submitBtn.Attribute("disabled")
-			if disabled == nil {
-				if len(currentContent) > 50 {
-					d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Submit button enabled and content found. Assuming complete.", nil, nil)
-					return
-				}
-			}
-		}
 	}
-	d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] waitForResponseComplete reached timeout", nil, nil)
+
+	d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] waitForResponseComplete reached timeout", map[string]interface{}{
+		"maxRetries":  maxRetries,
+		"finalLength": len(lastContent),
+	}, nil)
 }
 
 func (d *YuanbaoProvider) extractResponse(ctx context.Context, page *rod.Page) (string, error) {
