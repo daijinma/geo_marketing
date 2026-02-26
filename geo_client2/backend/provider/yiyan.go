@@ -545,15 +545,77 @@ func (d *YiyanProvider) clickSubmit(ctx context.Context, submitBtn *rod.Element,
 }
 
 func (d *YiyanProvider) waitForResponseComplete(ctx context.Context, page *rod.Page) {
-	// Wait until response stops changing
-	// This is a simplified version; production might need more robust checking (like Doubao)
-	// For now, just wait a fixed time or check for stop button disappearance
+	const maxRetries = 40 // 最多等待 80 秒
+	lastContent := ""
+	stableCount := 0
 
-	// Check if "停止生成" (Stop generating) button appears and then disappears
-	for i := 0; i < 60; i++ {
-		time.Sleep(1 * time.Second)
-		// Check for specific stop signal if known, otherwise wait for text stability
+	// 文心一言的回答容器选择器
+	contentSelectors := []string{
+		".markdown-body",
+		".answer-content",
+		"div[class*='content_'][class*='markdown']",
+		"div[class*='answer'] div[class*='content']",
+		".answer",
+		"div[class*='message']",
 	}
+
+	for i := 0; i < maxRetries; i++ {
+		select {
+		case <-ctx.Done():
+			d.logger.InfoWithContext(ctx, "[YIYAN-RPA] Context cancelled, stopping wait", nil, nil)
+			return
+		default:
+		}
+
+		time.Sleep(2 * time.Second)
+
+		// 尝试获取当前内容
+		currentContent := ""
+		for _, sel := range contentSelectors {
+			elements, err := page.Elements(sel)
+			if err == nil && len(elements) > 0 {
+				currentContent = elements[len(elements)-1].MustText()
+				if len(currentContent) > 0 {
+					break
+				}
+			}
+		}
+
+		// 内容稳定性检测
+		if len(currentContent) > 50 {
+			if currentContent == lastContent {
+				stableCount++
+				d.logger.DebugWithContext(ctx, "[YIYAN-RPA] Content stable", map[string]interface{}{
+					"stableCount": stableCount,
+					"contentLen":  len(currentContent),
+				}, nil)
+
+				// 连续 2 次内容不变，检查停止按钮
+				if stableCount >= 2 {
+					// 检查是否有"停止生成"按钮
+					hasStopBtn, _, _ := page.HasR("button, div, span", "停止生成|停止|Stop")
+					if !hasStopBtn {
+						d.logger.InfoWithContext(ctx, "[YIYAN-RPA] Response stable and no stop button, assuming complete", map[string]interface{}{
+							"contentLen": len(currentContent),
+							"retries":    i + 1,
+						}, nil)
+						return
+					}
+					// 如果还有停止按钮，重置计数继续等
+					stableCount = 0
+				}
+			} else {
+				// 内容变化，重置计数
+				lastContent = currentContent
+				stableCount = 0
+			}
+		}
+	}
+
+	d.logger.WarnWithContext(ctx, "[YIYAN-RPA] waitForResponseComplete reached timeout", map[string]interface{}{
+		"maxRetries":  maxRetries,
+		"finalLength": len(lastContent),
+	}, nil)
 }
 
 func (d *YiyanProvider) extractResponse(ctx context.Context, page *rod.Page) (string, error) {

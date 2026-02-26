@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { X, Play, ChevronDown, ChevronRight, ExternalLink, BarChart3, Link2, Search, Globe, Download } from 'lucide-react';
+import { X, Play, ChevronDown, ChevronRight, ExternalLink, BarChart3, Link2, Search, Globe, Download, RotateCw } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
 import { wailsAPI } from '@/utils/wails-api';
 import { exportMultipleRecordsCitations } from '@/utils/excelExport';
@@ -20,6 +22,7 @@ interface SearchStatsItem {
   keyword: string;
   subQueries: string[];
   urlCount: number;
+  platforms: string[];
 }
 
 interface DomainStatsItem {
@@ -38,6 +41,17 @@ function getDomainFromUrl(urlStr: string): string {
   }
 }
 
+function stripDoubaoBlockPrefix(text: string): string {
+  if (!text) return text;
+  const trimmed = text.trimStart();
+  if (!trimmed.startsWith('[{')) return text;
+  if (!trimmed.includes('"block_type":10000')) return text;
+  const endIdx = trimmed.indexOf('}]');
+  if (endIdx === -1) return text;
+  const rest = trimmed.slice(endIdx + 2);
+  return rest.trimStart();
+}
+
 function computeStats(records: any[]): {
   overview: OverviewStats;
   searchStats: SearchStatsItem[];
@@ -49,7 +63,7 @@ function computeStats(records: any[]): {
   const domainStatsMap = new Map<string, { total: number; byKeyword: Record<string, number> }>();
   const allKeywords = new Set<string>();
   
-  const searchStatsMap = new Map<string, { keyword: string; subQueries: string[]; urlCount: number }>();
+  const searchStatsMap = new Map<string, { keyword: string; subQueries: string[]; urlCount: number; platforms: Set<string> }>();
   
   records.forEach(record => {
     const queriesLen = record.queries?.length || 0;
@@ -84,11 +98,15 @@ function computeStats(records: any[]): {
         keyword,
         subQueries: subQueries.slice(),
         urlCount: 0,
+        platforms: new Set(),
       });
     }
     
     const item = searchStatsMap.get(groupKey)!;
     item.urlCount += recordCitationCount;
+    if (record.platform) {
+      item.platforms.add(record.platform);
+    }
     
     record.citations?.forEach((cite: any) => {
       const domain = getDomainFromUrl(cite.url) || cite.domain;
@@ -103,7 +121,10 @@ function computeStats(records: any[]): {
     });
   });
   
-  const searchStats = Array.from(searchStatsMap.values()).sort((a, b) => {
+  const searchStats = Array.from(searchStatsMap.values()).map(item => ({
+    ...item,
+    platforms: Array.from(item.platforms).sort()
+  })).sort((a, b) => {
     if (a.keyword !== b.keyword) {
       return a.keyword.localeCompare(b.keyword);
     }
@@ -180,6 +201,12 @@ export function LocalTaskDetail({ taskId, onClose }: LocalTaskDetailProps) {
     }
   };
 
+  const handleRefresh = () => {
+    loadTaskDetail();
+    loadRecords();
+    toast.success('已刷新');
+  };
+
   const toggleRecord = (recordId: number) => {
     setExpandedRecords(prev => 
       prev.includes(recordId) 
@@ -206,8 +233,15 @@ export function LocalTaskDetail({ taskId, onClose }: LocalTaskDetailProps) {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-card border border-border rounded-lg w-full max-w-6xl mx-4 max-h-[90vh] flex flex-col">
         <div className="p-6 border-b border-border flex items-center justify-between">
-          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4">
             <h2 className="text-xl font-bold">任务详情 #{taskId}</h2>
+            <button
+              onClick={handleRefresh}
+              className="p-1.5 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground transition-colors"
+              title="刷新数据"
+            >
+              <RotateCw className="w-4 h-4" />
+            </button>
             {taskData && taskData.status !== 'running' && (
               <button
                 onClick={handleRetry}
@@ -247,11 +281,11 @@ export function LocalTaskDetail({ taskId, onClose }: LocalTaskDetailProps) {
                 </div>
                 <div>
                   <div className="text-muted-foreground">关键词</div>
-                  <div className="font-medium truncate" title={taskData.keywords}>{taskData.keywords}</div>
+                  <div className="font-medium whitespace-pre-wrap break-words max-h-32 overflow-y-auto" title={taskData.keywords}>{taskData.keywords}</div>
                 </div>
                 <div>
                   <div className="text-muted-foreground">平台</div>
-                  <div className="font-medium capitalize">{taskData.platforms}</div>
+                  <div className="font-medium capitalize whitespace-pre-wrap break-words">{taskData.platforms}</div>
                 </div>
                 <div>
                   <div className="text-muted-foreground">进度</div>
@@ -302,35 +336,46 @@ export function LocalTaskDetail({ taskId, onClose }: LocalTaskDetailProps) {
                       <span className="font-medium text-sm">搜索词统计</span>
                     </div>
                     <div className="max-h-60 overflow-y-auto">
-                      <table className="w-full text-sm text-left">
+                      <table className="w-full text-sm text-left" style={{ writingMode: 'horizontal-tb' }}>
                         <thead className="bg-accent/20 border-b border-border sticky top-0">
                           <tr>
-                            <th className="px-4 py-2 font-medium">原始搜索词</th>
-                            <th className="px-4 py-2 font-medium">Sub Query</th>
-                            <th className="px-4 py-2 font-medium text-right">URL 数</th>
+                            <th className="px-4 py-2 font-medium whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>原始搜索词</th>
+                            <th className="px-4 py-2 font-medium whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>平台</th>
+                            <th className="px-4 py-2 font-medium whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>Sub Query</th>
+                            <th className="px-4 py-2 font-medium text-right whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>URL 数</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
-                          {stats.searchStats.map((item, idx) => {
-                            let displayText: string;
-                            if (item.subQueries.length === 0) {
-                              displayText = '--';
-                            } else if (item.subQueries.length === 1) {
-                              displayText = item.subQueries[0];
-                            } else {
-                              displayText = `[${item.subQueries.map(q => `'${q}'`).join(', ')}]`;
-                            }
-                            
-                            return (
-                              <tr key={idx} className="hover:bg-accent/10">
-                                <td className="px-4 py-2 font-medium">{item.keyword}</td>
-                                <td className="px-4 py-2 font-mono text-xs" title={displayText}>
-                                  {displayText.length > 60 ? displayText.slice(0, 60) + '...' : displayText}
-                                </td>
-                                <td className="px-4 py-2 text-right">{item.urlCount}</td>
-                              </tr>
-                            );
-                          })}
+                          {stats.searchStats.map((item, idx) => (
+                            <tr key={idx} className="hover:bg-accent/10" style={{ writingMode: 'horizontal-tb' }}>
+                              <td className="px-4 py-2 font-medium align-top" style={{ writingMode: 'horizontal-tb' }}>{item.keyword}</td>
+                              <td className="px-4 py-2 align-top" style={{ writingMode: 'horizontal-tb' }}>
+                                {item.platforms && item.platforms.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {item.platforms.map(p => (
+                                      <span key={p} className="bg-accent px-1.5 py-0.5 rounded text-xs capitalize">
+                                        {p}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground">-</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-2 font-mono text-xs align-top" style={{ writingMode: 'horizontal-tb' }}>
+                                {item.subQueries.length > 0 ? (
+                                  <div className="space-y-1">
+                                    {item.subQueries.map((q, i) => (
+                                      <div key={i} className="break-words">{q}</div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground">--</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-2 text-right align-top" style={{ writingMode: 'horizontal-tb' }}>{item.urlCount}</td>
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>
@@ -343,14 +388,14 @@ export function LocalTaskDetail({ taskId, onClose }: LocalTaskDetailProps) {
                     </div>
                     {stats.domainStats.domains.length > 0 ? (
                       <div className="max-h-80 overflow-auto">
-                        <table className="w-full text-sm text-left">
+                        <table className="w-full text-sm text-left" style={{ writingMode: 'horizontal-tb' }}>
                           <thead className="bg-accent/20 border-b border-border sticky top-0">
                             <tr>
-                              <th className="px-4 py-2 font-medium sticky left-0 bg-accent/20 z-10 min-w-[200px]">Domain</th>
-                              <th className="px-4 py-2 font-medium text-left min-w-[200px]">链接</th>
-                              <th className="px-4 py-2 font-medium text-right min-w-[60px]">总计</th>
+                              <th className="px-4 py-2 font-medium sticky left-0 bg-accent/20 z-10 min-w-[200px] whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>Domain</th>
+                              <th className="px-4 py-2 font-medium text-left min-w-[200px] whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>链接</th>
+                              <th className="px-4 py-2 font-medium text-right min-w-[60px] whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>总计</th>
                               {stats.domainStats.keywords.map(kw => (
-                                <th key={kw} className="px-4 py-2 font-medium text-right min-w-[80px] truncate" title={kw}>
+                                <th key={kw} className="px-4 py-2 font-medium text-right min-w-[80px] truncate" title={kw} style={{ writingMode: 'horizontal-tb' }}>
                                   {kw.length > 10 ? kw.slice(0, 10) + '...' : kw}
                                 </th>
                               ))}
@@ -358,22 +403,22 @@ export function LocalTaskDetail({ taskId, onClose }: LocalTaskDetailProps) {
                           </thead>
                           <tbody className="divide-y divide-border">
                             {stats.domainStats.domains.map((item, idx) => (
-                              <tr key={idx} className="hover:bg-accent/10">
-                                <td className="px-4 py-2 font-medium sticky left-0 bg-card z-10 truncate max-w-[200px]" title={item.domain}>
+                              <tr key={idx} className="hover:bg-accent/10" style={{ writingMode: 'horizontal-tb' }}>
+                                <td className="px-4 py-2 font-medium sticky left-0 bg-card z-10 truncate max-w-[200px]" title={item.domain} style={{ writingMode: 'horizontal-tb' }}>
                                   {item.domain}
                                 </td>
-                                <td className="px-4 py-2 text-left">
-                                  <button 
+                                <td className="px-4 py-2 text-left" style={{ writingMode: 'horizontal-tb' }}>
+                                  <button
                                     onClick={() => wailsAPI.browser.openURL(`https://${item.domain}`)}
                                     className="flex items-center gap-1 text-primary hover:underline truncate max-w-[200px]"
                                   >
                                     https://{item.domain}
-                                    <ExternalLink className="w-3 h-3" />
+                                    <ExternalLink className="w-3 h-3 flex-shrink-0" />
                                   </button>
                                 </td>
-                                <td className="px-4 py-2 text-right font-semibold">{item.total}</td>
+                                <td className="px-4 py-2 text-right font-semibold" style={{ writingMode: 'horizontal-tb' }}>{item.total}</td>
                                 {stats.domainStats.keywords.map(kw => (
-                                  <td key={kw} className="px-4 py-2 text-right text-muted-foreground">
+                                  <td key={kw} className="px-4 py-2 text-right text-muted-foreground" style={{ writingMode: 'horizontal-tb' }}>
                                     {item.byKeyword[kw] || '-'}
                                   </td>
                                 ))}
@@ -408,65 +453,90 @@ export function LocalTaskDetail({ taskId, onClose }: LocalTaskDetailProps) {
                     暂无记录
                   </div>
                 ) : (
-                  <div className="border border-border rounded-lg overflow-hidden">
-                    <table className="w-full text-sm text-left">
+                  <div className="border border-border rounded-lg overflow-x-auto">
+                    <table className="w-full text-sm text-left table-fixed" style={{ writingMode: 'horizontal-tb', minWidth: '1200px' }}>
                       <thead className="bg-accent/50 border-b border-border">
                         <tr>
-                          <th className="w-10 px-4 py-2"></th>
-                          <th className="px-4 py-2 font-medium">轮次</th>
-                          <th className="px-4 py-2 font-medium">平台</th>
-                          <th className="px-4 py-2 font-medium">关键词</th>
-                          <th className="px-4 py-2 font-medium">回答摘要</th>
-                          <th className="px-4 py-2 font-medium">耗时</th>
-                          <th className="px-4 py-2 font-medium">状态</th>
-                          <th className="px-4 py-2 font-medium">时间</th>
+                          <th className="w-12 px-4 py-2" style={{ writingMode: 'horizontal-tb' }}></th>
+                          <th className="w-16 px-4 py-2 font-medium whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>轮次</th>
+                          <th className="w-24 px-4 py-2 font-medium whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>平台</th>
+                          <th className="w-48 px-4 py-2 font-medium whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>关键词</th>
+                          <th className="px-4 py-2 font-medium whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>回答摘要</th>
+                          <th className="w-24 px-4 py-2 font-medium whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>耗时</th>
+                          <th className="w-20 px-4 py-2 font-medium whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>状态</th>
+                          <th className="w-40 px-4 py-2 font-medium whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>时间</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
                         {records.map((record) => (
-                          <>
-                            <tr 
-                              key={record.id} 
+                          <tbody key={record.id}>
+                            <tr
                               className="hover:bg-accent/10 transition-colors cursor-pointer"
                               onClick={() => toggleRecord(record.id)}
+                              style={{ writingMode: 'horizontal-tb' }}
                             >
-                              <td className="px-4 py-3">
-                                {expandedRecords.includes(record.id) ? 
-                                  <ChevronDown className="w-4 h-4 text-muted-foreground" /> : 
+                              <td className="px-4 py-3" style={{ writingMode: 'horizontal-tb' }}>
+                                {expandedRecords.includes(record.id) ?
+                                  <ChevronDown className="w-4 h-4 text-muted-foreground" /> :
                                   <ChevronRight className="w-4 h-4 text-muted-foreground" />
                                 }
                               </td>
-                              <td className="px-4 py-3">{record.round_number}</td>
-                              <td className="px-4 py-3 capitalize">{record.platform}</td>
-                              <td className="px-4 py-3 font-medium">{record.keyword}</td>
-                              <td className="px-4 py-3">
-                                <div className="max-w-xs truncate" title={record.full_answer}>
-                                  {record.full_answer || '-'}
+                              <td className="px-4 py-3 whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>{record.round_number}</td>
+                              <td className="px-4 py-3 capitalize whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>{record.platform}</td>
+                              <td className="px-4 py-3 font-medium" style={{ writingMode: 'horizontal-tb' }}>
+                                <div className="truncate" title={record.keyword} style={{ writingMode: 'horizontal-tb' }}>{record.keyword}</div>
+                              </td>
+                              <td className="px-4 py-3" style={{ writingMode: 'horizontal-tb' }}>
+                                <div className="truncate" title={stripDoubaoBlockPrefix(record.full_answer || '')} style={{ writingMode: 'horizontal-tb' }}>
+                                  {stripDoubaoBlockPrefix(record.full_answer || '') || '-'}
                                 </div>
                               </td>
-                              <td className="px-4 py-3">{record.response_time_ms}ms</td>
-                              <td className="px-4 py-3">
-                                <span className={`px-2 py-0.5 rounded-full text-xs ${
-                                  record.search_status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                              <td className="px-4 py-3 whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>{record.response_time_ms}ms</td>
+                              <td className="px-4 py-3" style={{ writingMode: 'horizontal-tb' }}>
+                                <span className={`px-2 py-0.5 rounded-full text-xs whitespace-nowrap inline-block ${
+                                  record.search_status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
                                 }`}>
                                   {record.search_status === 'completed' ? '成功' : '失败'}
                                 </span>
                               </td>
-                              <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                                {new Date(record.created_at).toLocaleString()}
+                              <td className="px-4 py-3 text-muted-foreground whitespace-nowrap text-xs" style={{ writingMode: 'horizontal-tb' }}>
+                                {new Date(record.created_at).toLocaleString('zh-CN', {
+                                  year: 'numeric',
+                                  month: '2-digit',
+                                  day: '2-digit',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
                               </td>
                             </tr>
                             
                             {/* Expanded Details Row */}
                             {expandedRecords.includes(record.id) && (
-                              <tr key={`${record.id}-details`}>
+                              <tr>
                                 <td colSpan={8} className="bg-accent/5 p-0">
                                   <div className="p-4 space-y-4 border-b border-border">
                                     {/* Full Answer */}
                                     <div>
-                                      <h4 className="font-semibold mb-2 text-xs uppercase tracking-wider text-muted-foreground">完整回答</h4>
-                                      <div className="bg-background border border-border rounded-md p-4 whitespace-pre-wrap max-h-96 overflow-y-auto text-sm leading-relaxed">
-                                        {record.full_answer || '无回答内容'}
+                                      <div className="flex items-center justify-between mb-2">
+                                        <h4 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">完整回答</h4>
+                                        <button
+                                          className="px-2 py-1 bg-primary text-white text-xs rounded hover:bg-primary/90"
+                                          onClick={() => navigator.clipboard.writeText(stripDoubaoBlockPrefix(record.full_answer || '无回答内容'))}
+                                        >
+                                          复制内容
+                                        </button>
+                                      </div>
+                                      <div className="bg-background border border-border rounded-md p-4 max-h-96 overflow-y-auto text-sm leading-relaxed">
+                                        {stripDoubaoBlockPrefix(record.full_answer || '') ? (
+                                          <ReactMarkdown 
+                                            remarkPlugins={[remarkGfm]}
+                                            className="prose dark:prose-invert max-w-none [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_h1]:text-lg [&_h1]:font-bold [&_h2]:text-base [&_h2]:font-bold [&_h3]:text-sm [&_h3]:font-bold [&_p]:mb-2 last:[&_p]:mb-0 [&_table]:w-full [&_table]:border-collapse [&_table]:border [&_table]:border-border [&_table]:mb-4 [&_th]:border [&_th]:border-border [&_th]:bg-accent/20 [&_th]:p-2 [&_th]:text-left [&_th]:font-bold [&_td]:border [&_td]:border-border [&_td]:p-2"
+                                          >
+                                            {stripDoubaoBlockPrefix(record.full_answer || '')}
+                                          </ReactMarkdown>
+                                        ) : (
+                                          '无回答内容'
+                                        )}
                                       </div>
                                     </div>
 
@@ -532,7 +602,7 @@ export function LocalTaskDetail({ taskId, onClose }: LocalTaskDetailProps) {
                                 </td>
                               </tr>
                             )}
-                          </>
+                          </tbody>
                         ))}
                       </tbody>
                     </table>

@@ -2,9 +2,11 @@ package provider
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -160,6 +162,28 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 	var fullResponseText string
 	var citationMu sync.Mutex
 
+	// Prefer CDP SSE for parsing (avoid double-parse). Fallback to JS hijack if CDP body not available.
+	var (
+		sawCDPCompleteBody bool
+		parseMu            sync.Mutex
+	)
+
+	// SSE State Machine - track data labels and event context
+	var (
+		lastDataLabel string // Track non-JSON data labels like "search_with_text"
+		sseStateMu    sync.Mutex
+	)
+
+	isLikelyMojibake := func(text string) bool {
+		if text == "" {
+			return false
+		}
+		if strings.Contains(text, "Ã") || strings.Contains(text, "æ") || strings.Contains(text, "å") || strings.Contains(text, "ï¼") {
+			return true
+		}
+		return false
+	}
+
 	// Helper to add citations without duplication
 	addCitation := func(cit Citation) {
 		if cit.URL == "" {
@@ -175,11 +199,15 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 		capturedCitations = append(capturedCitations, cit)
 	}
 
-	// SSE Data Parsing Function - handles CDP-parsed SSE data directly
-	// CDP gives us e.Data without "event:" or "data:" prefixes
-	// Yuanbao sends: type indicators ("search_with_text", "text") and JSON objects
+	// SSE Data Parsing Function with State Machine
+	// Yuanbao SSE format:
+	//   event: speech_type
+	//   data: search_with_text         <- Label indicating next data type
+	//   data: {"type":"searchGuid"...} <- Actual citation JSON
 	parseSSEData := func(data string) {
 		data = strings.TrimSpace(data)
+
+		// Skip event lines and empty data
 		if strings.HasPrefix(data, "event:") {
 			return
 		}
@@ -190,35 +218,95 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 			return
 		}
 
-		// Skip non-JSON type indicators (e.g., "search_with_text", "text", "status")
-		if !strings.HasPrefix(data, "{") {
+		sseStateMu.Lock()
+		defer sseStateMu.Unlock()
+
+		// Check if this is a JSON object
+		isJSON := strings.HasPrefix(data, "{")
+
+		if !isJSON {
+			// This is a data label (e.g., "search_with_text", "text", "status")
+			lastDataLabel = data
+			d.logger.DebugWithContext(ctx, "[YUANBAO-SSE] Data label received", map[string]interface{}{
+				"label": data,
+			}, nil)
 			return
 		}
 
-		// Try to parse as JSON and dispatch based on "type" field
-		var typeCheck struct {
-			Type string `json:"type"`
-		}
-		if err := json.Unmarshal([]byte(data), &typeCheck); err != nil {
+		// This is JSON - parse it
+		d.logger.DebugWithContext(ctx, "[YUANBAO-SSE] JSON data received", map[string]interface{}{
+			"data_len":      len(data),
+			"lastDataLabel": lastDataLabel,
+			"data_preview":  data[:min(len(data), 150)],
+		}, nil)
+
+		var fullPacket map[string]interface{}
+		if err := json.Unmarshal([]byte(data), &fullPacket); err != nil {
+			d.logger.DebugWithContext(ctx, "[YUANBAO-SSE] JavaScript fallback JSON unmarshal failed (expected, using CDP Network)", map[string]interface{}{
+				"error":        err.Error(),
+				"data_len":     len(data),
+				"data_preview": data[:min(len(data), 300)],
+				"data_suffix":  data[max(0, len(data)-100):],
+			}, nil)
 			return
 		}
 
-		switch typeCheck.Type {
+		typeField, ok := fullPacket["type"].(string)
+		if !ok {
+			d.logger.WarnWithContext(ctx, "[YUANBAO-SSE] Missing or invalid 'type' field", map[string]interface{}{
+				"keys":         fmt.Sprintf("%v", reflect.ValueOf(fullPacket).MapKeys()),
+				"data_preview": data[:min(len(data), 200)],
+			}, nil)
+			return
+		}
+
+		// Process based on type field
+		switch typeField {
 		case "searchGuid":
 			// Citation data: {"type":"searchGuid","docs":[...]}
 			var packet struct {
-				Docs []struct {
+				Type  string `json:"type"`
+				Title string `json:"title"`
+				Docs  []struct {
+					Index       int    `json:"index"`
+					DocID       string `json:"docId"`
 					Title       string `json:"title"`
 					URL         string `json:"url"`
 					Quote       string `json:"quote"`
 					WebSiteName string `json:"web_site_name"`
+					PublishTime string `json:"publish_time"`
 				} `json:"docs"`
 			}
 			if err := json.Unmarshal([]byte(data), &packet); err != nil {
-				d.logger.WarnWithContext(ctx, "[YUANBAO-SSE] Citation unmarshal failed", map[string]interface{}{"error": err.Error(), "raw_len": len(data)}, nil)
+				d.logger.DebugWithContext(ctx, "[YUANBAO-SSE] Citation packet unmarshal failed in JS fallback (will retry via CDP Network)", map[string]interface{}{
+					"error":        err.Error(),
+					"raw_len":      len(data),
+					"data_sample":  data[:min(len(data), 500)],
+					"packet_title": fullPacket["title"],
+					"docs_count":   len(fullPacket["docs"].([]interface{})),
+				}, nil)
 				return
 			}
+
+			citationMu.Lock()
+			beforeCount := len(capturedCitations)
+			citationMu.Unlock()
+
+			d.logger.InfoWithContext(ctx, "[YUANBAO-SSE] Processing citations packet", map[string]interface{}{
+				"packet_title": packet.Title,
+				"docs_count":   len(packet.Docs),
+			}, nil)
+
 			for _, item := range packet.Docs {
+				if item.URL == "" {
+					d.logger.WarnWithContext(ctx, "[YUANBAO-SSE] Skipping doc with empty URL", map[string]interface{}{
+						"doc_id":    item.DocID,
+						"doc_title": item.Title,
+						"index":     item.Index,
+					}, nil)
+					continue
+				}
+
 				cit := Citation{
 					URL:     item.URL,
 					Title:   item.Title,
@@ -229,8 +317,28 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 					cit.Domain = u.Host
 				}
 				addCitation(cit)
+
+				d.logger.DebugWithContext(ctx, "[YUANBAO-SSE] Added citation", map[string]interface{}{
+					"index":  item.Index,
+					"url":    item.URL,
+					"title":  item.Title[:min(len(item.Title), 50)],
+					"domain": cit.Domain,
+				}, nil)
 			}
-			d.logger.DebugWithContext(ctx, "[YUANBAO-SSE] Captured citations", map[string]interface{}{"count": len(packet.Docs)}, nil)
+
+			citationMu.Lock()
+			afterCount := len(capturedCitations)
+			citationMu.Unlock()
+
+			d.logger.InfoWithContext(ctx, "[YUANBAO-SSE] ✅ Citations captured", map[string]interface{}{
+				"docs_in_packet":  len(packet.Docs),
+				"new_citations":   afterCount - beforeCount,
+				"total_citations": afterCount,
+				"lastDataLabel":   lastDataLabel,
+			}, nil)
+
+			// Reset label after processing
+			lastDataLabel = ""
 
 		case "text":
 			// Text content: {"type":"text","msg":"..."}
@@ -238,22 +346,193 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 				Msg string `json:"msg"`
 			}
 			if err := json.Unmarshal([]byte(data), &packet); err != nil {
+				d.logger.WarnWithContext(ctx, "[YUANBAO-SSE] Text packet unmarshal failed", map[string]interface{}{
+					"error": err.Error(),
+				}, nil)
 				return
 			}
 			if packet.Msg != "" {
 				citationMu.Lock()
+				oldLen := len(fullResponseText)
 				fullResponseText += packet.Msg
+				newLen := len(fullResponseText)
 				citationMu.Unlock()
+
+				d.logger.DebugWithContext(ctx, "[YUANBAO-SSE] Text chunk added", map[string]interface{}{
+					"chunk_len":   len(packet.Msg),
+					"total_len":   newLen,
+					"added_bytes": newLen - oldLen,
+				}, nil)
 			}
+
+			// Reset label after processing
+			lastDataLabel = ""
+
+		default:
+			// Unknown type - log for debugging
+			d.logger.WarnWithContext(ctx, "[YUANBAO-SSE] Unknown JSON type", map[string]interface{}{
+				"type":          typeField,
+				"lastDataLabel": lastDataLabel,
+				"data_preview":  data[:min(len(data), 200)],
+				"all_keys":      fmt.Sprintf("%v", reflect.ValueOf(fullPacket).MapKeys()),
+			}, nil)
+			lastDataLabel = ""
 		}
 	}
 
 	// 1. Enable Network Domain
 	if err := (proto.NetworkEnable{}).Call(page); err != nil {
 		d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] Failed to enable network", map[string]interface{}{"error": err.Error()}, nil)
+	} else {
+		d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] ✅ CDP Network enabled successfully", nil, nil)
 	}
 
-	// Start Network Listener
+	// Track SSE request IDs for fetching complete response bodies
+	sseRequestIDs := &sync.Map{} // map[NetworkRequestID]bool
+
+	// Track SSE ResponseReceived events
+	go func() {
+		page.EachEvent(func(e *proto.NetworkResponseReceived) bool {
+			select {
+			case <-ctx.Done():
+				return true
+			default:
+			}
+
+			// Detect SSE responses by Content-Type or URL pattern
+			if e.Response.MIMEType == "text/event-stream" ||
+				strings.Contains(e.Response.URL, "/chat") ||
+				strings.Contains(e.Response.URL, "/stream") {
+				d.logger.DebugWithContext(ctx, "[YUANBAO-CDP-NETWORK] SSE Response detected", map[string]interface{}{
+					"request_id": string(e.RequestID),
+					"url":        e.Response.URL,
+					"mime_type":  e.Response.MIMEType,
+				}, nil)
+				sseRequestIDs.Store(string(e.RequestID), true)
+			}
+			return false
+		})()
+	}()
+
+	// Track LoadingFinished to fetch complete response body
+	go func() {
+		page.EachEvent(func(e *proto.NetworkLoadingFinished) bool {
+			select {
+			case <-ctx.Done():
+				return true
+			default:
+			}
+
+			reqID := string(e.RequestID)
+			if _, isSSE := sseRequestIDs.Load(reqID); isSSE {
+				d.logger.DebugWithContext(ctx, "[YUANBAO-CDP-NETWORK] SSE LoadingFinished, fetching body", map[string]interface{}{
+					"request_id": reqID,
+				}, nil)
+
+				// Fetch the complete response body via CDP (with delayed retry if empty)
+				body, err := proto.NetworkGetResponseBody{RequestID: e.RequestID}.Call(page)
+				if err != nil {
+					d.logger.WarnWithContext(ctx, "[YUANBAO-CDP-NETWORK] Failed to get response body", map[string]interface{}{
+						"request_id": reqID,
+						"error":      err.Error(),
+					}, nil)
+					return false
+				}
+
+				responseBody := body.Body
+				if body.Base64Encoded {
+					decoded, decodeErr := base64.StdEncoding.DecodeString(body.Body)
+					if decodeErr != nil {
+						d.logger.WarnWithContext(ctx, "[YUANBAO-CDP-NETWORK] Failed to decode base64 response body", map[string]interface{}{
+							"request_id": reqID,
+							"error":      decodeErr.Error(),
+						}, nil)
+					} else {
+						responseBody = string(decoded)
+					}
+				}
+				if strings.TrimSpace(responseBody) == "" {
+					d.logger.WarnWithContext(ctx, "[YUANBAO-CDP-NETWORK] Empty response body, retrying after delay", map[string]interface{}{
+						"request_id": reqID,
+					}, nil)
+					time.Sleep(400 * time.Millisecond)
+					retryBody, retryErr := proto.NetworkGetResponseBody{RequestID: e.RequestID}.Call(page)
+					if retryErr != nil {
+						d.logger.WarnWithContext(ctx, "[YUANBAO-CDP-NETWORK] Retry failed to get response body", map[string]interface{}{
+							"request_id": reqID,
+							"error":      retryErr.Error(),
+						}, nil)
+						return false
+					}
+					retryBodyText := retryBody.Body
+					if retryBody.Base64Encoded {
+						decoded, decodeErr := base64.StdEncoding.DecodeString(retryBody.Body)
+						if decodeErr != nil {
+							d.logger.WarnWithContext(ctx, "[YUANBAO-CDP-NETWORK] Failed to decode retry base64 response body", map[string]interface{}{
+								"request_id": reqID,
+								"error":      decodeErr.Error(),
+							}, nil)
+						} else {
+							retryBodyText = string(decoded)
+						}
+					}
+					if strings.TrimSpace(retryBodyText) != "" {
+						responseBody = retryBodyText
+					}
+				}
+				d.logger.InfoWithContext(ctx, "[YUANBAO-CDP-NETWORK] Response body encoding info", map[string]interface{}{
+					"request_id":       reqID,
+					"base64_encoded":   body.Base64Encoded,
+					"body_len":         len(responseBody),
+					"body_prefix_hex":  fmt.Sprintf("%x", []byte(responseBody[:min(len(responseBody), 16)])),
+					"body_prefix_text": responseBody[:min(len(responseBody), 120)],
+				}, nil)
+				d.logger.InfoWithContext(ctx, "[YUANBAO-CDP-NETWORK] ✅ Complete SSE body fetched", map[string]interface{}{
+					"request_id": reqID,
+					"body_len":   len(responseBody),
+					"preview":    responseBody[:min(len(responseBody), 300)],
+				}, nil)
+
+				if isLikelyMojibake(responseBody) {
+					d.logger.WarnWithContext(ctx, "[YUANBAO-CDP-NETWORK] Skipping CDP body parse due to mojibake", map[string]interface{}{
+						"request_id": reqID,
+						"preview":    responseBody[:min(len(responseBody), 300)],
+					}, nil)
+					sseRequestIDs.Delete(reqID)
+					return false
+				}
+
+				citationMu.Lock()
+				capturedCitations = nil
+				fullResponseText = ""
+				citationMu.Unlock()
+
+				parseMu.Lock()
+				sawCDPCompleteBody = true
+				parseMu.Unlock()
+
+				// Parse all SSE lines from complete body
+				lines := strings.Split(responseBody, "\n")
+				for _, line := range lines {
+					if strings.TrimSpace(line) == "" {
+						continue
+					}
+					d.logger.DebugWithContext(ctx, "[YUANBAO-CDP-NETWORK] Parsing SSE line", map[string]interface{}{
+						"request_id":   reqID,
+						"line_len":     len(line),
+						"line_preview": line[:min(len(line), 120)],
+					}, nil)
+					parseSSEData(line)
+				}
+
+				// Cleanup
+				sseRequestIDs.Delete(reqID)
+			}
+			return false
+		})()
+	}()
+
+	// Keep original EventSourceMessageReceived as fallback (for real-time partial data)
 	go func() {
 		page.EachEvent(func(e *proto.NetworkEventSourceMessageReceived) bool {
 			select {
@@ -261,7 +540,14 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 				return true
 			default:
 			}
-			parseSSEData(e.Data)
+
+			rawData := e.Data
+			d.logger.DebugWithContext(ctx, "[YUANBAO-CDP-SSE-FALLBACK] Received SSE chunk", map[string]interface{}{
+				"data_len":     len(rawData),
+				"data_preview": rawData[:min(len(rawData), 150)],
+			}, nil)
+
+			parseSSEData(rawData)
 			return false
 		})()
 	}()
@@ -269,24 +555,81 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 	// 2. Bypass Service Worker
 	if err := (proto.NetworkSetBypassServiceWorker{Bypass: true}).Call(page); err != nil {
 		d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] Failed to set bypass service worker", map[string]interface{}{"error": err.Error()}, nil)
+	} else {
+		d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] ✅ Service Worker bypass enabled", nil, nil)
 	}
 
-	// Inject Fetch/XHR Hijack Script
+	d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] CDP Network listeners activated (ResponseReceived, LoadingFinished, EventSource)", nil, nil)
+
 	hijackScript := `(() => {
-		// console.log('__YB_DEBUG__: Hijack script injected v3');
+			if (window.__YB_HIJACK_INJECTED__) {
+			// console output suppressed
+			return;
+		}
+		window.__YB_HIJACK_INJECTED__ = true;
+		console.log('__YB_DEBUG__: Hijack script injected v11');
+		window.__YB_SEARCHGUID_BUFFER__ = window.__YB_SEARCHGUID_BUFFER__ || [];
+		window.__YB_SEARCHGUID_DOCS__ = window.__YB_SEARCHGUID_DOCS__ || [];
+		window.__YB_SEARCHGUID_RAW__ = window.__YB_SEARCHGUID_RAW__ || [];
+		window.__YB_DETAIL_ITEMS__ = window.__YB_DETAIL_ITEMS__ || [];
+			window.__YB_PUSH_SEARCHGUID__ = (line) => {
+				try {
+					if (!line) return;
+					const jsonStr = String(line).replace(/^data:\s*/, '');
+					const obj = JSON.parse(jsonStr);
+					if (obj && obj.type === 'searchGuid' && Array.isArray(obj.docs)) {
+						for (const doc of obj.docs) {
+							if (!doc || !doc.url) continue;
+							window.__YB_SEARCHGUID_DOCS__.push({
+								index: doc.index,
+								docId: doc.docId,
+								title: doc.title,
+								url: doc.url,
+								quote: doc.quote,
+								web_site_name: doc.web_site_name,
+								publish_time: doc.publish_time
+							});
+						}
+						if (window.__YB_SEARCHGUID_DOCS__.length > 500) {
+							window.__YB_SEARCHGUID_DOCS__ = window.__YB_SEARCHGUID_DOCS__.slice(-500);
+						}
+						return;
+					}
+				} catch (e) {
+					// fallthrough to raw buffer
+				}
+				try {
+					window.__YB_SEARCHGUID_RAW__.push(String(line));
+					if (window.__YB_SEARCHGUID_RAW__.length > 3) {
+						window.__YB_SEARCHGUID_RAW__ = window.__YB_SEARCHGUID_RAW__.slice(-3);
+					}
+				} catch (e) {
+					// ignore
+				}
+				try {
+					window.__YB_SEARCHGUID_BUFFER__.push(line);
+					if (window.__YB_SEARCHGUID_BUFFER__.length > 5) {
+						window.__YB_SEARCHGUID_BUFFER__ = window.__YB_SEARCHGUID_BUFFER__.slice(-5);
+					}
+				} catch (e) {
+					// ignore
+				}
+			};
 		
 		// 1. Hijack Fetch
 		const originalFetch = window.fetch;
 		window.fetch = async (...args) => {
 			const response = await originalFetch(...args);
 			
-			try {
-				const urlStr = args[0] instanceof Request ? args[0].url : String(args[0]);
-				
-				// Match Yuanbao API
-				if (urlStr.includes('/api/') || urlStr.includes('chat') || urlStr.includes('stream')) {
-					const clone = response.clone();
-					const reader = clone.body.getReader();
+		try {
+			const urlStr = args[0] instanceof Request ? args[0].url : String(args[0]);
+			// Match Yuanbao API
+			if (urlStr.includes('/api/') || urlStr.includes('chat') || urlStr.includes('stream')) {
+				const clone = response.clone();
+				if (!clone.body) {
+					return response;
+				}
+				const reader = clone.body.getReader();
 					const decoder = new TextDecoder();
 					
 					(async () => {
@@ -299,22 +642,32 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 								}
 								const chunk = decoder.decode(value, { stream: true });
 								buffer += chunk;
-								
-								const lines = buffer.split('\n');
-								buffer = lines.pop(); 
-								
-								for (const line of lines) {
-									if (line.trim() === '') continue;
-									console.log('__YB_LINE__:' + line);
+								const events = buffer.split('\n\n');
+								buffer = events.pop();
+								for (const evt of events) {
+									if (!evt.trim()) continue;
+									const lines = evt.split('\n');
+									let dataPayload = '';
+									for (const line of lines) {
+										if (line.startsWith('data:')) {
+											dataPayload += line.replace(/^data:\s*/, '');
+										}
+									}
+									if (!dataPayload) continue;
+									if (dataPayload.includes('"type":"searchGuid"')) {
+										window.__YB_PUSH_SEARCHGUID__('data: ' + dataPayload);
+										continue;
+									}
+									console.log('__YB_LINE__:data: ' + dataPayload);
 								}
 							}
 						} catch (e) {
-							console.error('__YB_ERROR__:FETCH:', e.message);
+							console.error('__YB_ERROR__:FETCH:' + e.name + ':' + e.message + ':' + e.stack);
 						}
 					})();
 				}
 			} catch (err) {
-				console.error('__YB_ERROR__:FETCH_OUTER:', err.message);
+				console.error('__YB_ERROR__:FETCH_OUTER:' + err.name + ':' + err.message + ':' + (err.stack || 'no-stack'));
 			}
 			
 			return response;
@@ -330,23 +683,63 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 		};
 		
 		XMLHttpRequest.prototype.send = function(...args) {
-			if (this._ybUrl && (this._ybUrl.includes('chat') || this._ybUrl.includes('/api/'))) {
+			if (this._ybUrl && (this._ybUrl.includes('chat') || this._ybUrl.includes('/api/') || this._ybUrl.includes('/conversation/'))) {
 				let lastSeenLength = 0;
 				this.addEventListener('readystatechange', () => {
 					if (this.readyState === 3 || this.readyState === 4) {
 						try {
+							if (this.readyState === 4 && this._ybUrl && this._ybUrl.includes('/conversation/v1/detail')) {
+								console.log('__YB_DEBUG__: /conversation/v1/detail response received, length=' + (this.responseText || '').length);
+								const detailText = this.responseText;
+								if (detailText && detailText.trim().startsWith('{')) {
+									try {
+										const detailObj = JSON.parse(detailText);
+										const convs = detailObj?.data?.convs || detailObj?.convs || detailObj?.data?.data?.convs || [];
+										const first = Array.isArray(convs) ? convs[0] : null;
+										const content = first?.speechesV2?.content || first?.speeches_v2?.content || [];
+										console.log('__YB_DEBUG__: detail API parsed, content items=' + (content ? content.length : 0));
+										if (Array.isArray(content) && content.length) {
+											let citationCount = 0;
+											for (const item of content) {
+												if (!item || !item.type) continue;
+												window.__YB_DETAIL_ITEMS__.push({
+													type: item.type,
+													docs: item.docs,
+													msg: item.msg
+												});
+												if (item.type === 'searchGuid' && item.docs) {
+													citationCount += item.docs.length;
+												}
+											}
+											console.log('__YB_DEBUG__: Captured ' + citationCount + ' citations from detail API, total items=' + window.__YB_DETAIL_ITEMS__.length);
+											if (window.__YB_DETAIL_ITEMS__.length > 200) {
+												window.__YB_DETAIL_ITEMS__ = window.__YB_DETAIL_ITEMS__.slice(-200);
+											}
+										}
+									} catch (e) {
+										console.error('__YB_ERROR__: Failed to parse detail API: ' + e.message);
+									}
+								}
+							}
 							const text = this.responseText;
 							if (text) {
 								// Only process new content
 								const newContent = text.substring(lastSeenLength);
 								lastSeenLength = text.length;
 								
-								const lines = newContent.split('\n');
-								for (const line of lines) {
-									if (line.trim() && line.startsWith('data:')) {
-										console.log('__YB_LINE__:' + line);
+								const events = newContent.split('\n\n');
+								for (const evt of events) {
+									if (!evt.trim()) continue;
+									const lines = evt.split('\n');
+									let dataPayload = '';
+									for (const line of lines) {
+										if (line.trim() && line.startsWith('data:')) {
+											dataPayload += line.replace(/^data:\s*/, '');
+										}
 									}
-								}
+									if (!dataPayload) continue;
+								console.log('__YB_LINE__:data: ' + dataPayload);
+							}
 							}
 						} catch (e) {
 							// ignore
@@ -360,28 +753,33 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 		// 3. Hijack EventSource
 		const originalEventSource = window.EventSource;
 		if (originalEventSource) {
-			window.EventSource = function(url, config) {
-				const es = new originalEventSource(url, config);
-				es.addEventListener('message', (e) => {
-					console.log('__YB_LINE__:data: ' + e.data);
-				});
-				// Also listen to specific events if needed
-				es.addEventListener('text', (e) => console.log('__YB_LINE__:event: text\n' + '__YB_LINE__:data: ' + e.data));
-				es.addEventListener('searchGuid', (e) => console.log('__YB_LINE__:event: searchGuid\n' + '__YB_LINE__:data: ' + e.data));
-				return es;
-			};
-		}
+				window.EventSource = function(url, config) {
+					const es = new originalEventSource(url, config);
+					es.addEventListener('message', (e) => {
+						console.log('__YB_LINE__:data: ' + e.data);
+					});
+					return es;
+				};
+			}
 	})()`
 
+	// Critical: Inject hijack script on new document (runs before page scripts)
 	if _, err := page.EvalOnNewDocument(hijackScript); err != nil {
-		d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] Failed to inject fetch hijacker", map[string]interface{}{"error": err.Error()}, nil)
+		d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] Failed to inject fetch hijacker (OnNewDocument)", map[string]interface{}{"error": err.Error()}, nil)
+	} else {
+		d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] ✅ Hijack script registered via EvalOnNewDocument", nil, nil)
 	}
 
-	// 3. Listen to Console for Hijacked Data
 	go func() {
 		if err := (proto.RuntimeEnable{}).Call(page); err != nil {
 			d.logger.WarnWithContext(ctx, "[YUANBAO-SSE] RuntimeEnable failed", map[string]interface{}{"error": err.Error()}, nil)
 		}
+
+		var (
+			chunkBuffer   string
+			chunkBufferMu sync.Mutex
+			isChunking    bool
+		)
 
 		page.EachEvent(func(e *proto.RuntimeConsoleAPICalled) bool {
 			select {
@@ -408,23 +806,149 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 					}
 				}
 
-				if strings.HasPrefix(logMsg, "__YB_LINE__:") {
-					line := strings.TrimPrefix(logMsg, "__YB_LINE__:")
-					for _, subLine := range strings.Split(line, "\n") {
-						subLine = strings.TrimSpace(subLine)
-						if subLine == "" {
-							continue
-						}
-						// JS hijack sends raw SSE lines with "data:" prefix
-						if strings.HasPrefix(subLine, "data:") {
-							data := strings.TrimSpace(strings.TrimPrefix(subLine, "data:"))
-							parseSSEData(data)
-						}
+				chunkBufferMu.Lock()
+
+				if strings.HasPrefix(logMsg, "__YB_CHUNK_START__:") {
+					chunkBuffer = strings.TrimPrefix(logMsg, "__YB_CHUNK_START__:")
+					isChunking = true
+					d.logger.DebugWithContext(ctx, "[YUANBAO-CHUNK] Chunk started", map[string]interface{}{
+						"buffer_len": len(chunkBuffer),
+					}, nil)
+					chunkBufferMu.Unlock()
+					continue
+				} else if strings.HasPrefix(logMsg, "__YB_CHUNK_MID__:") {
+					if isChunking {
+						chunk := strings.TrimPrefix(logMsg, "__YB_CHUNK_MID__:")
+						chunkBuffer += chunk
+						d.logger.DebugWithContext(ctx, "[YUANBAO-CHUNK] Chunk mid received", map[string]interface{}{
+							"chunk_len":  len(chunk),
+							"buffer_len": len(chunkBuffer),
+						}, nil)
 					}
+					chunkBufferMu.Unlock()
+					continue
+				} else if strings.HasPrefix(logMsg, "__YB_CHUNK_END__:") {
+					if isChunking {
+						chunk := strings.TrimPrefix(logMsg, "__YB_CHUNK_END__:")
+						chunkBuffer += chunk
+						completeLine := chunkBuffer
+						chunkBuffer = ""
+						isChunking = false
+						chunkBufferMu.Unlock()
+
+						d.logger.InfoWithContext(ctx, "[YUANBAO-CHUNK] Chunk complete - FULL DATA", map[string]interface{}{
+							"total_len":       len(completeLine),
+							"line_prefix":     completeLine[:min(len(completeLine), 150)],
+							"line_suffix":     completeLine[max(0, len(completeLine)-150):],
+							"contains_docs":   strings.Contains(completeLine, `"docs":`),
+							"contains_url":    strings.Contains(completeLine, `"url":`),
+							"contains_search": strings.Contains(completeLine, "searchGuid"),
+						}, nil)
+
+						completeLine = strings.TrimSpace(completeLine)
+						if completeLine != "" {
+							if strings.HasPrefix(completeLine, "event:") {
+								parseSSEData(completeLine)
+							} else if strings.HasPrefix(completeLine, "data:") {
+								if strings.Contains(completeLine, `"type":"searchGuid"`) {
+									parseMu.Lock()
+									hasCDPCompleteBody := sawCDPCompleteBody
+									parseMu.Unlock()
+									if hasCDPCompleteBody {
+										d.logger.DebugWithContext(ctx, "[YUANBAO-JS] Skipping searchGuid SSE line (CDP complete body already parsed)", map[string]interface{}{
+											"line_len":     len(completeLine),
+											"line_preview": completeLine[:min(len(completeLine), 120)],
+										}, nil)
+										continue
+									}
+									d.logger.InfoWithContext(ctx, "[YUANBAO-JS] CDP body missing, using JS fallback for searchGuid", map[string]interface{}{
+										"line_len":     len(completeLine),
+										"line_preview": completeLine[:min(len(completeLine), 120)],
+									}, nil)
+								}
+								parseSSEData(completeLine)
+							} else {
+								d.logger.WarnWithContext(ctx, "[YUANBAO-CHUNK] Unexpected format (no event/data prefix)", map[string]interface{}{
+									"line_start": completeLine[:min(len(completeLine), 50)],
+								}, nil)
+							}
+						}
+						continue
+					}
+					chunkBufferMu.Unlock()
+					continue
+				} else if strings.HasPrefix(logMsg, "__YB_LINE__:") {
+					line := strings.TrimPrefix(logMsg, "__YB_LINE__:")
+					chunkBufferMu.Unlock()
+
+					line = strings.TrimSpace(line)
+					if line == "" {
+						continue
+					}
+
+					d.logger.DebugWithContext(ctx, "[YUANBAO-LINE] SSE line", map[string]interface{}{
+						"line_len":     len(line),
+						"line_preview": line[:min(len(line), 100)],
+					}, nil)
+
+					parseMu.Lock()
+					if sawCDPCompleteBody {
+						parseMu.Unlock()
+						d.logger.DebugWithContext(ctx, "[YUANBAO-JS] Skipping SSE line (CDP complete body already parsed)", map[string]interface{}{
+							"line_len":     len(line),
+							"line_preview": line[:min(len(line), 120)],
+						}, nil)
+						continue
+					}
+					parseMu.Unlock()
+
+					if strings.HasPrefix(line, "event:") {
+						d.logger.DebugWithContext(ctx, "[YUANBAO-JS] Parsing SSE line", map[string]interface{}{
+							"line_len":     len(line),
+							"line_preview": line[:min(len(line), 120)],
+						}, nil)
+						parseSSEData(line)
+					} else if strings.HasPrefix(line, "data:") {
+						if strings.Contains(line, `"type":"searchGuid"`) {
+							parseMu.Lock()
+							hasCDPCompleteBody := sawCDPCompleteBody
+							parseMu.Unlock()
+							if hasCDPCompleteBody {
+								d.logger.DebugWithContext(ctx, "[YUANBAO-JS] Skipping searchGuid SSE line (CDP complete body already parsed)", map[string]interface{}{
+									"line_len":     len(line),
+									"line_preview": line[:min(len(line), 120)],
+								}, nil)
+								continue
+							}
+							d.logger.InfoWithContext(ctx, "[YUANBAO-JS] CDP body missing, using JS fallback for searchGuid", map[string]interface{}{
+								"line_len":     len(line),
+								"line_preview": line[:min(len(line), 120)],
+							}, nil)
+						}
+						d.logger.DebugWithContext(ctx, "[YUANBAO-JS] Parsing SSE line", map[string]interface{}{
+							"line_len":     len(line),
+							"line_preview": line[:min(len(line), 120)],
+						}, nil)
+						parseSSEData(line)
+					}
+					continue
+				} else if strings.HasPrefix(logMsg, "__YB_DEBUG__:") {
+					chunkBufferMu.Unlock()
+					debugMsg := strings.TrimPrefix(logMsg, "__YB_DEBUG__:")
+					d.logger.InfoWithContext(ctx, "[YUANBAO-JS-DEBUG] "+debugMsg, nil, nil)
+					continue
+				} else if strings.HasPrefix(logMsg, "__YB_ERROR__:") {
+					chunkBufferMu.Unlock()
+					errorMsg := strings.TrimPrefix(logMsg, "__YB_ERROR__:")
+					d.logger.WarnWithContext(ctx, "[YUANBAO-JS-ERROR] "+errorMsg, nil, nil)
+					continue
 				} else if strings.HasPrefix(logMsg, "__YB_") {
-					// Log all other YB prefixes to the Go logger for debugging
+					chunkBufferMu.Unlock()
 					d.logger.DebugWithContext(ctx, "[YUANBAO-JS] "+logMsg, nil, nil)
+					continue
 				}
+
+				chunkBufferMu.Unlock()
 			}
 			return false
 		})()
@@ -439,6 +963,29 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 		return nil, fmt.Errorf("waiting for page load: %w", err)
 	}
 	rod.Try(func() { _ = page.Timeout(5 * time.Second).WaitStable(1 * time.Second) })
+
+	if _, err := page.Eval(hijackScript); err != nil {
+		d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] Failed to re-inject fetch hijacker after navigate", map[string]interface{}{"error": err.Error()}, nil)
+	} else {
+		d.logger.DebugWithContext(ctx, "[YUANBAO-RPA] Hijack script re-injected after page load", nil, nil)
+	}
+
+	finalURL := page.MustInfo().URL
+	d.logger.DebugWithContext(ctx, "[YUANBAO-RPA] Current page URL after navigation", map[string]interface{}{"url": finalURL}, nil)
+
+	if strings.Contains(finalURL, "login") || strings.Contains(finalURL, "passport") {
+		return nil, fmt.Errorf("redirected to login page, account may need re-authentication: %s", finalURL)
+	}
+
+	hasInput, _, _ := page.Has(".ql-editor[contenteditable='true'], textarea, [contenteditable='true']")
+	if !hasInput {
+		pageHTML, _ := page.HTML()
+		d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] No input area found, possible login issue", map[string]interface{}{
+			"url":         finalURL,
+			"htmlPreview": pageHTML[:min(len(pageHTML), 500)],
+		}, nil)
+		return nil, fmt.Errorf("no input area found after navigation, account may need login")
+	}
 
 	// STEP 0: Enable Web Search (Toggle)
 	d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Checking Web Search Toggle...", nil, nil)
@@ -498,6 +1045,201 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 	d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Waiting for AI response...", nil, nil)
 	d.waitForResponseComplete(ctx, page)
 
+	// Helper function to extract buffered data from JS
+	extractBufferedData := func(logPrefix string) {
+		// Pull any buffered searchGuid data from JS (bypass console limits)
+		if docsRaw, err := page.Eval(`() => {
+			try {
+				const docs = window.__YB_SEARCHGUID_DOCS__ || [];
+				window.__YB_SEARCHGUID_DOCS__ = [];
+				return JSON.stringify(docs);
+			} catch (e) {
+				return "[]";
+			}
+		}`); err == nil && docsRaw != nil {
+			var docs []struct {
+				Index       int    `json:"index"`
+				DocID       string `json:"docId"`
+				Title       string `json:"title"`
+				URL         string `json:"url"`
+				Quote       string `json:"quote"`
+				WebSiteName string `json:"web_site_name"`
+				PublishTime string `json:"publish_time"`
+			}
+			if err := json.Unmarshal([]byte(docsRaw.Value.String()), &docs); err == nil {
+				if len(docs) > 0 {
+					d.logger.InfoWithContext(ctx, fmt.Sprintf("[%s] Processing buffered searchGuid docs", logPrefix), map[string]interface{}{
+						"docs_count": len(docs),
+					}, nil)
+					citationMu.Lock()
+					beforeCount := len(capturedCitations)
+					citationMu.Unlock()
+					for _, item := range docs {
+						if item.URL == "" {
+							continue
+						}
+						cit := Citation{
+							URL:     item.URL,
+							Title:   item.Title,
+							Snippet: item.Quote,
+							Domain:  item.WebSiteName,
+						}
+						if u, err := url.Parse(item.URL); err == nil && cit.Domain == "" {
+							cit.Domain = u.Host
+						}
+						addCitation(cit)
+					}
+					citationMu.Lock()
+					afterCount := len(capturedCitations)
+					citationMu.Unlock()
+					d.logger.InfoWithContext(ctx, fmt.Sprintf("[%s] ✅ Citations captured from buffered docs", logPrefix), map[string]interface{}{
+						"docs_in_buffer": len(docs),
+						"new_citations":  afterCount - beforeCount,
+						"total":          afterCount,
+					}, nil)
+				}
+			} else if err != nil {
+				d.logger.WarnWithContext(ctx, fmt.Sprintf("[%s] Failed to unmarshal searchGuid docs buffer", logPrefix), map[string]interface{}{"error": err.Error()}, nil)
+			}
+		} else if err != nil {
+			d.logger.WarnWithContext(ctx, fmt.Sprintf("[%s] Failed to read searchGuid docs buffer", logPrefix), map[string]interface{}{"error": err.Error()}, nil)
+		}
+		if bufferRaw, err := page.Eval(`() => {
+			try {
+				const buf = window.__YB_SEARCHGUID_BUFFER__ || [];
+				window.__YB_SEARCHGUID_BUFFER__ = [];
+				return JSON.stringify(buf);
+			} catch (e) {
+				return "[]";
+			}
+		}`); err == nil && bufferRaw != nil {
+			var lines []string
+			if err := json.Unmarshal([]byte(bufferRaw.Value.String()), &lines); err == nil {
+				for _, line := range lines {
+					line = strings.TrimSpace(line)
+					if line == "" {
+						continue
+					}
+					d.logger.DebugWithContext(ctx, fmt.Sprintf("[%s] Processing buffered searchGuid", logPrefix), map[string]interface{}{
+						"line_len":     len(line),
+						"line_preview": line[:min(len(line), 120)],
+					}, nil)
+					parseSSEData(line)
+				}
+			} else if err != nil {
+				d.logger.WarnWithContext(ctx, fmt.Sprintf("[%s] Failed to unmarshal searchGuid buffer", logPrefix), map[string]interface{}{"error": err.Error()}, nil)
+			}
+		} else if err != nil {
+			d.logger.WarnWithContext(ctx, fmt.Sprintf("[%s] Failed to read searchGuid buffer", logPrefix), map[string]interface{}{"error": err.Error()}, nil)
+		}
+		// Fallback v2: read conversation detail items captured from /conversation/v1/detail
+		if detailRaw, err := page.Eval(`() => {
+			try {
+				const items = window.__YB_DETAIL_ITEMS__ || [];
+				window.__YB_DETAIL_ITEMS__ = [];
+				return JSON.stringify(items);
+			} catch (e) {
+				return "[]";
+			}
+		}`); err == nil && detailRaw != nil {
+			var items []struct {
+				Type string `json:"type"`
+				Docs []struct {
+					Index       int    `json:"index"`
+					DocID       string `json:"docId"`
+					Title       string `json:"title"`
+					URL         string `json:"url"`
+					Quote       string `json:"quote"`
+					WebSiteName string `json:"web_site_name"`
+					PublishTime string `json:"publish_time"`
+				} `json:"docs"`
+				Msg string `json:"msg"`
+			}
+			if err := json.Unmarshal([]byte(detailRaw.Value.String()), &items); err == nil {
+				if len(items) > 0 {
+					d.logger.InfoWithContext(ctx, fmt.Sprintf("[%s] Processing detail items from /conversation/v1/detail", logPrefix), map[string]interface{}{
+						"items_count": len(items),
+					}, nil)
+					for _, item := range items {
+						switch item.Type {
+						case "searchGuid":
+							citationMu.Lock()
+							beforeCount := len(capturedCitations)
+							citationMu.Unlock()
+							for _, doc := range item.Docs {
+								if doc.URL == "" {
+									continue
+								}
+								cit := Citation{
+									URL:     doc.URL,
+									Title:   doc.Title,
+									Snippet: doc.Quote,
+									Domain:  doc.WebSiteName,
+								}
+								if u, err := url.Parse(doc.URL); err == nil && cit.Domain == "" {
+									cit.Domain = u.Host
+								}
+								addCitation(cit)
+							}
+							citationMu.Lock()
+							afterCount := len(capturedCitations)
+							citationMu.Unlock()
+							d.logger.InfoWithContext(ctx, fmt.Sprintf("[%s] ✅ Citations captured from detail items", logPrefix), map[string]interface{}{
+								"docs_in_items": len(item.Docs),
+								"new_citations": afterCount - beforeCount,
+								"total":         afterCount,
+							}, nil)
+						case "text":
+							if item.Msg != "" {
+								citationMu.Lock()
+								fullResponseText += item.Msg
+								citationMu.Unlock()
+							}
+						}
+					}
+				}
+			} else if err != nil {
+				d.logger.WarnWithContext(ctx, fmt.Sprintf("[%s] Failed to unmarshal detail items", logPrefix), map[string]interface{}{"error": err.Error()}, nil)
+			}
+		} else if err != nil {
+			d.logger.WarnWithContext(ctx, fmt.Sprintf("[%s] Failed to read detail items", logPrefix), map[string]interface{}{"error": err.Error()}, nil)
+		}
+		if rawRaw, err := page.Eval(`() => {
+			try {
+				const raw = window.__YB_SEARCHGUID_RAW__ || [];
+				window.__YB_SEARCHGUID_RAW__ = [];
+				return JSON.stringify(raw);
+			} catch (e) {
+				return "[]";
+			}
+		}`); err == nil && rawRaw != nil {
+			var raws []string
+			if err := json.Unmarshal([]byte(rawRaw.Value.String()), &raws); err == nil {
+				for _, raw := range raws {
+					raw = strings.TrimSpace(raw)
+					if raw == "" {
+						continue
+					}
+					d.logger.WarnWithContext(ctx, fmt.Sprintf("[%s] Raw searchGuid captured", logPrefix), map[string]interface{}{
+						"raw_len":     len(raw),
+						"raw_prefix":  raw[:min(len(raw), 200)],
+						"raw_suffix":  raw[max(0, len(raw)-200):],
+						"has_docs":    strings.Contains(raw, `"docs"`),
+						"has_end":     strings.HasSuffix(strings.TrimSpace(raw), "}"),
+						"has_bracket": strings.Contains(raw, "]"),
+					}, nil)
+				}
+			} else if err != nil {
+				d.logger.WarnWithContext(ctx, fmt.Sprintf("[%s] Failed to unmarshal searchGuid raw buffer", logPrefix), map[string]interface{}{"error": err.Error()}, nil)
+			}
+		} else if err != nil {
+			d.logger.WarnWithContext(ctx, fmt.Sprintf("[%s] Failed to read searchGuid raw buffer", logPrefix), map[string]interface{}{"error": err.Error()}, nil)
+		}
+	}
+
+	// First extraction attempt
+	extractBufferedData("YUANBAO-JS-FIRST")
+
 	// STEP 6: Extract Response
 	fullText, err := d.extractResponse(ctx, page)
 	if err != nil {
@@ -513,15 +1255,111 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 	copy(finalCitations, capturedCitations)
 	citationMu.Unlock()
 
+	d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Citation capture summary", map[string]interface{}{
+		"cdp_sse_citations":    len(finalCitations),
+		"streamed_text_length": len(fullResponseText),
+		"dom_text_length":      len(fullText),
+	}, nil)
+
 	if len(finalCitations) == 0 {
-		d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] JS injection missed citations, trying DOM fallback...", nil, nil)
+		d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] No citations from CDP/JS interception, trying DOM fallback...", nil, nil)
 		domCitations := d.extractCitationsFromDOM(ctx, page)
 		if len(domCitations) > 0 {
 			finalCitations = domCitations
-			d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] DOM fallback success", map[string]interface{}{"count": len(finalCitations)}, nil)
+			d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] DOM fallback SUCCESS", map[string]interface{}{"count": len(finalCitations)}, nil)
 		} else {
-			d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] DOM fallback also failed", nil, nil)
+			d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] DOM fallback FAILED - no citations found", nil, nil)
+			d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] 🔄 Triggering REFRESH FALLBACK (refresh + /conversation/v1/detail)", nil, nil)
+
+			// Wait a bit before refresh to ensure any pending requests complete
+			time.Sleep(2 * time.Second)
+
+			if err := page.Reload(); err != nil {
+				d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] Refresh failed", map[string]interface{}{"error": err.Error()}, nil)
+			} else {
+				d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Page reloaded, waiting for load...", nil, nil)
+				_ = page.WaitLoad()
+
+				// Verify hijack script injection
+				verifyRes, verifyErr := page.Eval(`() => {
+					return {
+						injected: !!window.__YB_HIJACK_INJECTED__,
+						hasDetailItems: !!window.__YB_DETAIL_ITEMS__,
+						detailItemsCount: (window.__YB_DETAIL_ITEMS__ || []).length
+					};
+				}`)
+				if verifyErr == nil && verifyRes != nil {
+					d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Hijack script verification", map[string]interface{}{
+						"result": verifyRes.Value.String(),
+					}, nil)
+				}
+
+				// Re-inject hijack script if needed (belt and suspenders)
+				if _, err := page.Eval(hijackScript); err != nil {
+					d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] Failed to re-inject hijack after refresh", map[string]interface{}{"error": err.Error()}, nil)
+				} else {
+					d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] ✅ Hijack script re-injected after refresh", nil, nil)
+				}
+
+				// Wait for page to stabilize and API requests to complete
+				rod.Try(func() { _ = page.Timeout(8 * time.Second).WaitStable(2 * time.Second) })
+
+				// Check current URL
+				currentURL := page.MustInfo().URL
+				d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Current URL after refresh", map[string]interface{}{
+					"url": currentURL,
+				}, nil)
+
+				d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Waiting for /conversation/v1/detail API...", nil, nil)
+				time.Sleep(6 * time.Second) // Give more time for detail API to complete
+
+				// Check buffer status
+				bufferCheckRes, bufferCheckErr := page.Eval(`() => {
+					return {
+						detailItemsCount: (window.__YB_DETAIL_ITEMS__ || []).length,
+						searchGuidDocsCount: (window.__YB_SEARCHGUID_DOCS__ || []).length,
+						bufferCount: (window.__YB_SEARCHGUID_BUFFER__ || []).length
+					};
+				}`)
+				if bufferCheckErr == nil && bufferCheckRes != nil {
+					d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Buffer status before extraction", map[string]interface{}{
+						"result": bufferCheckRes.Value.String(),
+					}, nil)
+				}
+
+				// Re-extract buffered data after refresh
+				d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] 🔍 Extracting buffered data after refresh...", nil, nil)
+				extractBufferedData("YUANBAO-REFRESH-FALLBACK")
+
+				// Check if we got citations after refresh
+				citationMu.Lock()
+				afterRefreshCount := len(capturedCitations)
+				if afterRefreshCount > 0 {
+					finalCitations = make([]Citation, len(capturedCitations))
+					copy(finalCitations, capturedCitations)
+				}
+				citationMu.Unlock()
+
+				if afterRefreshCount > 0 {
+					d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] ✅ REFRESH FALLBACK SUCCESS", map[string]interface{}{
+						"citations_found": afterRefreshCount,
+					}, nil)
+				} else {
+					d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] ❌ REFRESH FALLBACK FAILED - still no citations", nil, nil)
+
+					// Last resort: try DOM extraction one more time after refresh
+					domCitationsAfterRefresh := d.extractCitationsFromDOM(ctx, page)
+					if len(domCitationsAfterRefresh) > 0 {
+						finalCitations = domCitationsAfterRefresh
+						d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] ✅ DOM extraction after refresh SUCCESS", map[string]interface{}{
+							"count": len(finalCitations),
+						}, nil)
+					}
+				}
+			}
 		}
+	} else {
+		d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Citations captured via CDP/JS", map[string]interface{}{"count": len(finalCitations)}, nil)
 	}
 
 	d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Search complete", map[string]interface{}{
@@ -538,22 +1376,19 @@ func (d *YuanbaoProvider) Search(ctx context.Context, keyword, prompt string) (*
 }
 
 func (d *YuanbaoProvider) extractCitationsFromDOM(ctx context.Context, page *rod.Page) []Citation {
-	// Enhanced JS-based citation extraction that scopes to the last response
-	// and looks for specific citation patterns (lists, reference headers)
 	citationsJS := `() => {
-		// 1. Locate the container of the LAST AI response
-		// Heuristic: The last element with a specific message/markdown class
-		const potentialContainers = Array.from(document.querySelectorAll('.markdown-body, div[class*="answer"], div[class*="response"]'));
-		if (!potentialContainers.length) return [];
+		const potentialContainers = Array.from(document.querySelectorAll(
+			'.markdown-body, div[class*="answer"], div[class*="response"], div[class*="message"], div[class*="content"], article, [class*="ChatMessage"]'
+		));
+		if (!potentialContainers.length) {
+			console.log('__YB_DEBUG__: No response containers found');
+			return [];
+		}
 		
-		// Get the last one (most recent response)
 		const lastContainer = potentialContainers[potentialContainers.length - 1];
+		console.log('__YB_DEBUG__: Found container with class:', lastContainer.className);
 		
-		// 2. Strategy A: Find Explicit Reference Lists (Ordered Lists with Links)
-		// Look for <ol> or <ul> that contains links, usually at the bottom
 		const lists = Array.from(lastContainer.querySelectorAll('ol, ul'));
-		
-		// Filter for lists that look like citations (contain external links)
 		const citationLinks = [];
 		
 		for (const list of lists) {
@@ -899,9 +1734,11 @@ func (d *YuanbaoProvider) clickSubmit(ctx context.Context, submitBtn *rod.Elemen
 }
 
 func (d *YuanbaoProvider) waitForResponseComplete(ctx context.Context, page *rod.Page) {
-	const maxRetries = 40
+	const maxWaitSeconds = 120
 	lastContent := ""
 	stableCount := 0
+	checkInterval := 1 * time.Second
+	startTime := time.Now()
 
 	contentSelectors := []string{
 		".markdown-body",
@@ -909,9 +1746,19 @@ func (d *YuanbaoProvider) waitForResponseComplete(ctx context.Context, page *rod
 		"div[class*='response']",
 		"article",
 		"div[class*='message']",
+		"div[class*='content']",
+		"[class*='ChatMessage']",
 	}
 
-	for i := 0; i < maxRetries; i++ {
+	stopButtonSelectors := []string{
+		"button[class*='stop']",
+		"button[class*='Stop']",
+		"button[aria-label*='stop']",
+		"button[aria-label*='Stop']",
+		"[class*='stop'][class*='button']",
+	}
+
+	for {
 		select {
 		case <-ctx.Done():
 			d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Context cancelled, stopping wait", nil, nil)
@@ -919,21 +1766,28 @@ func (d *YuanbaoProvider) waitForResponseComplete(ctx context.Context, page *rod
 		default:
 		}
 
-		time.Sleep(2 * time.Second)
+		if time.Since(startTime) > maxWaitSeconds*time.Second {
+			d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] waitForResponseComplete reached timeout", map[string]interface{}{
+				"maxSeconds":  maxWaitSeconds,
+				"finalLength": len(lastContent),
+			}, nil)
+			return
+		}
 
-		// 尝试获取当前内容
+		time.Sleep(checkInterval)
+
 		currentContent := ""
 		for _, sel := range contentSelectors {
 			elements, err := page.Elements(sel)
 			if err == nil && len(elements) > 0 {
-				currentContent = elements[len(elements)-1].MustText()
-				if len(currentContent) > 0 {
+				text, textErr := elements[len(elements)-1].Text()
+				if textErr == nil && len(text) > 0 {
+					currentContent = text
 					break
 				}
 			}
 		}
 
-		// 内容稳定性检测
 		if len(currentContent) > 50 {
 			if currentContent == lastContent {
 				stableCount++
@@ -942,33 +1796,57 @@ func (d *YuanbaoProvider) waitForResponseComplete(ctx context.Context, page *rod
 					"contentLen":  len(currentContent),
 				}, nil)
 
-				// 连续 2 次内容不变，检查停止按钮
-				if stableCount >= 2 {
-					// 检查是否有"停止"按钮（元宝通常显示"停止"）
-					hasStopBtn, _, _ := page.HasR("button, div, span, a", "停止")
+				if stableCount >= 3 {
+					if len(currentContent) < 500 {
+						d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] Content too short, likely error page", map[string]interface{}{
+							"contentLen":     len(currentContent),
+							"contentPreview": currentContent[:min(len(currentContent), 200)],
+						}, nil)
+						time.Sleep(2 * time.Second)
+						stableCount = 0
+						continue
+					}
+
+					hasStopBtn := false
+					for _, sel := range stopButtonSelectors {
+						exists, _, _ := page.Has(sel)
+						if exists {
+							hasStopBtn = true
+							break
+						}
+					}
+
 					if !hasStopBtn {
-						d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Response stable and no stop button, assuming complete", map[string]interface{}{
-							"contentLen": len(currentContent),
-							"retries":    i + 1,
+						hasStopBtnText, _, _ := page.HasR("button, div, span, a", "停止|Stop")
+						hasStopBtn = hasStopBtnText
+					}
+
+					if !hasStopBtn {
+						d.logger.InfoWithContext(ctx, "[YUANBAO-RPA] Response complete (stable + no stop button)", map[string]interface{}{
+							"contentLen":     len(currentContent),
+							"elapsed":        time.Since(startTime).Seconds(),
+							"contentPreview": currentContent[:min(len(currentContent), 150)],
 						}, nil)
 						return
 					}
-					// 如果还有停止按钮，重置计数继续等
-					d.logger.DebugWithContext(ctx, "[YUANBAO-RPA] Stop button still present, continuing wait", nil, nil)
+
+					d.logger.DebugWithContext(ctx, "[YUANBAO-RPA] Stop button present, response still generating", nil, nil)
 					stableCount = 0
+					checkInterval = 2 * time.Second
 				}
 			} else {
-				// 内容变化，重置计数
+				if stableCount > 0 {
+					d.logger.DebugWithContext(ctx, "[YUANBAO-RPA] Content changed, resetting stability counter", map[string]interface{}{
+						"oldLen": len(lastContent),
+						"newLen": len(currentContent),
+					}, nil)
+				}
 				lastContent = currentContent
 				stableCount = 0
+				checkInterval = 1 * time.Second
 			}
 		}
 	}
-
-	d.logger.WarnWithContext(ctx, "[YUANBAO-RPA] waitForResponseComplete reached timeout", map[string]interface{}{
-		"maxRetries":  maxRetries,
-		"finalLength": len(lastContent),
-	}, nil)
 }
 
 func (d *YuanbaoProvider) extractResponse(ctx context.Context, page *rod.Page) (string, error) {

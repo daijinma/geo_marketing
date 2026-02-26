@@ -20,6 +20,7 @@ interface SearchStatsItem {
   keyword: string;
   subQueries: string[];
   urlCount: number;
+  platforms: string[];
 }
 
 interface DomainStatsItem {
@@ -39,7 +40,7 @@ function computeStats(records: any[]): {
   const domainStatsMap = new Map<string, { total: number; byKeyword: Record<string, number> }>();
   const allKeywords = new Set<string>();
   
-  const searchStatsMap = new Map<string, { keyword: string; subQueries: string[]; urlCount: number }>();
+  const searchStatsMap = new Map<string, { keyword: string; subQueries: string[]; urlCount: number; platforms: Set<string> }>();
   
   records.forEach(record => {
     const queriesLen = record.queries?.length || 0;
@@ -73,11 +74,15 @@ function computeStats(records: any[]): {
         keyword,
         subQueries: subQueries.slice(),
         urlCount: 0,
+        platforms: new Set(),
       });
     }
     
     const item = searchStatsMap.get(groupKey)!;
     item.urlCount += recordCitationCount;
+    if (record.platform) {
+      item.platforms.add(record.platform);
+    }
     
     record.citations?.forEach((cite: any) => {
       if (!cite.domain) return;
@@ -91,7 +96,10 @@ function computeStats(records: any[]): {
     });
   });
   
-  const searchStats = Array.from(searchStatsMap.values()).sort((a, b) => {
+  const searchStats = Array.from(searchStatsMap.values()).map(item => ({
+    ...item,
+    platforms: Array.from(item.platforms).sort()
+  })).sort((a, b) => {
     if (a.keyword !== b.keyword) {
       return a.keyword.localeCompare(b.keyword);
     }
@@ -226,31 +234,42 @@ export function MergedTaskViewer({ taskIds, onClose }: MergedTaskViewerProps) {
                         <thead className="bg-accent/20 border-b border-border sticky top-0">
                           <tr>
                             <th className="px-4 py-2 font-medium">原始搜索词</th>
+                            <th className="px-4 py-2 font-medium">平台</th>
                             <th className="px-4 py-2 font-medium">Sub Query</th>
                             <th className="px-4 py-2 font-medium text-right">URL 数</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
-                          {stats.searchStats.map((item, idx) => {
-                            let displayText: string;
-                            if (item.subQueries.length === 0) {
-                              displayText = '--';
-                            } else if (item.subQueries.length === 1) {
-                              displayText = item.subQueries[0];
-                            } else {
-                              displayText = `[${item.subQueries.map(q => `'${q}'`).join(', ')}]`;
-                            }
-                            
-                            return (
-                              <tr key={idx} className="hover:bg-accent/10">
-                                <td className="px-4 py-2 font-medium">{item.keyword}</td>
-                                <td className="px-4 py-2 font-mono text-xs" title={displayText}>
-                                  {displayText.length > 60 ? displayText.slice(0, 60) + '...' : displayText}
-                                </td>
-                                <td className="px-4 py-2 text-right">{item.urlCount}</td>
-                              </tr>
-                            );
-                          })}
+                          {stats.searchStats.map((item, idx) => (
+                            <tr key={idx} className="hover:bg-accent/10">
+                              <td className="px-4 py-2 font-medium align-top">{item.keyword}</td>
+                              <td className="px-4 py-2 align-top">
+                                {item.platforms && item.platforms.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {item.platforms.map(p => (
+                                      <span key={p} className="bg-accent px-1.5 py-0.5 rounded text-xs capitalize">
+                                        {p}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground">-</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-2 font-mono text-xs align-top">
+                                {item.subQueries.length > 0 ? (
+                                  <div className="space-y-1">
+                                    {item.subQueries.map((q, i) => (
+                                      <div key={i} className="break-words">{q}</div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground">--</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-2 text-right align-top">{item.urlCount}</td>
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>
