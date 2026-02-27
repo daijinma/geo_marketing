@@ -57,6 +57,14 @@ interface WailsApp {
   CheckLoginStatus(platform: string): Promise<{ success: boolean; isLoggedIn: boolean }>;
   BatchCheckLoginStatus(): Promise<void>;
 
+  // Publish
+  StartPublish(platforms: string[], accountIDs: Record<string, string>, article: { title: string; content: string; cover_image?: string }): Promise<void>;
+  ResumePublish(taskID: string): Promise<void>;
+  CancelPublish(taskID: string): Promise<void>;
+
+  // AI Publish Assist
+  SetAIPublishConfig(baseURL: string, apiKey: string): Promise<void>;
+
   // Logs
   GetLogs(limit: number, offset: number, filtersJSON: string): Promise<{ success: boolean; logs: LogEntry[]; total: number }>;
   AddLog(level: string, source: string, message: string, detailsJSON: string, sessionID: string, correlationID: string, component: string, userAction: string, performanceMS: number | null, taskID: number | null): Promise<void>;
@@ -352,6 +360,34 @@ export const wailsAPI = {
   browser: {
     openURL: (url: string) => {
       BrowserOpenURL(url);
+    },
+  },
+  publish: {
+    startPublish: async (
+      platforms: string[],
+      accountIDs: Record<string, string>,
+      article: { title: string; content: string; cover_image?: string },
+    ) => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.StartPublish(platforms, accountIDs, article);
+    },
+    resumePublish: async (taskID: string) => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.ResumePublish(taskID);
+    },
+    cancelPublish: async (taskID: string) => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.CancelPublish(taskID);
+    },
+  },
+  aiPublish: {
+    setConfig: async (baseURL: string, apiKey: string) => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.SetAIPublishConfig(baseURL, apiKey);
     },
   },
 };

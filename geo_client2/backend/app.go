@@ -13,11 +13,13 @@ import (
 	"time"
 
 	"geo_client2/backend/account"
+	"geo_client2/backend/aiassist"
 	"geo_client2/backend/auth"
 	"geo_client2/backend/database"
 	"geo_client2/backend/database/repositories"
 	"geo_client2/backend/logger"
 	"geo_client2/backend/provider"
+	"geo_client2/backend/publisher"
 	"geo_client2/backend/search"
 	"geo_client2/backend/settings"
 	"geo_client2/backend/task"
@@ -26,15 +28,16 @@ import (
 )
 
 type App struct {
-	ctx          context.Context
-	accountSvc   *account.Service
-	authSvc      *auth.Service
-	settingsSvc  *settings.Service
-	taskManager  *task.Manager
-	searchSvc    *search.Service
-	providerFact *provider.Factory
-	logRepo      *repositories.LogRepository
-	loginCancel  func()
+	ctx            context.Context
+	accountSvc     *account.Service
+	authSvc        *auth.Service
+	settingsSvc    *settings.Service
+	taskManager    *task.Manager
+	searchSvc      *search.Service
+	providerFact   *provider.Factory
+	publishManager *publisher.Manager
+	logRepo        *repositories.LogRepository
+	loginCancel    func()
 }
 
 func NewApp() *App {
@@ -74,6 +77,9 @@ func (a *App) Startup(ctx context.Context) {
 	headlessStr, _ := a.settingsSvc.Get("browser_headless")
 	headless := headlessStr != "false" // Default to true if not set or "true"
 	a.providerFact = provider.NewFactory(headless, 60000)
+
+	// Initialize publish manager
+	a.publishManager = publisher.NewManager(a.providerFact)
 
 	// Initialize task executor and manager
 	executor := task.NewExecutor(taskRepo, a.providerFact, accountRepo, ctx)
@@ -115,6 +121,60 @@ func (a *App) SetSetting(key, value string) error {
 		a.providerFact.SetHeadless(value != "false")
 	}
 	return a.settingsSvc.Set(key, value)
+}
+
+// AI publish assist methods
+func (a *App) SetAIPublishConfig(baseURL, apiKey string) error {
+	if a.settingsSvc == nil {
+		return fmt.Errorf("settings service not initialized")
+	}
+	if err := a.settingsSvc.Set("ai_publish_base_url", baseURL); err != nil {
+		return err
+	}
+	if err := a.settingsSvc.Set("ai_publish_api_key", apiKey); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (a *App) AIPublishDecision(goal, url, title, dom, screenshot string) (map[string]interface{}, error) {
+	if a.settingsSvc == nil {
+		return nil, fmt.Errorf("settings service not initialized")
+	}
+	baseURL, err := a.settingsSvc.Get("ai_publish_base_url")
+	if err != nil {
+		return nil, err
+	}
+	apiKey, err := a.settingsSvc.Get("ai_publish_api_key")
+	if err != nil {
+		return nil, err
+	}
+	client, err := aiassist.NewDifyClient(baseURL, apiKey)
+	if err != nil {
+		return nil, err
+	}
+	outputs, err := client.RunWorkflow(a.ctx, map[string]interface{}{
+		"goal":       goal,
+		"url":        url,
+		"title":      title,
+		"dom":        dom,
+		"screenshot": screenshot,
+	})
+	if err != nil {
+		return nil, err
+	}
+	decision, err := aiassist.ParseDecision(outputs)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{
+		"action":     decision.Action,
+		"selector":   decision.Selector,
+		"value":      decision.Value,
+		"ms":         decision.MS,
+		"reason":     decision.Reason,
+		"confidence": decision.Confidence,
+	}, nil
 }
 
 // Task methods
@@ -742,4 +802,53 @@ func (a *App) ExportLogs(timeRange string) (map[string]interface{}, error) {
 		"path":    filepath,
 		"count":   lines,
 	}, nil
+}
+
+// --- Publish methods ---
+
+// StartPublish starts RPA-based article publishing to multiple social media platforms.
+// platforms: list of platform IDs; accountIDs: map of platform -> accountID; article: title + content.
+func (a *App) StartPublish(platforms []string, accountIDs map[string]string, article publisher.Article) error {
+	if a.publishManager == nil {
+		return fmt.Errorf("publish manager not initialized")
+	}
+
+	emit := func(event string, data interface{}) {
+		runtime.EventsEmit(a.ctx, event, data)
+	}
+
+	aiEnabled := true
+	if a.settingsSvc != nil {
+		value, err := a.settingsSvc.Get("ai_publish_assist")
+		if err == nil && value == "false" {
+			aiEnabled = false
+		}
+	}
+
+	baseURL, _ := a.settingsSvc.Get("ai_publish_base_url")
+	apiKey, _ := a.settingsSvc.Get("ai_publish_api_key")
+
+	aiConfig := publisher.AIPublishConfig{
+		Enabled: aiEnabled,
+		BaseURL: baseURL,
+		APIKey:  apiKey,
+	}
+
+	return a.publishManager.StartPublish(a.ctx, platforms, accountIDs, article, emit, aiConfig)
+}
+
+// ResumePublish signals a paused publish job (waiting for manual intervention) to continue.
+func (a *App) ResumePublish(taskID string) error {
+	if a.publishManager == nil {
+		return fmt.Errorf("publish manager not initialized")
+	}
+	return a.publishManager.ResumePublish(taskID)
+}
+
+// CancelPublish cancels a running publish job.
+func (a *App) CancelPublish(taskID string) error {
+	if a.publishManager == nil {
+		return fmt.Errorf("publish manager not initialized")
+	}
+	return a.publishManager.CancelPublish(taskID)
 }

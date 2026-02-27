@@ -21,12 +21,14 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-type PlatformKey = 'deepseek' | 'doubao' | 'xiaohongshu' | 'yiyan' | 'yuanbao';
+type PlatformKey =
+  | 'deepseek' | 'doubao' | 'yiyan' | 'yuanbao'
+  | 'xiaohongshu' | 'zhihu' | 'sohu' | 'csdn' | 'qie' | 'baijiahao';
 
 interface PlatformConfig {
   id: PlatformKey;
   name: string;
-  category: 'ai' | 'platform';
+  category: 'ai' | 'social_media';
 }
 
 export default function Auth() {
@@ -58,11 +60,18 @@ export default function Auth() {
   const [batchProgress, setBatchProgress] = useState<{ checked: number; total: number }>({ checked: 0, total: 0 });
 
   const platforms: PlatformConfig[] = [
-    { id: 'deepseek', name: 'DeepSeek', category: 'ai' },
-    { id: 'doubao', name: '豆包', category: 'ai' },
-    { id: 'yiyan', name: '文心一言', category: 'ai' },
-    { id: 'yuanbao', name: '腾讯元宝', category: 'ai' },
-    { id: 'xiaohongshu', name: '小红书', category: 'platform' },
+    // AI 大模型
+    { id: 'deepseek',    name: 'DeepSeek',  category: 'ai' },
+    { id: 'doubao',      name: '豆包',      category: 'ai' },
+    { id: 'yiyan',       name: '文心一言',  category: 'ai' },
+    { id: 'yuanbao',     name: '腾讯元宝',  category: 'ai' },
+    // 社交媒体发布平台
+    { id: 'zhihu',       name: '知乎',      category: 'social_media' },
+    { id: 'sohu',        name: '搜狐号',    category: 'social_media' },
+    { id: 'csdn',        name: 'CSDN',      category: 'social_media' },
+    { id: 'qie',         name: '企鹅号',    category: 'social_media' },
+    { id: 'baijiahao',   name: '百家号',    category: 'social_media' },
+    { id: 'xiaohongshu', name: '小红书',    category: 'social_media' },
   ];
 
   useEffect(() => {
@@ -249,7 +258,7 @@ export default function Auth() {
             {isAI ? <Brain className={`w-4 h-4 shrink-0 ${iconColorClass}`} /> : <Share2 className={`w-4 h-4 shrink-0 ${iconColorClass}`} />}
             <span className="font-bold text-sm truncate">{platform.name}</span>
             <span className={`hidden sm:inline-block text-[10px] px-1.5 py-0.5 rounded-full uppercase font-bold tracking-wider shrink-0 ${isAI ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'}`}>
-              {isAI ? 'AI' : 'Platform'}
+              {isAI ? 'AI' : '社交媒体'}
             </span>
             {status !== null && !isChecking && (
               <span title={status ? "登录状态正常" : "登录已过期"}>
@@ -387,7 +396,7 @@ export default function Auth() {
   };
 
   const aiPlatforms = platforms.filter(p => p.category === 'ai');
-  const socialPlatforms = platforms.filter(p => p.category === 'platform');
+  const socialPlatforms = platforms.filter(p => p.category === 'social_media');
 
   return (
     <div className="p-4 md:p-6 space-y-8 max-w-[1600px] mx-auto">

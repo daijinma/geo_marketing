@@ -1,7 +1,14 @@
 import { create } from 'zustand';
 import { wailsAPI, type Account } from '@/utils/wails-api';
 
-type PlatformName = 'deepseek' | 'doubao' | 'xiaohongshu' | 'yiyan' | 'yuanbao';
+type PlatformName =
+  | 'deepseek' | 'doubao' | 'yiyan' | 'yuanbao'
+  | 'xiaohongshu' | 'zhihu' | 'sohu' | 'csdn' | 'qie' | 'baijiahao';
+
+const ALL_PLATFORMS: PlatformName[] = [
+  'deepseek', 'doubao', 'yiyan', 'yuanbao',
+  'xiaohongshu', 'zhihu', 'sohu', 'csdn', 'qie', 'baijiahao',
+];
 
 interface AccountState {
   // Active accounts per platform
@@ -24,20 +31,8 @@ interface AccountState {
 }
 
 export const useAccountStore = create<AccountState>((set, get) => ({
-  activeAccounts: {
-    deepseek: null,
-    doubao: null,
-    xiaohongshu: null,
-    yiyan: null,
-    yuanbao: null,
-  },
-  accountsByPlatform: {
-    deepseek: [],
-    doubao: [],
-    xiaohongshu: [],
-    yiyan: [],
-    yuanbao: [],
-  },
+  activeAccounts: Object.fromEntries(ALL_PLATFORMS.map(p => [p, null])) as unknown as Record<PlatformName, Account | null>,
+  accountsByPlatform: Object.fromEntries(ALL_PLATFORMS.map(p => [p, []])) as unknown as Record<PlatformName, Account[]>,
   loading: {},
 
   loadAccounts: async (platform: PlatformName) => {
@@ -119,7 +114,7 @@ export const useAccountStore = create<AccountState>((set, get) => ({
       await wailsAPI.account.delete(accountID);
       // Find which platform this account belongs to and refresh
       const state = get();
-      for (const platform of ['deepseek', 'doubao', 'xiaohongshu', 'yiyan', 'yuanbao'] as PlatformName[]) {
+      for (const platform of ALL_PLATFORMS) {
         const account = state.accountsByPlatform[platform].find((a) => a.account_id === accountID);
         if (account) {
           await get().loadAccounts(platform);
@@ -141,7 +136,7 @@ export const useAccountStore = create<AccountState>((set, get) => ({
       await wailsAPI.account.updateName(accountID, name);
       // Refresh accounts
       const state = get();
-      for (const platform of ['deepseek', 'doubao', 'xiaohongshu', 'yiyan', 'yuanbao'] as PlatformName[]) {
+      for (const platform of ALL_PLATFORMS) {
         const account = state.accountsByPlatform[platform].find((a) => a.account_id === accountID);
         if (account) {
           await get().loadAccounts(platform);

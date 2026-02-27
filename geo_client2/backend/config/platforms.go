@@ -8,6 +8,7 @@ type PlatformConfig struct {
 }
 
 var Platforms = map[string]PlatformConfig{
+	// AI 大模型
 	"doubao": {
 		Name:     "Doubao",
 		LoginURL: "https://www.doubao.com/",
@@ -20,12 +21,6 @@ var Platforms = map[string]PlatformConfig{
 		HomeURL:  "https://chat.deepseek.com/",
 		Category: "ai_model",
 	},
-	"xiaohongshu": {
-		Name:     "Xiaohongshu",
-		LoginURL: "https://www.xiaohongshu.com/",
-		HomeURL:  "https://www.xiaohongshu.com/",
-		Category: "publishing",
-	},
 	"yiyan": {
 		Name:     "Yiyan",
 		LoginURL: "https://yiyan.baidu.com/",
@@ -37,6 +32,43 @@ var Platforms = map[string]PlatformConfig{
 		LoginURL: "https://yuanbao.tencent.com/login",
 		HomeURL:  "https://yuanbao.tencent.com/",
 		Category: "ai_model",
+	},
+	// 社交媒体发布平台
+	"xiaohongshu": {
+		Name:     "小红书",
+		LoginURL: "https://www.xiaohongshu.com/",
+		HomeURL:  "https://www.xiaohongshu.com/",
+		Category: "social_media",
+	},
+	"zhihu": {
+		Name:     "知乎",
+		LoginURL: "https://www.zhihu.com/signin",
+		HomeURL:  "https://www.zhihu.com",
+		Category: "social_media",
+	},
+	"sohu": {
+		Name:     "搜狐号",
+		LoginURL: "https://mp.sohu.com/mpfe/v4/login",
+		HomeURL:  "https://mp.sohu.com",
+		Category: "social_media",
+	},
+	"csdn": {
+		Name:     "CSDN",
+		LoginURL: "https://passport.csdn.net/login",
+		HomeURL:  "https://www.csdn.net",
+		Category: "social_media",
+	},
+	"qie": {
+		Name:     "企鹅号",
+		LoginURL: "https://om.qq.com/userAuth/index",
+		HomeURL:  "https://om.qq.com",
+		Category: "social_media",
+	},
+	"baijiahao": {
+		Name:     "百家号",
+		LoginURL: "https://baijiahao.baidu.com/builder/theme/bjh/login",
+		HomeURL:  "https://baijiahao.baidu.com",
+		Category: "social_media",
 	},
 }
 
@@ -75,12 +107,16 @@ func GetAIModelPlatforms() []string {
 	return platforms
 }
 
-func GetPublishingPlatforms() []string {
+func GetSocialMediaPlatforms() []string {
 	platforms := []string{}
 	for key, config := range Platforms {
-		if config.Category == "publishing" {
+		if config.Category == "social_media" {
 			platforms = append(platforms, key)
 		}
 	}
 	return platforms
+}
+
+func IsSocialMediaPlatform(platform string) bool {
+	return GetPlatformCategory(platform) == "social_media"
 }

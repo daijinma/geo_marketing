@@ -4,6 +4,18 @@ import { toast } from 'sonner';
 import { wailsAPI } from '@/utils/wails-api';
 import { exportMultipleRecordsCitations } from '@/utils/excelExport';
 
+function getRecordSummary(record: any): string {
+  const citations = record?.citations || [];
+  for (const cite of citations) {
+    if (cite?.snippet && cite.snippet.trim()) {
+      return cite.snippet.trim();
+    }
+  }
+  const body = (record?.full_answer || '').trim();
+  if (!body) return '';
+  return body.length > 160 ? `${body.slice(0, 160)}...` : body;
+}
+
 interface MergedTaskViewerProps {
   taskIds: number[];
   onClose: () => void;
@@ -335,8 +347,8 @@ export function MergedTaskViewer({ taskIds, onClose }: MergedTaskViewerProps) {
                     暂无记录
                   </div>
                 ) : (
-                  <div className="border border-border rounded-lg overflow-hidden">
-                    <table className="w-full text-sm text-left">
+                  <div className="border border-border rounded-lg overflow-x-auto">
+                    <table className="w-full text-sm text-left table-fixed" style={{ minWidth: '1600px' }}>
                       <thead className="bg-accent/50 border-b border-border">
                         <tr>
                           <th className="w-10 px-4 py-2"></th>
@@ -344,7 +356,8 @@ export function MergedTaskViewer({ taskIds, onClose }: MergedTaskViewerProps) {
                           <th className="px-4 py-2 font-medium">轮次</th>
                           <th className="px-4 py-2 font-medium">平台</th>
                           <th className="px-4 py-2 font-medium">关键词</th>
-                          <th className="px-4 py-2 font-medium">回答摘要</th>
+                          <th className="w-64 px-4 py-2 font-medium">摘要</th>
+                          <th className="w-64 px-4 py-2 font-medium">正文</th>
                           <th className="px-4 py-2 font-medium">耗时</th>
                           <th className="px-4 py-2 font-medium">状态</th>
                           <th className="px-4 py-2 font-medium">时间</th>
@@ -369,7 +382,12 @@ export function MergedTaskViewer({ taskIds, onClose }: MergedTaskViewerProps) {
                               <td className="px-4 py-3 capitalize">{record.platform}</td>
                               <td className="px-4 py-3 font-medium">{record.keyword}</td>
                               <td className="px-4 py-3">
-                                <div className="max-w-xs truncate" title={record.full_answer}>
+                                <div className="max-h-20 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-relaxed" title={getRecordSummary(record)}>
+                                  {getRecordSummary(record) || '-'}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="max-h-20 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-relaxed" title={record.full_answer}>
                                   {record.full_answer || '-'}
                                 </div>
                               </td>
@@ -388,7 +406,7 @@ export function MergedTaskViewer({ taskIds, onClose }: MergedTaskViewerProps) {
                             
                             {expandedRecords.includes(record.id) && (
                               <tr key={`${record.id}-details`}>
-                                <td colSpan={9} className="bg-accent/5 p-0">
+                                <td colSpan={10} className="bg-accent/5 p-0">
                                   <div className="p-4 space-y-4 border-b border-border">
                                     <div>
                                       <h4 className="font-semibold mb-2 text-xs uppercase tracking-wider text-muted-foreground">完整回答</h4>

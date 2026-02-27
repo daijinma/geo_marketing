@@ -4,6 +4,9 @@ import { wailsAPI } from '@/utils/wails-api';
 
 export default function Settings() {
   const [headless, setHeadless] = useState(true);
+  const [aiPublishEnabled, setAIPublishEnabled] = useState(true);
+  const [aiBaseURL, setAIBaseURL] = useState('');
+  const [aiApiKey, setAIApiKey] = useState('');
 
   useEffect(() => {
     loadSettings();
@@ -13,6 +16,14 @@ export default function Settings() {
     try {
       const value = await wailsAPI.settings.get('browser_headless');
       setHeadless(value !== 'false'); // Default to true if not set or not 'false'
+
+      const aiEnabledValue = await wailsAPI.settings.get('ai_publish_assist');
+      setAIPublishEnabled(aiEnabledValue !== 'false');
+
+      const baseURL = await wailsAPI.settings.get('ai_publish_base_url');
+      const apiKey = await wailsAPI.settings.get('ai_publish_api_key');
+      setAIBaseURL(baseURL || '');
+      setAIApiKey(apiKey || '');
     } catch (error) {
       console.error('Load settings failed', error);
     }
@@ -24,6 +35,23 @@ export default function Settings() {
       await wailsAPI.settings.set('browser_headless', checked.toString());
     } catch (error) {
       console.error('Save settings failed', error);
+    }
+  };
+
+  const handleAIPublishToggle = async (checked: boolean) => {
+    setAIPublishEnabled(checked);
+    try {
+      await wailsAPI.settings.set('ai_publish_assist', checked.toString());
+    } catch (error) {
+      console.error('Save AI publish setting failed', error);
+    }
+  };
+
+  const handleSaveAIPublishConfig = async () => {
+    try {
+      await wailsAPI.aiPublish.setConfig(aiBaseURL.trim(), aiApiKey.trim());
+    } catch (error) {
+      console.error('Save AI publish config failed', error);
     }
   };
 
@@ -55,6 +83,57 @@ export default function Settings() {
                     checked={headless} 
                     onCheckedChange={handleHeadlessChange} 
                 />
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
+          <div className="flex flex-col space-y-1.5 p-6">
+            <h3 className="text-2xl font-semibold leading-none tracking-tight">AI 发布辅助</h3>
+            <p className="text-sm text-muted-foreground">调用 Dify Workflow 获取自动化操作指令。</p>
+          </div>
+          <div className="p-6 pt-0 space-y-6">
+            <div className="flex items-center justify-between space-x-2">
+              <div className="space-y-1">
+                <label htmlFor="ai-publish-assist" className="text-base font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">AI 发布辅助</label>
+                <p className="text-sm text-muted-foreground">
+                  默认开启。关闭后发布流程将回退为人工操作。
+                </p>
+              </div>
+              <Switch
+                id="ai-publish-assist"
+                checked={aiPublishEnabled}
+                onCheckedChange={handleAIPublishToggle}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Dify Base URL</label>
+                <input
+                  value={aiBaseURL}
+                  onChange={(e) => setAIBaseURL(e.target.value)}
+                  placeholder="http://levi.duanjieai.com/v1"
+                  className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Dify API Key</label>
+                <input
+                  value={aiApiKey}
+                  onChange={(e) => setAIApiKey(e.target.value)}
+                  placeholder="app-xxxxxxxxxxxxxxxx"
+                  className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+                />
+              </div>
+              <div className="flex justify-end">
+                <button
+                  onClick={handleSaveAIPublishConfig}
+                  className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  保存配置
+                </button>
+              </div>
             </div>
           </div>
         </div>

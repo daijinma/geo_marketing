@@ -5,6 +5,7 @@ import {
   ListTodo,
   FileText,
   Search,
+  Send,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -15,6 +16,7 @@ export default function Sidebar() {
     { path: '/', icon: LayoutDashboard, label: '首页' },
     { path: '/search', icon: Search, label: '大模型搜索' },
     { path: '/auth', icon: Shield, label: '授权列表' },
+    { path: '/publish', icon: Send, label: '一键发文' },
     { path: '/tasks', icon: ListTodo, label: '任务列表' },
     { path: '/logs', icon: FileText, label: '系统控制台' },
   ];

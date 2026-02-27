@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
 import { wailsAPI } from '@/utils/wails-api';
 import { exportMultipleRecordsCitations } from '@/utils/excelExport';
+import { hasNamedCaptureGroups } from '@/utils/browser-features';
 
 interface LocalTaskDetailProps {
   taskId: number;
@@ -50,6 +51,18 @@ function stripDoubaoBlockPrefix(text: string): string {
   if (endIdx === -1) return text;
   const rest = trimmed.slice(endIdx + 2);
   return rest.trimStart();
+}
+
+function getRecordSummary(record: any): string {
+  const citations = record?.citations || [];
+  for (const cite of citations) {
+    if (cite?.snippet && cite.snippet.trim()) {
+      return cite.snippet.trim();
+    }
+  }
+  const body = stripDoubaoBlockPrefix(record?.full_answer || '').trim();
+  if (!body) return '';
+  return body.length > 160 ? `${body.slice(0, 160)}...` : body;
 }
 
 function computeStats(records: any[]): {
@@ -281,11 +294,37 @@ export function LocalTaskDetail({ taskId, onClose }: LocalTaskDetailProps) {
                 </div>
                 <div>
                   <div className="text-muted-foreground">关键词</div>
-                  <div className="font-medium whitespace-pre-wrap break-words max-h-32 overflow-y-auto" title={taskData.keywords}>{taskData.keywords}</div>
+                  <div className="font-medium max-h-32 overflow-y-auto">
+                    {(() => {
+                      const keywords = typeof taskData.keywords === 'string' 
+                        ? taskData.keywords.split(',').map((k: string) => k.trim()).filter(Boolean)
+                        : Array.isArray(taskData.keywords) ? taskData.keywords : [];
+                      return keywords.length > 0 ? (
+                        <div className="flex flex-col gap-0.5">
+                          {keywords.map((kw: string, idx: number) => (
+                            <span key={idx} className="block">{kw}</span>
+                          ))}
+                        </div>
+                      ) : taskData.keywords;
+                    })()}
+                  </div>
                 </div>
                 <div>
                   <div className="text-muted-foreground">平台</div>
-                  <div className="font-medium capitalize whitespace-pre-wrap break-words">{taskData.platforms}</div>
+                  <div className="font-medium capitalize">
+                    {(() => {
+                      const platforms = typeof taskData.platforms === 'string'
+                        ? taskData.platforms.split(',').map((p: string) => p.trim()).filter(Boolean)
+                        : Array.isArray(taskData.platforms) ? taskData.platforms : [];
+                      return platforms.length > 0 ? (
+                        <div className="flex flex-col gap-0.5">
+                          {platforms.map((p: string, idx: number) => (
+                            <span key={idx} className="block">{p}</span>
+                          ))}
+                        </div>
+                      ) : taskData.platforms;
+                    })()}
+                  </div>
                 </div>
                 <div>
                   <div className="text-muted-foreground">进度</div>
@@ -454,22 +493,25 @@ export function LocalTaskDetail({ taskId, onClose }: LocalTaskDetailProps) {
                   </div>
                 ) : (
                   <div className="border border-border rounded-lg overflow-x-auto">
-                    <table className="w-full text-sm text-left table-fixed" style={{ writingMode: 'horizontal-tb', minWidth: '1200px' }}>
+                    <table className="w-full text-sm text-left table-fixed" style={{ writingMode: 'horizontal-tb' }}>
                       <thead className="bg-accent/50 border-b border-border">
                         <tr>
                           <th className="w-12 px-4 py-2" style={{ writingMode: 'horizontal-tb' }}></th>
                           <th className="w-16 px-4 py-2 font-medium whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>轮次</th>
                           <th className="w-24 px-4 py-2 font-medium whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>平台</th>
                           <th className="w-48 px-4 py-2 font-medium whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>关键词</th>
-                          <th className="px-4 py-2 font-medium whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>回答摘要</th>
                           <th className="w-24 px-4 py-2 font-medium whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>耗时</th>
                           <th className="w-20 px-4 py-2 font-medium whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>状态</th>
                           <th className="w-40 px-4 py-2 font-medium whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>时间</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
+                        <tr>
+                        <td colSpan={7}>
                         {records.map((record) => (
-                          <tbody key={record.id}>
+                          <div key={record.id}>
+                          <table style={{width:"100%"}}> 
+                          <tbody>
                             <tr
                               className="hover:bg-accent/10 transition-colors cursor-pointer"
                               onClick={() => toggleRecord(record.id)}
@@ -485,11 +527,6 @@ export function LocalTaskDetail({ taskId, onClose }: LocalTaskDetailProps) {
                               <td className="px-4 py-3 capitalize whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>{record.platform}</td>
                               <td className="px-4 py-3 font-medium" style={{ writingMode: 'horizontal-tb' }}>
                                 <div className="truncate" title={record.keyword} style={{ writingMode: 'horizontal-tb' }}>{record.keyword}</div>
-                              </td>
-                              <td className="px-4 py-3" style={{ writingMode: 'horizontal-tb' }}>
-                                <div className="truncate" title={stripDoubaoBlockPrefix(record.full_answer || '')} style={{ writingMode: 'horizontal-tb' }}>
-                                  {stripDoubaoBlockPrefix(record.full_answer || '') || '-'}
-                                </div>
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap" style={{ writingMode: 'horizontal-tb' }}>{record.response_time_ms}ms</td>
                               <td className="px-4 py-3" style={{ writingMode: 'horizontal-tb' }}>
@@ -513,7 +550,7 @@ export function LocalTaskDetail({ taskId, onClose }: LocalTaskDetailProps) {
                             {/* Expanded Details Row */}
                             {expandedRecords.includes(record.id) && (
                               <tr>
-                                <td colSpan={8} className="bg-accent/5 p-0">
+                                <td colSpan={11} className="bg-accent/5 p-0">
                                   <div className="p-4 space-y-4 border-b border-border">
                                     {/* Full Answer */}
                                     <div>
@@ -521,23 +558,35 @@ export function LocalTaskDetail({ taskId, onClose }: LocalTaskDetailProps) {
                                         <h4 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">完整回答</h4>
                                         <button
                                           className="px-2 py-1 bg-primary text-white text-xs rounded hover:bg-primary/90"
-                                          onClick={() => navigator.clipboard.writeText(stripDoubaoBlockPrefix(record.full_answer || '无回答内容'))}
+                                          onClick={() => {
+                                            navigator.clipboard
+                                              .writeText(stripDoubaoBlockPrefix(record.full_answer || '无回答内容'))
+                                              .then(() => {
+                                                toast.success('复制成功');
+                                              });
+                                          }}
                                         >
                                           复制内容
                                         </button>
                                       </div>
-                                      <div className="bg-background border border-border rounded-md p-4 max-h-96 overflow-y-auto text-sm leading-relaxed">
-                                        {stripDoubaoBlockPrefix(record.full_answer || '') ? (
-                                          <ReactMarkdown 
-                                            remarkPlugins={[remarkGfm]}
-                                            className="prose dark:prose-invert max-w-none [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_h1]:text-lg [&_h1]:font-bold [&_h2]:text-base [&_h2]:font-bold [&_h3]:text-sm [&_h3]:font-bold [&_p]:mb-2 last:[&_p]:mb-0 [&_table]:w-full [&_table]:border-collapse [&_table]:border [&_table]:border-border [&_table]:mb-4 [&_th]:border [&_th]:border-border [&_th]:bg-accent/20 [&_th]:p-2 [&_th]:text-left [&_th]:font-bold [&_td]:border [&_td]:border-border [&_td]:p-2"
-                                          >
-                                            {stripDoubaoBlockPrefix(record.full_answer || '')}
-                                          </ReactMarkdown>
-                                        ) : (
-                                          '无回答内容'
-                                        )}
-                                      </div>
+                                       <div className="bg-background border border-border rounded-md p-4 max-h-96 overflow-y-auto text-sm leading-relaxed">
+                                         {stripDoubaoBlockPrefix(record.full_answer || '') ? (
+                                           hasNamedCaptureGroups() ? (
+                                             <ReactMarkdown 
+                                               remarkPlugins={[remarkGfm]}
+                                               className="prose dark:prose-invert max-w-none [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_h1]:text-lg [&_h1]:font-bold [&_h2]:text-base [&_h2]:font-bold [&_h3]:text-sm [&_h3]:font-bold [&_p]:mb-2 last:[&_p]:mb-0 [&_table]:w-full [&_table]:border-collapse [&_table]:border [&_table]:border-border [&_table]:mb-4 [&_th]:border [&_th]:border-border [&_th]:bg-accent/20 [&_th]:p-2 [&_th]:text-left [&_th]:font-bold [&_td]:border [&_td]:border-border [&_td]:p-2"
+                                             >
+                                               {stripDoubaoBlockPrefix(record.full_answer || '')}
+                                             </ReactMarkdown>
+                                           ) : (
+                                             <div className="whitespace-pre-wrap break-words font-sans text-muted-foreground">
+                                               {stripDoubaoBlockPrefix(record.full_answer || '')}
+                                             </div>
+                                           )
+                                         ) : (
+                                           '无回答内容'
+                                         )}
+                                       </div>
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -603,7 +652,11 @@ export function LocalTaskDetail({ taskId, onClose }: LocalTaskDetailProps) {
                               </tr>
                             )}
                           </tbody>
+                          </table>
+                          </div>
                         ))}
+                      </td>
+                      </tr>
                       </tbody>
                     </table>
                   </div>

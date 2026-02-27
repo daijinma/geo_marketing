@@ -13,7 +13,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 11
+const schemaVersion = 12
 
 var db *sql.DB
 
@@ -121,6 +121,13 @@ func runMigrations() error {
 			}
 		}
 
+		// Migrate from version 11 to 12: Add publish_tasks table
+		if currentVersion <= 11 {
+			if err := migrateToV12(); err != nil {
+				return fmt.Errorf("failed to migrate to v12: %w", err)
+			}
+		}
+
 		_, err = GetDB().Exec("UPDATE db_version SET version = ?, updated_at = datetime('now') WHERE id = 1", schemaVersion)
 		if err != nil {
 			return fmt.Errorf("failed to update version: %w", err)
@@ -144,6 +151,43 @@ func migrateToV10() error {
 			return fmt.Errorf("failed to create index on accounts(category): %w", err)
 		}
 	}
+	return nil
+}
+
+// migrateToV12 migrates database from version 11 to 12.
+// Adds publish_tasks table for article publishing jobs.
+func migrateToV12() error {
+	db := GetDB()
+
+	var exists int
+	db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='publish_tasks'").Scan(&exists)
+	if exists == 0 {
+		_, err := db.Exec(`
+			CREATE TABLE IF NOT EXISTS publish_tasks (
+				id         INTEGER PRIMARY KEY AUTOINCREMENT,
+				task_id    TEXT NOT NULL UNIQUE,
+				title      TEXT NOT NULL,
+				content    TEXT NOT NULL,
+				platforms  TEXT NOT NULL,
+				status     TEXT DEFAULT 'pending',
+				results    TEXT,
+				created_at TEXT DEFAULT (datetime('now', 'localtime')),
+				updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+			)
+		`)
+		if err != nil {
+			return fmt.Errorf("failed to create publish_tasks table: %w", err)
+		}
+		if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_publish_tasks_status ON publish_tasks(status)"); err != nil {
+			return fmt.Errorf("failed to create publish_tasks index: %w", err)
+		}
+	}
+
+	// Also update existing xiaohongshu accounts category from 'publishing' to 'social_media'
+	if _, err := db.Exec("UPDATE accounts SET category = 'social_media' WHERE category = 'publishing'"); err != nil {
+		return fmt.Errorf("failed to update xiaohongshu category: %w", err)
+	}
+
 	return nil
 }
 
