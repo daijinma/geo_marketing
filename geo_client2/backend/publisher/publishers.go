@@ -3,6 +3,7 @@ package publisher
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -334,6 +335,12 @@ func (b *BasePublisher) runAIAssist(ctx context.Context, article Article, resume
 	defer page.Close()
 	page.MustWaitLoad()
 
+	cdpObserver := NewCDPObserver(browser, page)
+	if err := cdpObserver.StartObserving(ctx); err != nil {
+		b.logger.Warn(fmt.Sprintf("[AIPublish] Failed to start CDP observer: %v", err))
+	}
+	defer cdpObserver.StopObserving()
+
 	goal := buildGoal(article)
 
 	if cached, ok := getCachedDecisions(b.platform); ok {
@@ -351,6 +358,9 @@ func (b *BasePublisher) runAIAssist(ctx context.Context, article Article, resume
 				emit("publish:progress", map[string]string{"platform": b.platform, "message": "缓存动作失效，回退至 AI 决策"})
 				return b.runAIAssist(ctx, article, resume, emit, aiConfig)
 			}
+			waitCtx, waitCancel := context.WithTimeout(ctx, 3*time.Second)
+			_ = cdpObserver.WaitForNetworkIdle(waitCtx, 500*time.Millisecond)
+			waitCancel()
 		}
 		return nil
 	}
@@ -358,15 +368,28 @@ func (b *BasePublisher) runAIAssist(ctx context.Context, article Article, resume
 	maxSteps := 12
 	decisions := make([]CachedDecision, 0, maxSteps)
 	for step := 0; step < maxSteps; step++ {
-		obs, err := captureObservation(page, goal)
+		enhancedObs, err := cdpObserver.CaptureEnhancedObservation(true)
 		if err != nil {
-			return err
+			obs, obsErr := captureObservation(page, goal)
+			if obsErr != nil {
+				return obsErr
+			}
+			enhancedObs = &EnhancedObservation{
+				URL:         obs.URL,
+				Title:       obs.Title,
+				VisibleText: obs.DOM,
+				Screenshot:  obs.Screenshot,
+			}
 		}
 
-		b.logger.Info(fmt.Sprintf("[AIPublish] observation platform=%s url=%s title=%s dom_len=%d clickables_len=%d has_shot=%t", b.platform, obs.URL, obs.Title, len(obs.DOM), len(obs.Clickables), obs.Screenshot != ""))
+		clickablesJSON := buildClickablesFromInteractive(enhancedObs.InteractiveElements)
+		domStr := buildEnhancedDOM(enhancedObs)
+
+		b.logger.Info(fmt.Sprintf("[AIPublish] observation platform=%s url=%s title=%s forms=%d interactive=%d pending_requests=%d",
+			b.platform, enhancedObs.URL, enhancedObs.Title, len(enhancedObs.FormFields), len(enhancedObs.InteractiveElements), len(enhancedObs.PendingRequests)))
 		emit("publish:progress", map[string]string{
 			"platform": b.platform,
-			"message":  fmt.Sprintf("页面观测: dom=%d, clickables=%d, screenshot=%t", len(obs.DOM), len(obs.Clickables), obs.Screenshot != ""),
+			"message":  fmt.Sprintf("页面观测: forms=%d, buttons=%d, loading=%t", len(enhancedObs.FormFields), len(enhancedObs.InteractiveElements), enhancedObs.IsLoading),
 		})
 
 		client, err := aiassist.NewDifyClient(aiConfig.BaseURL, aiConfig.APIKey)
@@ -374,12 +397,12 @@ func (b *BasePublisher) runAIAssist(ctx context.Context, article Article, resume
 			return err
 		}
 		outputs, err := client.RunWorkflow(ctx, map[string]interface{}{
-			"goal":       obs.Goal,
-			"url":        obs.URL,
-			"title":      obs.Title,
-			"dom":        obs.DOM,
-			"clickables": obs.Clickables,
-			"screenshot": obs.Screenshot,
+			"goal":       goal,
+			"url":        enhancedObs.URL,
+			"title":      enhancedObs.Title,
+			"dom":        domStr,
+			"clickables": clickablesJSON,
+			"screenshot": enhancedObs.Screenshot,
 		})
 		if err != nil {
 			return err
@@ -408,6 +431,11 @@ func (b *BasePublisher) runAIAssist(ctx context.Context, article Article, resume
 			if err := executeDecision(page, decision); err != nil {
 				return err
 			}
+			if action != "wait" {
+				waitCtx, waitCancel := context.WithTimeout(ctx, 3*time.Second)
+				_ = cdpObserver.WaitForNetworkIdle(waitCtx, 500*time.Millisecond)
+				waitCancel()
+			}
 			val := decision.Value
 			if action == "input" {
 				if decision.Value == article.Title {
@@ -428,6 +456,54 @@ func (b *BasePublisher) runAIAssist(ctx context.Context, article Article, resume
 	}
 
 	return fmt.Errorf("ai assist exceeded max steps")
+}
+
+func buildClickablesFromInteractive(elements []InteractiveElement) string {
+	type clickable struct {
+		Text     string `json:"text"`
+		Selector string `json:"selector"`
+		Tag      string `json:"tag"`
+	}
+	list := make([]clickable, 0, len(elements))
+	for _, el := range elements {
+		if len(list) >= 60 {
+			break
+		}
+		list = append(list, clickable{
+			Text:     el.Text,
+			Selector: el.Selector,
+			Tag:      el.Tag,
+		})
+	}
+	data, _ := json.Marshal(list)
+	return limitString(string(data), 4000)
+}
+
+func buildEnhancedDOM(obs *EnhancedObservation) string {
+	var sb strings.Builder
+
+	if len(obs.FormFields) > 0 {
+		sb.WriteString("[FORM FIELDS]\n")
+		for _, f := range obs.FormFields {
+			if !f.Visible {
+				continue
+			}
+			sb.WriteString(fmt.Sprintf("- %s (type=%s, selector=%s", f.Label, f.Type, f.Selector))
+			if f.Placeholder != "" {
+				sb.WriteString(fmt.Sprintf(", placeholder=%s", f.Placeholder))
+			}
+			if f.Required {
+				sb.WriteString(", required")
+			}
+			sb.WriteString(")\n")
+		}
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString("[TEXT]\n")
+	sb.WriteString(limitString(obs.VisibleText, 3000))
+
+	return sb.String()
 }
 
 // --- 企鹅号 ---

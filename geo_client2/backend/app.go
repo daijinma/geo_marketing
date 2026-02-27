@@ -28,16 +28,17 @@ import (
 )
 
 type App struct {
-	ctx            context.Context
-	accountSvc     *account.Service
-	authSvc        *auth.Service
-	settingsSvc    *settings.Service
-	taskManager    *task.Manager
-	searchSvc      *search.Service
-	providerFact   *provider.Factory
-	publishManager *publisher.Manager
-	logRepo        *repositories.LogRepository
-	loginCancel    func()
+	ctx             context.Context
+	accountSvc      *account.Service
+	authSvc         *auth.Service
+	settingsSvc     *settings.Service
+	taskManager     *task.Manager
+	searchSvc       *search.Service
+	providerFact    *provider.Factory
+	publishManager  *publisher.Manager
+	longTaskManager *publisher.LongTaskManager
+	logRepo         *repositories.LogRepository
+	loginCancel     func()
 }
 
 func NewApp() *App {
@@ -80,6 +81,7 @@ func (a *App) Startup(ctx context.Context) {
 
 	// Initialize publish manager
 	a.publishManager = publisher.NewManager(a.providerFact)
+	a.longTaskManager = publisher.NewLongTaskManager(a.publishManager)
 
 	// Initialize task executor and manager
 	executor := task.NewExecutor(taskRepo, a.providerFact, accountRepo, ctx)
@@ -851,4 +853,128 @@ func (a *App) CancelPublish(taskID string) error {
 		return fmt.Errorf("publish manager not initialized")
 	}
 	return a.publishManager.CancelPublish(taskID)
+}
+
+func (a *App) StartLongTask(platformsJSON string, accountIDsJSON string, articleJSON string) (map[string]interface{}, error) {
+	if a.longTaskManager == nil {
+		return nil, fmt.Errorf("long task manager not initialized")
+	}
+
+	var platforms []string
+	if err := json.Unmarshal([]byte(platformsJSON), &platforms); err != nil {
+		return nil, fmt.Errorf("invalid platforms JSON: %w", err)
+	}
+
+	var accountIDs map[string]string
+	if err := json.Unmarshal([]byte(accountIDsJSON), &accountIDs); err != nil {
+		return nil, fmt.Errorf("invalid accountIDs JSON: %w", err)
+	}
+
+	var article publisher.Article
+	if err := json.Unmarshal([]byte(articleJSON), &article); err != nil {
+		return nil, fmt.Errorf("invalid article JSON: %w", err)
+	}
+
+	emit := func(event string, data interface{}) {
+		runtime.EventsEmit(a.ctx, event, data)
+	}
+
+	aiEnabled := true
+	if a.settingsSvc != nil {
+		value, err := a.settingsSvc.Get("ai_publish_assist")
+		if err == nil && value == "false" {
+			aiEnabled = false
+		}
+	}
+
+	baseURL, _ := a.settingsSvc.Get("ai_publish_base_url")
+	apiKey, _ := a.settingsSvc.Get("ai_publish_api_key")
+
+	config := publisher.LongTaskConfig{
+		Platforms:             platforms,
+		AccountIDs:            accountIDs,
+		Article:               article,
+		AIConfig:              publisher.AIPublishConfig{Enabled: aiEnabled, BaseURL: baseURL, APIKey: apiKey},
+		MaxRetriesPerPlatform: 2,
+		DelayBetweenPlatforms: 3 * time.Second,
+	}
+
+	runner := a.longTaskManager.CreateTask(emit, config)
+	if err := runner.Start(a.ctx); err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"success": true,
+		"taskId":  runner.GetState().TaskID,
+	}, nil
+}
+
+func (a *App) PauseLongTask(taskID string) error {
+	if a.longTaskManager == nil {
+		return fmt.Errorf("long task manager not initialized")
+	}
+	task := a.longTaskManager.GetTask(taskID)
+	if task == nil {
+		return fmt.Errorf("task not found: %s", taskID)
+	}
+	task.Pause()
+	return nil
+}
+
+func (a *App) ResumeLongTask(taskID string) error {
+	if a.longTaskManager == nil {
+		return fmt.Errorf("long task manager not initialized")
+	}
+	task := a.longTaskManager.GetTask(taskID)
+	if task == nil {
+		return fmt.Errorf("task not found: %s", taskID)
+	}
+	task.Resume()
+	return nil
+}
+
+func (a *App) CancelLongTask(taskID string) error {
+	if a.longTaskManager == nil {
+		return fmt.Errorf("long task manager not initialized")
+	}
+	task := a.longTaskManager.GetTask(taskID)
+	if task == nil {
+		return fmt.Errorf("task not found: %s", taskID)
+	}
+	task.Cancel()
+	return nil
+}
+
+func (a *App) GetLongTaskState(taskID string) (map[string]interface{}, error) {
+	if a.longTaskManager == nil {
+		return nil, fmt.Errorf("long task manager not initialized")
+	}
+	task := a.longTaskManager.GetTask(taskID)
+	if task == nil {
+		return nil, fmt.Errorf("task not found: %s", taskID)
+	}
+	stateJSON, err := task.GetStateJSON()
+	if err != nil {
+		return nil, err
+	}
+	var state map[string]interface{}
+	json.Unmarshal([]byte(stateJSON), &state)
+	return map[string]interface{}{"success": true, "state": state}, nil
+}
+
+func (a *App) ListLongTasks() (map[string]interface{}, error) {
+	if a.longTaskManager == nil {
+		return nil, fmt.Errorf("long task manager not initialized")
+	}
+	states := a.longTaskManager.ListTasks()
+	return map[string]interface{}{"success": true, "tasks": states}, nil
+}
+
+func (a *App) RemoveLongTask(taskID string) error {
+	if a.longTaskManager == nil {
+		return fmt.Errorf("long task manager not initialized")
+	}
+	a.longTaskManager.RemoveTask(taskID)
+	return nil
 }
