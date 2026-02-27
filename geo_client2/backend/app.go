@@ -67,6 +67,7 @@ func (a *App) Startup(ctx context.Context) {
 	taskRepo := repositories.NewTaskRepository(db)
 	loginRepo := repositories.NewLoginStatusRepository(db)
 	logRepo := repositories.NewLogRepository(db)
+	longTaskRepo := repositories.NewLongTaskRepository(db)
 
 	// Initialize services
 	a.accountSvc = account.NewService(accountRepo)
@@ -81,7 +82,7 @@ func (a *App) Startup(ctx context.Context) {
 
 	// Initialize publish manager
 	a.publishManager = publisher.NewManager(a.providerFact)
-	a.longTaskManager = publisher.NewLongTaskManager(a.publishManager)
+	a.longTaskManager = publisher.NewLongTaskManager(a.publishManager, longTaskRepo)
 
 	// Initialize task executor and manager
 	executor := task.NewExecutor(taskRepo, a.providerFact, accountRepo, ctx)

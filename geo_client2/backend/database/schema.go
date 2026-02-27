@@ -140,6 +140,21 @@ func initSchema() error {
 			created_at TEXT DEFAULT (datetime('now', 'localtime')),
 			updated_at TEXT DEFAULT (datetime('now', 'localtime'))
 		)`,
+		`CREATE TABLE IF NOT EXISTS long_tasks (
+			id              INTEGER PRIMARY KEY AUTOINCREMENT,
+			task_id         TEXT NOT NULL UNIQUE,
+			status          TEXT NOT NULL DEFAULT 'pending',
+			article_json    TEXT NOT NULL,
+			platforms_json  TEXT NOT NULL,
+			account_ids_json TEXT NOT NULL,
+			platform_states_json TEXT,
+			current_index   INTEGER DEFAULT 0,
+			total_platforms INTEGER DEFAULT 0,
+			created_at      TEXT DEFAULT (datetime('now', 'localtime')),
+			started_at      TEXT,
+			completed_at    TEXT,
+			updated_at      TEXT DEFAULT (datetime('now', 'localtime'))
+		)`,
 	}
 
 	indexes := []string{
@@ -166,6 +181,8 @@ func initSchema() error {
 		"CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp)",
 		// "CREATE INDEX IF NOT EXISTS idx_login_status_platform_account ON login_status(platform_name, account_id)", // Created manually in db.go to handle migrations
 		"CREATE INDEX IF NOT EXISTS idx_publish_tasks_status ON publish_tasks(status)",
+		"CREATE INDEX IF NOT EXISTS idx_long_tasks_status ON long_tasks(status)",
+		"CREATE INDEX IF NOT EXISTS idx_long_tasks_task_id ON long_tasks(task_id)",
 	}
 
 	for _, schema := range schemas {

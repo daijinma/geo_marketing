@@ -13,7 +13,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 12
+const schemaVersion = 13
 
 var db *sql.DB
 
@@ -128,6 +128,13 @@ func runMigrations() error {
 			}
 		}
 
+		// Migrate from version 12 to 13: Add long_tasks table
+		if currentVersion <= 12 {
+			if err := migrateToV13(); err != nil {
+				return fmt.Errorf("failed to migrate to v13: %w", err)
+			}
+		}
+
 		_, err = GetDB().Exec("UPDATE db_version SET version = ?, updated_at = datetime('now') WHERE id = 1", schemaVersion)
 		if err != nil {
 			return fmt.Errorf("failed to update version: %w", err)
@@ -186,6 +193,43 @@ func migrateToV12() error {
 	// Also update existing xiaohongshu accounts category from 'publishing' to 'social_media'
 	if _, err := db.Exec("UPDATE accounts SET category = 'social_media' WHERE category = 'publishing'"); err != nil {
 		return fmt.Errorf("failed to update xiaohongshu category: %w", err)
+	}
+
+	return nil
+}
+
+func migrateToV13() error {
+	db := GetDB()
+
+	var exists int
+	db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='long_tasks'").Scan(&exists)
+	if exists == 0 {
+		_, err := db.Exec(`
+			CREATE TABLE IF NOT EXISTS long_tasks (
+				id              INTEGER PRIMARY KEY AUTOINCREMENT,
+				task_id         TEXT NOT NULL UNIQUE,
+				status          TEXT NOT NULL DEFAULT 'pending',
+				article_json    TEXT NOT NULL,
+				platforms_json  TEXT NOT NULL,
+				account_ids_json TEXT NOT NULL,
+				platform_states_json TEXT,
+				current_index   INTEGER DEFAULT 0,
+				total_platforms INTEGER DEFAULT 0,
+				created_at      TEXT DEFAULT (datetime('now', 'localtime')),
+				started_at      TEXT,
+				completed_at    TEXT,
+				updated_at      TEXT DEFAULT (datetime('now', 'localtime'))
+			)
+		`)
+		if err != nil {
+			return fmt.Errorf("failed to create long_tasks table: %w", err)
+		}
+		if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_long_tasks_status ON long_tasks(status)"); err != nil {
+			return fmt.Errorf("failed to create long_tasks status index: %w", err)
+		}
+		if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_long_tasks_task_id ON long_tasks(task_id)"); err != nil {
+			return fmt.Errorf("failed to create long_tasks task_id index: %w", err)
+		}
 	}
 
 	return nil

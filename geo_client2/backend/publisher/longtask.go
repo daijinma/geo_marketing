@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"geo_client2/backend/database/repositories"
 	"geo_client2/backend/logger"
 )
 
@@ -58,6 +59,7 @@ type LongTaskRunner struct {
 	pauseChan  chan struct{}
 	resumeChan chan struct{}
 	isPaused   bool
+	repo       *repositories.LongTaskRepository
 }
 
 type LongTaskConfig struct {
@@ -67,6 +69,7 @@ type LongTaskConfig struct {
 	AIConfig              AIPublishConfig
 	MaxRetriesPerPlatform int
 	DelayBetweenPlatforms time.Duration
+	Repo                  *repositories.LongTaskRepository
 }
 
 func NewLongTaskRunner(manager *Manager, emit EventEmitter, config LongTaskConfig) *LongTaskRunner {
@@ -96,7 +99,7 @@ func NewLongTaskRunner(manager *Manager, emit EventEmitter, config LongTaskConfi
 		TotalPlatforms: len(config.Platforms),
 	}
 
-	return &LongTaskRunner{
+	runner := &LongTaskRunner{
 		state:      state,
 		manager:    manager,
 		emit:       emit,
@@ -105,7 +108,12 @@ func NewLongTaskRunner(manager *Manager, emit EventEmitter, config LongTaskConfi
 		logger:     logger.GetLogger(),
 		pauseChan:  make(chan struct{}),
 		resumeChan: make(chan struct{}),
+		repo:       config.Repo,
 	}
+
+	runner.persistCreate()
+
+	return runner
 }
 
 func (r *LongTaskRunner) Start(ctx context.Context) error {
@@ -121,6 +129,7 @@ func (r *LongTaskRunner) Start(ctx context.Context) error {
 	r.state.StartedAt = &now
 	r.mu.Unlock()
 
+	r.persistStarted()
 	r.emitStateUpdate()
 
 	go r.runLoop()
@@ -133,10 +142,13 @@ func (r *LongTaskRunner) runLoop() {
 		r.mu.Lock()
 		now := time.Now()
 		r.state.CompletedAt = &now
-		if r.state.Status == LongTaskStatusRunning {
-			r.state.Status = LongTaskStatusCompleted
+		finalStatus := r.state.Status
+		if finalStatus == LongTaskStatusRunning {
+			finalStatus = LongTaskStatusCompleted
+			r.state.Status = finalStatus
 		}
 		r.mu.Unlock()
+		r.persistCompleted(finalStatus)
 		r.emitStateUpdate()
 		r.emit("longtask:all_done", map[string]interface{}{
 			"task_id": r.state.TaskID,
@@ -150,6 +162,7 @@ func (r *LongTaskRunner) runLoop() {
 			r.mu.Lock()
 			r.state.Status = LongTaskStatusCancelled
 			r.mu.Unlock()
+			r.persistStatus(LongTaskStatusCancelled)
 			return
 		default:
 		}
@@ -169,6 +182,8 @@ func (r *LongTaskRunner) runLoop() {
 		r.mu.Lock()
 		r.state.CurrentIndex++
 		r.mu.Unlock()
+
+		r.persistProgress()
 
 		if r.state.CurrentIndex < len(r.state.Platforms) {
 			select {
@@ -274,6 +289,7 @@ func (r *LongTaskRunner) Pause() {
 
 	r.isPaused = true
 	r.state.Status = LongTaskStatusPaused
+	r.persistStatus(LongTaskStatusPaused)
 	r.emitStateUpdate()
 }
 
@@ -286,6 +302,7 @@ func (r *LongTaskRunner) Resume() {
 	}
 
 	r.state.Status = LongTaskStatusRunning
+	r.persistStatus(LongTaskStatusRunning)
 	select {
 	case r.resumeChan <- struct{}{}:
 	default:
@@ -301,6 +318,7 @@ func (r *LongTaskRunner) Cancel() {
 		r.cancel()
 	}
 	r.state.Status = LongTaskStatusCancelled
+	r.persistStatus(LongTaskStatusCancelled)
 	r.emitStateUpdate()
 }
 
@@ -331,22 +349,94 @@ func (r *LongTaskRunner) emitStateUpdate() {
 	})
 }
 
+func (r *LongTaskRunner) persistCreate() {
+	if r.repo == nil {
+		return
+	}
+
+	articleJSON, _ := json.Marshal(r.state.Article)
+	platformsJSON, _ := json.Marshal(r.state.Platforms)
+	accountIDsJSON, _ := json.Marshal(r.accountIDs)
+
+	err := r.repo.Create(
+		r.state.TaskID,
+		string(r.state.Status),
+		string(articleJSON),
+		string(platformsJSON),
+		string(accountIDsJSON),
+		r.state.TotalPlatforms,
+	)
+	if err != nil {
+		r.logger.Warn(fmt.Sprintf("[LongTask] Failed to persist task creation: %v", err))
+	}
+}
+
+func (r *LongTaskRunner) persistProgress() {
+	if r.repo == nil {
+		return
+	}
+
+	platformStatesJSON, _ := json.Marshal(r.state.PlatformStates)
+	err := r.repo.UpdateProgress(r.state.TaskID, r.state.CurrentIndex, string(platformStatesJSON))
+	if err != nil {
+		r.logger.Warn(fmt.Sprintf("[LongTask] Failed to persist progress: %v", err))
+	}
+}
+
+func (r *LongTaskRunner) persistStatus(status LongTaskStatus) {
+	if r.repo == nil {
+		return
+	}
+
+	err := r.repo.UpdateStatus(r.state.TaskID, string(status))
+	if err != nil {
+		r.logger.Warn(fmt.Sprintf("[LongTask] Failed to persist status: %v", err))
+	}
+}
+
+func (r *LongTaskRunner) persistStarted() {
+	if r.repo == nil {
+		return
+	}
+
+	err := r.repo.SetStarted(r.state.TaskID)
+	if err != nil {
+		r.logger.Warn(fmt.Sprintf("[LongTask] Failed to persist started: %v", err))
+	}
+}
+
+func (r *LongTaskRunner) persistCompleted(status LongTaskStatus) {
+	if r.repo == nil {
+		return
+	}
+
+	platformStatesJSON, _ := json.Marshal(r.state.PlatformStates)
+	_ = r.repo.UpdateProgress(r.state.TaskID, r.state.CurrentIndex, string(platformStatesJSON))
+	err := r.repo.SetCompleted(r.state.TaskID, string(status))
+	if err != nil {
+		r.logger.Warn(fmt.Sprintf("[LongTask] Failed to persist completed: %v", err))
+	}
+}
+
 type LongTaskManager struct {
 	mu      sync.Mutex
 	tasks   map[string]*LongTaskRunner
 	manager *Manager
 	logger  *logger.Logger
+	repo    *repositories.LongTaskRepository
 }
 
-func NewLongTaskManager(manager *Manager) *LongTaskManager {
+func NewLongTaskManager(manager *Manager, repo *repositories.LongTaskRepository) *LongTaskManager {
 	return &LongTaskManager{
 		tasks:   make(map[string]*LongTaskRunner),
 		manager: manager,
 		logger:  logger.GetLogger(),
+		repo:    repo,
 	}
 }
 
 func (m *LongTaskManager) CreateTask(emit EventEmitter, config LongTaskConfig) *LongTaskRunner {
+	config.Repo = m.repo
 	runner := NewLongTaskRunner(m.manager, emit, config)
 
 	m.mu.Lock()
@@ -381,6 +471,10 @@ func (m *LongTaskManager) RemoveTask(taskID string) {
 		task.Cancel()
 		delete(m.tasks, taskID)
 	}
+
+	if m.repo != nil {
+		_ = m.repo.Delete(taskID)
+	}
 }
 
 func (m *LongTaskManager) CleanupCompletedTasks(olderThan time.Duration) int {
@@ -398,5 +492,105 @@ func (m *LongTaskManager) CleanupCompletedTasks(olderThan time.Duration) int {
 		}
 	}
 
+	if m.repo != nil {
+		dbRemoved, _ := m.repo.DeleteOlderThan(olderThan)
+		removed += int(dbRemoved)
+	}
+
 	return removed
+}
+
+func (m *LongTaskManager) RestoreUnfinishedTasks(emit EventEmitter, aiConfig AIPublishConfig) ([]*LongTaskState, error) {
+	if m.repo == nil {
+		return nil, nil
+	}
+
+	records, err := m.repo.GetUnfinished()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get unfinished tasks: %w", err)
+	}
+
+	var restored []*LongTaskState
+
+	for _, rec := range records {
+		var article Article
+		if err := json.Unmarshal([]byte(rec.ArticleJSON), &article); err != nil {
+			m.logger.Warn(fmt.Sprintf("[LongTask] Failed to unmarshal article for task %s: %v", rec.TaskID, err))
+			continue
+		}
+
+		var platforms []string
+		if err := json.Unmarshal([]byte(rec.PlatformsJSON), &platforms); err != nil {
+			m.logger.Warn(fmt.Sprintf("[LongTask] Failed to unmarshal platforms for task %s: %v", rec.TaskID, err))
+			continue
+		}
+
+		var accountIDs map[string]string
+		if err := json.Unmarshal([]byte(rec.AccountIDsJSON), &accountIDs); err != nil {
+			m.logger.Warn(fmt.Sprintf("[LongTask] Failed to unmarshal account IDs for task %s: %v", rec.TaskID, err))
+			continue
+		}
+
+		platformStates := make(map[string]*PlatformTaskState)
+		if rec.PlatformStatesJSON.Valid && rec.PlatformStatesJSON.String != "" {
+			if err := json.Unmarshal([]byte(rec.PlatformStatesJSON.String), &platformStates); err != nil {
+				m.logger.Warn(fmt.Sprintf("[LongTask] Failed to unmarshal platform states for task %s: %v", rec.TaskID, err))
+			}
+		}
+
+		if len(platformStates) == 0 {
+			for _, p := range platforms {
+				platformStates[p] = &PlatformTaskState{
+					Platform:   p,
+					Status:     LongTaskStatusPending,
+					MaxRetries: 2,
+				}
+			}
+		}
+
+		state := &LongTaskState{
+			TaskID:         rec.TaskID,
+			Status:         LongTaskStatus(rec.Status),
+			Article:        article,
+			Platforms:      platforms,
+			PlatformStates: platformStates,
+			CreatedAt:      rec.CreatedAt,
+			CurrentIndex:   rec.CurrentIndex,
+			TotalPlatforms: rec.TotalPlatforms,
+		}
+
+		if rec.StartedAt.Valid {
+			state.StartedAt = &rec.StartedAt.Time
+		}
+		if rec.CompletedAt.Valid {
+			state.CompletedAt = &rec.CompletedAt.Time
+		}
+
+		runner := &LongTaskRunner{
+			state:      state,
+			manager:    m.manager,
+			emit:       emit,
+			aiConfig:   aiConfig,
+			accountIDs: accountIDs,
+			logger:     logger.GetLogger(),
+			pauseChan:  make(chan struct{}),
+			resumeChan: make(chan struct{}),
+			repo:       m.repo,
+			isPaused:   state.Status == LongTaskStatusPaused,
+		}
+
+		m.mu.Lock()
+		m.tasks[rec.TaskID] = runner
+		m.mu.Unlock()
+
+		restored = append(restored, state)
+		m.logger.Info(fmt.Sprintf("[LongTask] Restored task %s with status %s (index %d/%d)",
+			rec.TaskID, rec.Status, rec.CurrentIndex, rec.TotalPlatforms))
+	}
+
+	return restored, nil
+}
+
+func (m *LongTaskManager) GetRepo() *repositories.LongTaskRepository {
+	return m.repo
 }
