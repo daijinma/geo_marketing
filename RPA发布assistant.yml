@@ -1,0 +1,206 @@
+app:
+  description: 'RPA发布自动化决策（Webhook 输入 -> LLM 指令输出）'
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  mode: workflow
+  name: RPA发布assistant
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/openai_api_compatible:0.0.30@065d5a0ef2af4f50887dbb245113a9754eec8ea7f0d753fa4102395f52fdfed8
+    version: null
+kind: app
+version: 0.5.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: true
+      fileUploadConfig:
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        image_file_batch_limit: 10
+        image_file_size_limit: 10
+        single_chunk_attachment_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: true
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: trigger-webhook
+        targetType: llm
+      id: 1772073974870-source-1772073987660-target
+      source: '1772073974870'
+      sourceHandle: source
+      target: '1772073987660'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: llm
+        targetType: end
+      id: 1772073987660-source-1772074238109-target
+      source: '1772073987660'
+      sourceHandle: source
+      target: '1772074238109'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        async_mode: true
+        body: []
+        content_type: application/json
+        headers: []
+        method: POST
+        params: []
+        response_body: ''
+        selected: false
+        status_code: 200
+        title: Webhook 触发器
+        type: trigger-webhook
+        variables:
+        - label: raw
+          required: true
+          value_selector: []
+          value_type: object
+          variable: _webhook_raw
+        webhook_debug_url: ''
+        webhook_url: ''
+      height: 130
+      id: '1772073974870'
+      position:
+        x: 80
+        y: 282
+      positionAbsolute:
+        x: 80
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        model:
+          completion_params:
+            temperature: 0.7
+          mode: chat
+          name: gpt-5.2
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        prompt_template:
+        - id: 5234fab9-7f28-4e7c-bca2-9e3bd547ca8e
+          role: system
+          text: "你是浏览器自动化助手。目标是根据页面快照与截图，输出下一步可执行指令。\n只输出一个 JSON 对象，不要输出任何多余文本。\n\
+            规则：\n1) 只允许输出以下 action：\n   - input: 向输入框或编辑器写入文字\n   - click: 点击按钮/元素\n\
+            \   - wait: 等待页面变化\n   - request_manual: 请求人工介入\n   - done: 已完成目标\n2)\
+            \ 如果无法确定输入框或按钮，必须输出 request_manual。\n3) 选择器必须来自可点击元素列表或 DOM 片段中出现的元素。\n\
+            4) 若涉及填写标题/正文，必须先填标题，再填正文。\n5) 若需要点击“发布/提交/发表”，必须先确认已填标题/正文。\n6) 当页面出现分类/标签等需要人工选择的区域，优先\
+            \ request_manual。\n7) 输出 JSON schema：\n{\n  \"action\": \"input|click|wait|request_manual|done\"\
+            ,\n  \"selector\": \"CSS_SELECTOR\",\n  \"value\": \"TEXT_TO_INPUT\",\n\
+            \  \"ms\": 1000,\n  \"reason\": \"WHY\",\n  \"confidence\": 0.0\n}"
+        - id: 7d3b2b2b-7f8f-4c4b-a4d8-02d0a6a2b0c1
+          role: user
+          text: |-
+            目标: {{#1772073974870._webhook_raw.goal#}}
+
+            页面信息:
+            - URL: {{#1772073974870._webhook_raw.url#}}
+            - Title: {{#1772073974870._webhook_raw.title#}}
+
+            DOM 片段:
+            {{#1772073974870._webhook_raw.dom#}}
+
+            截图(Base64):
+            {{#1772073974870._webhook_raw.screenshot#}}
+
+            请输出下一步执行指令（只输出 JSON）。
+        selected: false
+        title: LLM
+        type: llm
+        vision:
+          enabled: false
+      height: 88
+      id: '1772073987660'
+      position:
+        x: 382
+        y: 282
+      positionAbsolute:
+        x: 382
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        outputs:
+        - value_selector:
+          - '1772073987660'
+          - text
+          value_type: string
+          variable: output
+        selected: false
+        title: 输出
+        type: end
+      height: 88
+      id: '1772074238109'
+      position:
+        x: 684
+        y: 282
+      positionAbsolute:
+        x: 684
+        y: 282
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    viewport:
+      x: 0
+      y: 0
+      zoom: 1
+  rag_pipeline_variables: []
