@@ -3,7 +3,6 @@
  * Maps electronAPI calls to Wails App methods
  */
 
-import { Greet, EmitTestEvent } from '@/wailsjs/go/main/App';
 import { EventsOn, BrowserOpenURL } from '@/wailsjs/runtime/runtime';
 
 // Get the Wails App instance (will be set when Wails loads)
@@ -61,6 +60,19 @@ interface WailsApp {
   StartPublish(platforms: string[], accountIDs: Record<string, string>, article: { title: string; content: string; cover_image?: string }): Promise<void>;
   ResumePublish(taskID: string): Promise<void>;
   CancelPublish(taskID: string): Promise<void>;
+
+  // Publish LongTask
+  StartLongTask(platformsJSON: string, accountIDsJSON: string, articleJSON: string): Promise<{ success: boolean; taskId?: string }>;
+  PauseLongTask(taskID: string): Promise<void>;
+  ResumeLongTask(taskID: string): Promise<void>;
+  CancelLongTask(taskID: string): Promise<void>;
+  GetLongTaskState(taskID: string): Promise<{ success: boolean; state?: unknown }>;
+  ListLongTasks(): Promise<{ success: boolean; tasks?: unknown[] }>;
+  ListLongTaskRecords(): Promise<{ success: boolean; tasks?: unknown[] }>;
+  GetLongTaskRecord(taskID: string): Promise<{ success: boolean; task?: unknown }>;
+  RerunLongTask(taskID: string): Promise<{ success: boolean; taskId?: string }>;
+  RestartLongTask(taskID: string): Promise<{ success: boolean; taskId?: string }>;
+  RemoveLongTask(taskID: string): Promise<void>;
 
   // AI Publish Assist
   SetAIPublishConfig(baseURL: string, apiKey: string): Promise<void>;
@@ -381,6 +393,62 @@ export const wailsAPI = {
       const app = getApp();
       if (!app) throw new Error('Wails backend not available');
       return app.CancelPublish(taskID);
+    },
+  },
+  longTask: {
+    start: async (
+      platforms: string[],
+      accountIDs: Record<string, string>,
+      article: { title: string; content: string; cover_image?: string },
+    ) => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.StartLongTask(JSON.stringify(platforms), JSON.stringify(accountIDs), JSON.stringify(article));
+    },
+    pause: async (taskID: string) => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.PauseLongTask(taskID);
+    },
+    resume: async (taskID: string) => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.ResumeLongTask(taskID);
+    },
+    cancel: async (taskID: string) => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.CancelLongTask(taskID);
+    },
+    getState: async (taskID: string) => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.GetLongTaskState(taskID);
+    },
+    listRunning: async () => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.ListLongTasks();
+    },
+    listRecords: async () => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.ListLongTaskRecords();
+    },
+    getRecord: async (taskID: string) => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.GetLongTaskRecord(taskID);
+    },
+    restart: async (taskID: string) => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.RestartLongTask(taskID);
+    },
+    remove: async (taskID: string) => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.RemoveLongTask(taskID);
     },
   },
   aiPublish: {

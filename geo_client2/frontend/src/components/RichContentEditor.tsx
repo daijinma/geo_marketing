@@ -40,13 +40,27 @@ export default function RichContentEditor({
   const [showPreview, setShowPreview] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Re-detect format when value changes externally (e.g. cleared)
+  // Re-detect format when value changes externally (async load, clear, etc.)
   useEffect(() => {
-    if (!value) {
-      setFormat('plain');
+    const trimmed = value.trim();
+    const detected = trimmed ? detectFormat(value) : 'plain';
+    setFormat(detected);
+
+    // In read-only mode (task detail), default to preview for HTML/Markdown.
+    if (disabled) {
+      if (!trimmed || detected === 'plain') {
+        setShowPreview(false);
+      } else {
+        setShowPreview(true);
+      }
+      return;
+    }
+
+    // In edit mode, only force-reset preview when cleared.
+    if (!trimmed) {
       setShowPreview(false);
     }
-  }, [value]);
+  }, [value, disabled]);
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newVal = e.target.value;
@@ -74,6 +88,18 @@ export default function RichContentEditor({
 
       // Plain text: detect if it's Markdown
       if (plain) {
+        const trimmedPlain = plain.trim();
+        const looksLikeHtml = /^<[a-zA-Z]/.test(trimmedPlain) || /<(p|div|h[1-6]|ul|ol|li|strong|em|br|img|a|blockquote|pre|code|section)\b/i.test(trimmedPlain);
+        if (looksLikeHtml) {
+          const cleanedPlainHtml = cleanPastedHTML(trimmedPlain);
+          if (cleanedPlainHtml) {
+            e.preventDefault();
+            insertAtCursor(cleanedPlainHtml);
+            setFormat('html');
+            setShowPreview(true);
+            return;
+          }
+        }
         const detected = detectFormat(plain);
         if (detected !== 'plain') {
           // Let the default paste happen (plain text into textarea),
@@ -142,11 +168,11 @@ export default function RichContentEditor({
 
       {showPreview && canPreview ? (
         /* ---- Preview pane ---- */
-        <div
+       <div
           className="w-full min-h-[200px] px-3 py-2 rounded-lg border border-input bg-background text-sm overflow-auto"
           style={{ minHeight: `${rows * 1.6}em` }}
-          onClick={() => setShowPreview(false)}
-          title="点击返回编辑"
+          onClick={disabled ? undefined : () => setShowPreview(false)}
+          title={disabled ? undefined : '点击返回编辑'}
         >
            {format === 'html' ? (
              <div
@@ -162,7 +188,9 @@ export default function RichContentEditor({
                {value}
              </div>
            )}
-          <p className="text-[10px] text-muted-foreground/50 mt-2 text-right select-none">点击任意处返回编辑</p>
+           {!disabled && (
+             <p className="text-[10px] text-muted-foreground/50 mt-2 text-right select-none">点击任意处返回编辑</p>
+           )}
         </div>
       ) : (
         /* ---- Edit textarea ---- */
@@ -193,25 +221,17 @@ export default function RichContentEditor({
 }
 
 // ---------------------------------------------------------------------------
-// HTML paste cleaner
-// Removes meta / style / script / conditional comments while keeping content
-// PRESERVES inline styles and class attributes for full HTML fidelity
+// HTML paste cleaner (minimal structure-safe cleanup)
+// Drops document-level wrappers and head/meta/style/link noise, keeps body HTML
 // ---------------------------------------------------------------------------
 function cleanPastedHTML(raw: string): string {
-  // Remove <!--[if ... ]>...<![endif]--> conditional comments (MS Word)
-  let out = raw.replace(/<!--\[if[^\]]*\]>[\s\S]*?<!\[endif\]-->/gi, '');
-  // Remove regular HTML comments
-  out = out.replace(/<!--[\s\S]*?-->/g, '');
-  // Remove <meta>, <link>, <style>, <script> blocks (document-level, not inline)
-  out = out.replace(/<(meta|link|style|script)\b[^>]*>[\s\S]*?<\/\1>/gi, '');
-  out = out.replace(/<(meta|link)\b[^>]*\/?>/gi, '');
-  // Remove XML namespace declarations and MS Office tags
-  out = out.replace(/<\/?o:[^>]*>/gi, '');
-  out = out.replace(/<\/?w:[^>]*>/gi, '');
-  out = out.replace(/<\/?m:[^>]*>/gi, '');
-  out = out.replace(/\s+xmlns[^=]*="[^"]*"/gi, '');
-  // Remove data-* attributes (editor metadata) but KEEP style and class
-  out = out.replace(/\s+data-[a-z0-9-]+="[^"]*"/gi, '');
-  // Trim
+  let out = raw;
+  // Remove full <head> block when present
+  out = out.replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, '');
+  // Remove document-level wrappers
+  out = out.replace(/<\/?(?:html|body)\b[^>]*>/gi, '');
+  // Remove standalone meta/link/style tags that may appear in body fragments
+  out = out.replace(/<(meta|link|style)\b[^>]*>\s*<\/\1>/gi, '');
+  out = out.replace(/<(meta|link|style)\b[^>]*\/?>(?![^<]*<\/\1>)/gi, '');
   return out.trim();
 }

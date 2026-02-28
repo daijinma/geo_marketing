@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Send,
   CheckCircle2,
@@ -31,7 +32,7 @@ const SOCIAL_PLATFORMS: PlatformOption[] = [
   { id: 'csdn',        name: 'CSDN',   category: 'social_media' },
   { id: 'qie',         name: '企鹅号', category: 'social_media' },
   { id: 'baijiahao',   name: '百家号', category: 'social_media' },
-  { id: 'xiaohongshu', name: '小红书', category: 'social_media' },
+  // { id: 'xiaohongshu', name: '小红书', category: 'social_media' },
 ];
 
 type PublishStatus = 'idle' | 'running' | 'waiting_manual' | 'completed' | 'failed';
@@ -46,6 +47,7 @@ interface PlatformPublishState {
 
 export default function Publish() {
   const { accountsByPlatform, activeAccounts, loadAccounts, loadActiveAccount } = useAccountStore();
+  const navigate = useNavigate();
 
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
   const [selectedAccountIds, setSelectedAccountIds] = useState<Record<string, string>>({});
@@ -224,11 +226,20 @@ export default function Publish() {
         }
       });
 
-      await wailsAPI.publish.startPublish(selectedPlatforms, accountIds, {
+      const res = await wailsAPI.longTask.start(selectedPlatforms, accountIds, {
         title: title.trim(),
         content: content.trim(),
         cover_image: coverImage.trim() || undefined,
       });
+      const taskId = (res as any)?.taskId;
+      if (taskId) {
+        toast.success('发文任务已创建', { description: `任务ID: ${taskId}` });
+        setIsPublishing(false);
+        navigate(`/publish-tasks/${taskId}`);
+      } else {
+        toast.success('发文任务已创建');
+        setIsPublishing(false);
+      }
     } catch (error) {
       toast.error('启动发布任务失败');
       setIsPublishing(false);

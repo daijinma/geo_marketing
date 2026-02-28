@@ -71,7 +71,7 @@ export default function Auth() {
     { id: 'csdn',        name: 'CSDN',      category: 'social_media' },
     { id: 'qie',         name: '企鹅号',    category: 'social_media' },
     { id: 'baijiahao',   name: '百家号',    category: 'social_media' },
-    { id: 'xiaohongshu', name: '小红书',    category: 'social_media' },
+    // { id: 'xiaohongshu', name: '小红书',    category: 'social_media' },
   ];
 
   useEffect(() => {
