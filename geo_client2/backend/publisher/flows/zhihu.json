@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "platform": "zhihu",
+  "steps": [
+    {"id": "open", "action": "navigate", "url": "https://zhuanlan.zhihu.com/write"},
+    {"id": "wait_load", "action": "wait_load"},
+    {"id": "wait_idle", "action": "wait_idle"},
+    {
+      "id": "fill_title",
+      "action": "fill",
+      "selector": "textarea[placeholder*=\"\u8bf7\u8f93\u5165\u6807\u9898\"]",
+      "value": "{{title}}",
+      "mode": "value"
+    },
+    {
+      "id": "fill_content",
+      "action": "fill",
+      "selector": "div.public-DraftEditor-content[contenteditable=\"true\"][role=\"textbox\"]",
+      "value": "{{content}}",
+      "mode": "innerText",
+      "clickFirst": true
+    },
+    {"id": "wait_before_publish", "action": "wait", "ms": 20000},
+    {"id": "click_publish", "action": "click_r", "selector": "button", "regex": "\u53d1\u5e03"},
+    {
+      "id": "wait_redirect",
+      "action": "wait_url_not",
+      "url": "https://zhuanlan.zhihu.com/write",
+      "timeoutMs": 15000,
+      "optional": true
+    },
+    {"id": "post_wait", "action": "wait", "ms": 5000}
+  ]
+}

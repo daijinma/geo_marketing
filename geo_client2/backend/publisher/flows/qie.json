@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "platform": "qie",
+  "steps": [
+    {
+      "id": "navigate",
+      "action": "navigate",
+      "url": "https://om.qq.com/main/creation/article"
+    },
+    {
+      "id": "wait_load",
+      "action": "wait_load"
+    },
+    {
+      "id": "wait_idle",
+      "action": "wait_idle"
+    },
+    {
+      "id": "wait_editor",
+      "action": "wait",
+      "ms": 3000
+    },
+    {
+      "id": "verify_publish_button",
+      "action": "wait_selector",
+      "selector": "button",
+      "timeoutMs": 10000
+    },
+    {
+      "id": "fill_title",
+      "action": "eval",
+      "script": "(title) => {\n  const isVisible = (el) => {\n    if (!el) return false;\n    const style = window.getComputedStyle(el);\n    if (!style || style.visibility === 'hidden' || style.display === 'none') return false;\n    const rect = el.getBoundingClientRect();\n    return rect.width > 0 && rect.height > 0;\n  };\n  const markInput = (el, value) => {\n    el.focus();\n    el.innerText = '';\n    el.dispatchEvent(new Event('input', { bubbles: true }));\n    try { document.execCommand('insertText', false, value); } catch (e) { el.innerText = value; }\n    if (!el.innerText || el.innerText.trim() === '') el.innerText = value;\n    try {\n      el.dispatchEvent(new InputEvent('input', { bubbles: true, data: value, inputType: 'insertText' }));\n    } catch (e) {\n      el.dispatchEvent(new Event('input', { bubbles: true }));\n    }\n    el.dispatchEvent(new Event('change', { bubbles: true }));\n    el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'a' }));\n  };\n  const candidates = Array.from(document.querySelectorAll('[contenteditable=\"true\"], [contenteditable=\"plaintext-only\"]')).filter(isVisible);\n  for (const el of candidates) {\n    const placeholder = ((el.getAttribute('placeholder') || '') + ' ' + (el.getAttribute('data-placeholder') || '') + ' ' + (el.getAttribute('aria-label') || '')).trim();\n    const text = (el.textContent || '').trim();\n    if (placeholder.includes('标题') || text.includes('请输入标题')) {\n      markInput(el, title);\n      return { success: true };\n    }\n  }\n  return { success: false };\n}",
+      "args": ["{{title}}"]
+    },
+    {
+      "id": "fill_title_fallback",
+      "action": "needs_manual",
+      "optional": true,
+      "prompt": "未能自动填写企鹅号标题，请手动补全后点击继续"
+    },
+    {
+      "id": "fill_content",
+      "action": "eval",
+      "script": "(content) => {\n  const isVisible = (el) => {\n    if (!el) return false;\n    const style = window.getComputedStyle(el);\n    if (!style || style.visibility === 'hidden' || style.display === 'none') return false;\n    const rect = el.getBoundingClientRect();\n    return rect.width > 0 && rect.height > 0;\n  };\n  const editors = Array.from(document.querySelectorAll('main [contenteditable=\"true\"], [contenteditable=\"true\"][role=\"textbox\"]')).filter(isVisible);\n  const score = (el) => {\n    const placeholder = (el.getAttribute('placeholder') || '').trim();\n    const text = (el.textContent || '').trim();\n    if (placeholder.includes('标题') || text.includes('请输入标题')) return -1;\n    let s = 0;\n    if (el.closest('main')) s += 3;\n    if (el.getAttribute('role') === 'textbox') s += 2;\n    if ((el.getAttribute('data-placeholder') || '').length > 0) s += 1;\n    const rect = el.getBoundingClientRect();\n    s += Math.min(5, Math.floor(rect.height / 80));\n    return s;\n  };\n  const target = editors.map(el => ({ el, score: score(el) })).filter(item => item.score >= 0).sort((a, b) => b.score - a.score)[0];\n  if (!target) return { success: false };\n  const el = target.el;\n  el.focus();\n  el.innerHTML = '';\n  el.dispatchEvent(new Event('input', { bubbles: true }));\n  try { document.execCommand('insertHTML', false, content); } catch (e) { el.innerHTML = content; }\n  if (!el.innerHTML || el.innerHTML.trim() === '') el.innerHTML = content;\n  el.dispatchEvent(new Event('input', { bubbles: true }));\n  el.dispatchEvent(new Event('change', { bubbles: true }));\n  try {\n    el.dispatchEvent(new InputEvent('input', { bubbles: true, data: content, inputType: 'insertFromPaste' }));\n  } catch (e) {\n    el.dispatchEvent(new Event('input', { bubbles: true }));\n  }\n  return { success: true };\n}",
+      "args": ["{{content}}"]
+    },
+    {
+      "id": "wait_after_content",
+      "action": "wait",
+      "ms": 1000
+    },
+    {
+      "id": "click_declaration",
+      "action": "click_r",
+      "selector": "button",
+      "regex": "添加内容自主声明",
+      "timeoutMs": 5000
+    },
+    {
+      "id": "wait_declaration_modal",
+      "action": "wait",
+      "ms": 1200
+    },
+    {
+      "id": "select_declarations",
+      "action": "eval",
+      "script": "() => {\n  const isVisible = (el) => {\n    if (!el) return false;\n    const style = window.getComputedStyle(el);\n    if (!style || style.visibility === 'hidden' || style.display === 'none') return false;\n    const rect = el.getBoundingClientRect();\n    return rect.width > 0 && rect.height > 0;\n  };\n  const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim();\n  const clickOption = (re) => {\n    const candidates = Array.from(document.querySelectorAll('label, button, [role=\"button\"], span, div, li, p')).filter(isVisible);\n    for (const el of candidates) {\n      const text = norm(el.innerText || el.textContent || '');\n      if (!re.test(text)) continue;\n      const clickable = el.closest('label, button, [role=\"button\"], li, div') || el;\n      clickable.click();\n      return true;\n    }\n    return false;\n  };\n  const aiSelected = clickOption(/AI(生成|创作)?声明|AIGC声明|AI声明/);\n  const contentSelected = clickOption(/发布内容自主声明|内容自主声明|自主声明/);\n  return { aiSelected, contentSelected, ok: aiSelected && contentSelected };\n}"
+    },
+    {
+      "id": "manual_declaration_fallback",
+      "action": "needs_manual",
+      "optional": true,
+      "prompt": "请在声明弹框中勾选 AI 生成声明和发布内容自主声明后点击继续"
+    },
+    {
+      "id": "wait_before_confirm_decl",
+      "action": "wait",
+      "ms": 600
+    },
+    {
+      "id": "confirm_declaration",
+      "action": "eval",
+      "script": "() => {\n  const isVisible = (el) => {\n    if (!el) return false;\n    const style = window.getComputedStyle(el);\n    if (!style || style.visibility === 'hidden' || style.display === 'none') return false;\n    const rect = el.getBoundingClientRect();\n    return rect.width > 0 && rect.height > 0;\n  };\n  const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim();\n  const confirmRe = /确定|完成|提交/;\n  const skipRe = /发布|取消|关闭|返回/;\n  const candidates = Array.from(document.querySelectorAll('button, [role=\"button\"]')).filter(isVisible);\n  for (const el of candidates) {\n    const text = norm(el.innerText || el.textContent || '');\n    if (confirmRe.test(text) && !skipRe.test(text)) {\n      el.click();\n      return { success: true };\n    }\n  }\n  return { success: false };\n}"
+    },
+    {
+      "id": "wait_after_declaration",
+      "action": "wait",
+      "ms": 800
+    },
+    {
+      "id": "wait_before_publish",
+      "action": "wait",
+      "ms": 5000
+    },
+    {
+      "id": "click_publish",
+      "action": "eval",
+      "script": "() => {\n  const isVisible = (el) => {\n    if (!el) return false;\n    const style = window.getComputedStyle(el);\n    if (!style || style.visibility === 'hidden' || style.display === 'none') return false;\n    const rect = el.getBoundingClientRect();\n    return rect.width > 0 && rect.height > 0;\n  };\n  const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim();\n  const candidates = Array.from(document.querySelectorAll('button, [role=\"button\"], a')).filter(isVisible);\n  for (const el of candidates) {\n    const text = norm(el.innerText || el.textContent || el.getAttribute('aria-label') || '');\n    if (text === '发布') { el.click(); return { success: true }; }\n  }\n  const fallback = candidates.find(el => {\n    const text = norm(el.innerText || el.textContent || '');\n    return text.includes('发布') && !text.includes('草稿') && !text.includes('定时');\n  });\n  if (fallback) { fallback.click(); return { success: true }; }\n  return { success: false };\n}"
+    },
+    {
+      "id": "wait_after_publish",
+      "action": "wait",
+      "ms": 5000
+    },
+    {
+      "id": "manual_publish_confirm",
+      "action": "needs_manual",
+      "optional": true,
+      "prompt": "请在企鹅号页面完成最终发布确认，出现发布成功后点击继续"
+    },
+    {
+      "id": "wait_redirect",
+      "action": "wait_url_change",
+      "timeoutMs": 20000
+    }
+  ]
+}

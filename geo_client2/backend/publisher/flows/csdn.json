@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "platform": "csdn",
+  "steps": [
+    {"id": "open", "action": "navigate", "url": "https://mp.csdn.net/mp_blog/creation/editor"},
+    {"id": "wait_load", "action": "wait_load"},
+    {"id": "wait_idle", "action": "wait_idle"},
+    {"id": "wait_editor_init", "action": "wait", "ms": 3000},
+    {
+      "id": "wait_title",
+      "action": "wait_selector",
+      "selector": "textarea[placeholder*=\"请输入文章标题\"]",
+      "timeoutMs": 10000
+    },
+    {
+      "id": "fill_title",
+      "action": "fill",
+      "selector": "textarea[placeholder*=\"请输入文章标题\"]",
+      "value": "{{title}}",
+      "mode": "input"
+    },
+    {
+      "id": "fill_content",
+      "action": "eval",
+      "script": "(html) => { try { const iframe = document.querySelector('main iframe'); if (iframe && iframe.contentDocument && iframe.contentDocument.body) { iframe.contentDocument.body.innerHTML = html; iframe.contentDocument.body.dispatchEvent(new Event('input', { bubbles: true })); return { success: true, method: 'new_iframe', length: html.length }; } return { success: false, error: 'iframe not found' }; } catch (e) { return { success: false, error: e.message }; } }",
+      "args": ["{{content}}"]
+    },
+    {
+      "id": "trigger_word_count",
+      "action": "frame_fill",
+      "frameSelector": "main iframe",
+      "selector": "body",
+      "value": " ",
+      "mode": "input",
+      "clickFirst": true,
+      "optional": true
+    },
+    {"id": "wait_after_content", "action": "wait", "ms": 1000},
+    {
+      "id": "click_tag_btn",
+      "action": "click_r",
+      "selector": "button",
+      "regex": "添加文章标签"
+    },
+    {
+      "id": "wait_tag_popup",
+      "action": "wait_selector",
+      "selector": ".mark-modal, .tag-modal, [class*=\"tag\"][class*=\"modal\"], .el_mcm-dialog",
+      "timeoutMs": 10000
+    },
+    {"id": "wait_popup_ready", "action": "wait", "ms": 1000},
+    {
+      "id": "select_tags",
+      "action": "eval",
+      "script": "() => { const firstTag = document.querySelector('[class*=\"tabs__item\"][title=\"学习和成长\"], [class*=\"tab-item\"][title=\"学习和成长\"]') || Array.from(document.querySelectorAll('div, span')).find(el => el.textContent.trim() === '学习和成长'); if (firstTag) firstTag.click(); return !!firstTag; }"
+    },
+    {"id": "wait_subtags", "action": "wait", "ms": 2000},
+    {
+      "id": "select_subtags",
+      "action": "eval",
+      "script": "() => { const names = ['职场和发展', '学习方法']; let clicked = 0; for (const name of names) { const el = document.querySelector('[class*=\"tag\"][title=\"' + name + '\"], .tag-item[title=\"' + name + '\"]') || Array.from(document.querySelectorAll('span, div, label')).find(e => e.textContent.trim() === name); if (el) { el.click(); clicked++; } } return clicked; }"
+    },
+    {"id": "wait_after_tags", "action": "wait", "ms": 1000},
+    {
+      "id": "click_ai_summary",
+      "action": "click_r",
+      "selector": "*",
+      "regex": "AI提取摘要",
+      "optional": true,
+      "timeoutMs": 3000
+    },
+    {"id": "wait_ai_summary", "action": "wait", "ms": 3000, "optional": true},
+    {
+      "id": "click_publish",
+      "action": "click_r",
+      "selector": "button",
+      "regex": "发布博客"
+    },
+    {
+      "id": "wait_after_publish",
+      "action": "wait_url_change",
+      "timeoutMs": 15000,
+      "optional": true
+    },
+    {"id": "post_wait", "action": "wait", "ms": 3000}
+  ]
+}

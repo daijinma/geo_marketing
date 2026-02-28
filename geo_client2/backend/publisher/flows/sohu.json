@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "platform": "sohu",
+  "steps": [
+    {"id": "open", "action": "navigate", "url": "https://mp.sohu.com"},
+    {"id": "wait_load", "action": "wait_load"},
+    {"id": "wait_idle", "action": "wait_idle"},
+    {
+      "id": "click_publish_btn",
+      "action": "click_r",
+      "selector": "button",
+      "regex": "发布内容"
+    },
+    {
+      "id": "wait_redirect_to_editor",
+      "action": "wait_url_change",
+      "timeoutMs": 15000
+    },
+    {"id": "wait_load2", "action": "wait_load"},
+    {"id": "wait_idle2", "action": "wait_idle"},
+    {
+      "id": "fill_title",
+      "action": "fill",
+      "selector": ".publish-title input[type=\"text\"]",
+      "value": "{{title}}",
+      "mode": "input"
+    },
+    {
+      "id": "fill_content",
+      "action": "eval",
+      "script": "(html) => { const editor = document.querySelector('#editor .ql-editor'); if (!editor) { throw new Error('editor not found'); } editor.innerHTML = html; editor.dispatchEvent(new Event('input', { bubbles: true })); editor.dispatchEvent(new Event('change', { bubbles: true })); const container = document.querySelector('#editor .ql-container') || document.querySelector('#editor'); let quill = container && (container.__quill || window.quill); if (!quill && typeof Quill !== 'undefined' && container) { quill = Quill.find(container); } if (quill && typeof quill.update === 'function') { quill.update('user'); } return true; }",
+      "args": ["{{content}}"]
+    },
+    {
+      "id": "click_abstract",
+      "action": "click_r",
+      "selector": "button",
+      "regex": "生成摘要"
+    },
+    {"id": "wait_abstract", "action": "wait", "ms": 5000},
+    {
+      "id": "click_submit",
+      "action": "click",
+      "selector": "li.publish-report-btn.active.positive-button"
+    },
+    {
+      "id": "wait_after_publish",
+      "action": "wait_url_change",
+      "timeoutMs": 15000,
+      "optional": true
+    },
+    {"id": "post_wait", "action": "wait", "ms": 5000}
+  ]
+}

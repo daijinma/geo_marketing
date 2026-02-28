@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "platform": "baijiahao",
+  "steps": [
+    {
+      "id": "navigate",
+      "action": "navigate",
+      "url": "https://baijiahao.baidu.com/builder/rc/edit?type=news"
+    },
+    {
+      "id": "wait_load",
+      "action": "wait_load"
+    },
+    {
+      "id": "wait_idle",
+      "action": "wait_idle"
+    },
+    {
+      "id": "wait_editor",
+      "action": "wait",
+      "ms": 3000
+    },
+    {
+      "id": "verify_publish_button",
+      "action": "wait_selector",
+      "selector": "button",
+      "timeoutMs": 10000
+    },
+    {
+      "id": "fill_title",
+      "action": "eval",
+      "script": "(title) => {\n  const titleRoot = document.querySelector('div.client_components_titleInput');\n  const editor = titleRoot ? titleRoot.querySelector('[contenteditable=\"true\"]') : null;\n  if (editor) {\n    editor.focus();\n    editor.innerText = '';\n    editor.dispatchEvent(new Event('input', { bubbles: true }));\n    editor.innerText = title;\n    try {\n      editor.dispatchEvent(new InputEvent('input', { bubbles: true, data: title, inputType: 'insertText' }));\n    } catch (e) {\n      editor.dispatchEvent(new Event('input', { bubbles: true }));\n    }\n    editor.dispatchEvent(new Event('change', { bubbles: true }));\n    editor.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'a' }));\n    editor.dispatchEvent(new Event('blur', { bubbles: true }));\n    return { success: true };\n  }\n  const elements = document.querySelectorAll('[contenteditable=\"true\"]');\n  for (const el of elements) {\n    const t = (el.closest('div')?.textContent || '');\n    if (t.includes('请输入标题') || t.includes('标题（')) {\n      el.focus();\n      el.innerText = title;\n      el.dispatchEvent(new Event('input', { bubbles: true }));\n      return { success: true };\n    }\n  }\n  return { success: false };\n}",
+      "args": ["{{title}}"]
+    },
+    {
+      "id": "fill_content",
+      "action": "eval",
+      "script": "(content) => {\n  const inst = window.UE_V2 && window.UE_V2.instants && window.UE_V2.instants.ueditorInstant0;\n  if (inst && typeof inst.execCommand === 'function') {\n    try { inst.execCommand('cleardoc'); } catch (e) {}\n    try {\n      inst.execCommand('insertHtml', content);\n      return { success: true };\n    } catch (e) {}\n  }\n  const iframe = document.querySelector('iframe');\n  if (iframe && iframe.contentDocument && iframe.contentDocument.body) {\n    const editor = iframe.contentDocument.body.querySelector('[contenteditable=\"true\"]');\n    if (editor) {\n      editor.innerHTML = content;\n      editor.dispatchEvent(new Event('input', { bubbles: true }));\n      editor.dispatchEvent(new Event('change', { bubbles: true }));\n      return { success: true };\n    }\n    iframe.contentDocument.body.innerHTML = content;\n    iframe.contentDocument.body.dispatchEvent(new Event('input', { bubbles: true }));\n    return { success: true };\n  }\n  return { success: false };\n}",
+      "args": ["{{content}}"]
+    },
+    {
+      "id": "wait_after_content",
+      "action": "wait",
+      "ms": 1000
+    },
+    {
+      "id": "download_cover",
+      "action": "download_to_temp",
+      "url": "{{cover_image}}",
+      "optional": true
+    },
+    {
+      "id": "open_cover_picker",
+      "action": "eval",
+      "optional": true,
+      "script": "() => {\n  const root = document.getElementById('bjhNewsCover');\n  const txt = root ? (root.textContent || '') : '';\n  if (!txt.includes('选择封面')) return { skipped: true };\n  const icon = document.querySelector('#bjhNewsCover ._73a3a52aab7e3a36-icon');\n  if (icon) { icon.click(); return { success: true }; }\n  const fallback = Array.from(document.querySelectorAll('*')).find(el => (el.textContent || '').replace(/\\s+/g,'').trim() === '选择封面');\n  if (fallback) { fallback.click(); return { success: true }; }\n  return { success: false };\n}"
+    },
+    {
+      "id": "switch_to_content_tab",
+      "action": "eval",
+      "optional": true,
+      "script": "() => {\n  const wrap = document.querySelector('.cheetah-modal-wrap');\n  if (!wrap) return { success: false };\n  const tabs = Array.from(wrap.querySelectorAll('[role=tab]'));\n  const tab = tabs.find(t => (t.textContent || '').replace(/\\s+/g,'').includes('正文'));\n  if (tab) { tab.click(); return { success: true }; }\n  return { success: false };\n}"
+    },
+    {
+      "id": "set_cover_file",
+      "action": "set_files",
+      "selector": ".cheetah-modal-wrap input[type=\"file\"][accept*=\"image\"]",
+      "files": ["{{temp_cover}}"],
+      "optional": true,
+      "timeoutMs": 10000
+    },
+    {
+      "id": "wait_cover_confirm_enabled",
+      "action": "eval",
+      "optional": true,
+      "script": "() => new Promise(resolve => {\n  let attempts = 0;\n  const check = () => {\n    const wrap = document.querySelector('.cheetah-modal-wrap');\n    if (!wrap) { resolve({ ok: false }); return; }\n    const btns = Array.from(wrap.querySelectorAll('button'));\n    const ok = btns.find(b => (b.textContent || '').replace(/\\s+/g,'').trim() === '确定');\n    if (ok && !ok.disabled) { resolve({ ok: true }); return; }\n    if (++attempts < 60) setTimeout(check, 300); else resolve({ ok: false });\n  };\n  check();\n})"
+    },
+    {
+      "id": "confirm_cover",
+      "action": "click_r",
+      "selector": ".cheetah-modal-wrap button",
+      "regex": "确定",
+      "optional": true,
+      "timeoutMs": 5000
+    },
+    {
+      "id": "click_publish",
+      "action": "click_r",
+      "selector": "button",
+      "regex": "发布",
+      "timeoutMs": 5000
+    },
+    {
+      "id": "wait_redirect",
+      "action": "wait_url_change",
+      "timeoutMs": 20000
+    }
+  ]
+}
