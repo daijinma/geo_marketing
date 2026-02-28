@@ -150,7 +150,7 @@ export default function Search() {
               onClick={handleSearch}
               disabled={isSearching}
               className={`
-                w-full md:w-auto px-8 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all shadow-sm hover:shadow-md
+                w-full md:w-auto px-8 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all shadow-sm hover:shadow-sm
                 ${isSearching 
                   ? 'bg-muted text-muted-foreground cursor-not-allowed' 
                   : 'bg-primary text-primary-foreground hover:bg-primary/90 hover:scale-[1.02] active:scale-[0.98]'}

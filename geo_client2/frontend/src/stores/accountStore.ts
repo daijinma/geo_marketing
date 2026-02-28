@@ -3,11 +3,11 @@ import { wailsAPI, type Account } from '@/utils/wails-api';
 
 type PlatformName =
   | 'deepseek' | 'doubao' | 'yiyan' | 'yuanbao'
-  | 'xiaohongshu' | 'zhihu' | 'sohu' | 'csdn' | 'qie' | 'baijiahao';
+  | 'xiaohongshu' | 'zhihu' | 'sohu' | 'csdn' | 'qie' | 'baijiahao' | 'toutiao';
 
 const ALL_PLATFORMS: PlatformName[] = [
   'deepseek', 'doubao', 'yiyan', 'yuanbao',
-  'xiaohongshu', 'zhihu', 'sohu', 'csdn', 'qie', 'baijiahao',
+  'xiaohongshu', 'zhihu', 'sohu', 'csdn', 'qie', 'baijiahao', 'toutiao',
 ];
 
 interface AccountState {

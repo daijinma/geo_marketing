@@ -18,21 +18,29 @@ import (
 )
 
 type FlowRunner struct {
-	log      *logger.Logger
-	platform string
-	emit     EventEmitter
-	resume   <-chan struct{}
-	tempVars map[string]string
+	log       *logger.Logger
+	platform  string
+	jobTaskID string
+	emit      EventEmitter
+	resume    <-chan struct{}
+	aiConfig  *AIPublishConfig
+	tempVars  map[string]string
 }
 
-func NewFlowRunner(log *logger.Logger, platform string, emit EventEmitter, resume <-chan struct{}) *FlowRunner {
+func NewFlowRunner(log *logger.Logger, platform, jobTaskID string, emit EventEmitter, resume <-chan struct{}) *FlowRunner {
 	return &FlowRunner{
-		log:      log,
-		platform: platform,
-		emit:     emit,
-		resume:   resume,
-		tempVars: make(map[string]string),
+		log:       log,
+		platform:  platform,
+		jobTaskID: jobTaskID,
+		emit:      emit,
+		resume:    resume,
+		tempVars:  make(map[string]string),
 	}
+}
+
+func (r *FlowRunner) WithAIConfig(cfg AIPublishConfig) *FlowRunner {
+	r.aiConfig = &cfg
+	return r
 }
 
 func (r *FlowRunner) Run(ctx context.Context, page *rod.Page, flow *Flow, article Article) (string, error) {
@@ -62,6 +70,7 @@ func (r *FlowRunner) Run(ctx context.Context, page *rod.Page, flow *Flow, articl
 				}, nil)
 				continue
 			}
+
 			r.log.InfoWithContext(ctx, fmt.Sprintf("[Flow] step failed id=%s action=%s err=%v", step.ID, step.Action, stepErr), map[string]interface{}{
 				"platform": r.platform,
 				"step_id":  step.ID,
@@ -69,7 +78,10 @@ func (r *FlowRunner) Run(ctx context.Context, page *rod.Page, flow *Flow, articl
 				"index":    i,
 				"error":    stepErr.Error(),
 			}, nil)
-			return "", fmt.Errorf("flow step failed id=%s action=%s: %w", step.ID, step.Action, stepErr)
+
+			if resumeErr := r.handleStepFailure(ctx, page, step, stepErr); resumeErr != nil {
+				return "", fmt.Errorf("flow step failed id=%s action=%s: %w", step.ID, step.Action, stepErr)
+			}
 		}
 	}
 
@@ -140,6 +152,26 @@ func (r *FlowRunner) interp(raw string, article Article) string {
 	return interpolateValue(raw, article, r.tempVars)
 }
 
+func (r *FlowRunner) handleStepFailure(ctx context.Context, page *rod.Page, step FlowStep, stepErr error) error {
+	if r.emit == nil || r.resume == nil {
+		return stepErr
+	}
+
+	prompt := fmt.Sprintf(
+		"步骤「%s」自动执行失败：%s\n\n请在浏览器中手动完成该操作，完成后点击「继续」。",
+		step.ID, stepErr.Error(),
+	)
+
+	taskID := r.jobTaskID
+	r.log.InfoWithContext(ctx, fmt.Sprintf("[Flow] step failure, waiting for manual intervention id=%s", step.ID), map[string]interface{}{
+		"platform": r.platform,
+		"step_id":  step.ID,
+		"error":    stepErr.Error(),
+	}, nil)
+
+	return emitNeedsManual(ctx, r.platform, taskID, prompt, r.resume, r.emit)
+}
+
 func (r *FlowRunner) doStep(stepCtx context.Context, ctx context.Context, page *rod.Page, step FlowStep, action string, article Article) error {
 	switch action {
 	case "navigate":
@@ -148,10 +180,9 @@ func (r *FlowRunner) doStep(stepCtx context.Context, ctx context.Context, page *
 		}
 		return page.Navigate(step.URL)
 	case "wait_load":
-		page.MustWaitLoad()
-		return nil
+		return page.WaitLoad()
 	case "wait_idle":
-		page.MustWaitIdle()
+		rod.Try(func() { _ = page.Timeout(10 * time.Second).WaitStable(1 * time.Second) })
 		return nil
 	case "wait":
 		d := time.Duration(step.MS) * time.Millisecond
@@ -320,7 +351,7 @@ func (r *FlowRunner) doStep(stepCtx context.Context, ctx context.Context, page *
 		if prompt == "" {
 			prompt = "请手动完成操作后点击继续"
 		}
-		taskID := fmt.Sprintf("%s-%d", r.platform, time.Now().UnixNano())
+		taskID := r.jobTaskID
 		return emitNeedsManual(ctx, r.platform, taskID, prompt, r.resume, r.emit)
 	default:
 		return fmt.Errorf("unsupported action: %s", step.Action)
@@ -346,20 +377,65 @@ func (r *FlowRunner) fillElement(el *rod.Element, mode string, value string) err
 		if err := el.Input(value); err == nil {
 			return nil
 		}
-		_, err := el.Eval(`(el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }`, value)
+		_, err := el.Eval(`(v) => { this.value = v; this.dispatchEvent(new Event('input', { bubbles: true })); }`, value)
 		return err
 	case "value":
-		_, err := el.Eval(`(el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }`, value)
+		_, err := el.Eval(`(v) => { this.value = v; this.dispatchEvent(new Event('input', { bubbles: true })); this.dispatchEvent(new Event('change', { bubbles: true })); }`, value)
 		return err
 	case "innertext":
-		_, err := el.Eval(`(el, v) => { el.innerText = v; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }`, value)
+		_, err := el.Eval(`(v) => { this.innerText = v; this.dispatchEvent(new Event('input', { bubbles: true })); this.dispatchEvent(new Event('change', { bubbles: true })); }`, value)
 		return err
 	case "innerhtml":
-		_, err := el.Eval(`(el, v) => { el.innerHTML = v; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }`, value)
+		_, err := el.Eval(`(v) => { this.innerHTML = v; this.dispatchEvent(new Event('input', { bubbles: true })); this.dispatchEvent(new Event('change', { bubbles: true })); }`, value)
+		return err
+	case "clipboard":
+		_ = el.Click(proto.InputMouseButtonLeft, 1)
+		plain := stripHTMLTags(value)
+		_, err := el.Eval(`(html, plain) => {
+			this.focus();
+			const sel = window.getSelection();
+			const range = document.createRange();
+			range.selectNodeContents(this);
+			sel.removeAllRanges();
+			sel.addRange(range);
+			const dt = new DataTransfer();
+			dt.setData('text/html', html);
+			dt.setData('text/plain', plain);
+			this.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+		}`, value, plain)
+		if err != nil {
+			return fmt.Errorf("clipboard fill eval: %w", err)
+		}
+		return nil
+	case "react":
+		_, err := el.Eval(`(v) => {
+			const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value') ||
+				Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+			if (nativeSetter && nativeSetter.set) {
+				nativeSetter.set.call(this, v);
+			} else {
+				this.value = v;
+			}
+			this.dispatchEvent(new Event('input', { bubbles: true }));
+			this.dispatchEvent(new Event('change', { bubbles: true }));
+		}`, value)
 		return err
 	default:
 		return fmt.Errorf("unsupported fill mode: %s", mode)
 	}
+}
+
+var reHTMLTag = regexp.MustCompile(`<[^>]*>`)
+
+func stripHTMLTags(html string) string {
+	plain := reHTMLTag.ReplaceAllString(html, "")
+	plain = strings.ReplaceAll(plain, "&amp;", "&")
+	plain = strings.ReplaceAll(plain, "&lt;", "<")
+	plain = strings.ReplaceAll(plain, "&gt;", ">")
+	plain = strings.ReplaceAll(plain, "&nbsp;", " ")
+	plain = strings.ReplaceAll(plain, "&quot;", "\"")
+	plain = strings.ReplaceAll(plain, "&#39;", "'")
+	return strings.TrimSpace(plain)
 }
 
 func downloadURLToTempFileFlow(urlStr string) (string, error) {

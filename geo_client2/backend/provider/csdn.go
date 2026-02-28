@@ -7,6 +7,8 @@ import (
 
 	"geo_client2/backend/config"
 	"geo_client2/backend/logger"
+
+	"github.com/go-rod/rod"
 )
 
 type CsdnProvider struct {
@@ -36,8 +38,11 @@ func (p *CsdnProvider) CheckLoginStatus() (bool, error) {
 
 	page := browser.MustPage(homeURL)
 	defer page.Close()
-	page.MustWaitLoad()
-	page.MustWaitIdle()
+
+	if err := page.WaitLoad(); err != nil {
+		p.logger.Warn("[CheckLoginStatus] csdn: WaitLoad failed: " + err.Error())
+	}
+	rod.Try(func() { _ = page.Timeout(5 * time.Second).WaitStable(1 * time.Second) })
 	time.Sleep(2 * time.Second)
 
 	hasCreateLink, createEl, _ := page.HasR("a", "创作")

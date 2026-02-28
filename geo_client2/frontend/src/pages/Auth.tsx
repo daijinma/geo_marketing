@@ -23,7 +23,7 @@ import { toast } from 'sonner';
 
 type PlatformKey =
   | 'deepseek' | 'doubao' | 'yiyan' | 'yuanbao'
-  | 'xiaohongshu' | 'zhihu' | 'sohu' | 'csdn' | 'qie' | 'baijiahao';
+  | 'xiaohongshu' | 'zhihu' | 'sohu' | 'csdn' | 'qie' | 'baijiahao' | 'toutiao';
 
 interface PlatformConfig {
   id: PlatformKey;
@@ -71,6 +71,7 @@ export default function Auth() {
     { id: 'csdn',        name: 'CSDN',      category: 'social_media' },
     { id: 'qie',         name: '企鹅号',    category: 'social_media' },
     { id: 'baijiahao',   name: '百家号',    category: 'social_media' },
+    { id: 'toutiao',     name: '头条号',    category: 'social_media' },
     // { id: 'xiaohongshu', name: '小红书',    category: 'social_media' },
   ];
 
@@ -402,7 +403,7 @@ export default function Auth() {
     <div className="p-4 md:p-6 space-y-8 max-w-[1600px] mx-auto">
       {deleteConfirm && (
         <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-card border border-border p-5 rounded-xl shadow-2xl max-w-sm w-full space-y-4 animate-in fade-in zoom-in duration-200">
+          <div className="bg-card border border-border p-5 rounded-xl shadow-md max-w-sm w-full space-y-4 animate-in fade-in zoom-in duration-200">
             <div className="flex items-start gap-3 text-destructive">
               <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
               <div>
@@ -422,7 +423,7 @@ export default function Auth() {
 
       {isLoginOpen && (
         <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-card border border-border p-8 rounded-2xl shadow-2xl max-w-md w-full text-center space-y-6 animate-in fade-in zoom-in duration-200">
+          <div className="bg-card border border-border p-8 rounded-xl shadow-md max-w-md w-full text-center space-y-6 animate-in fade-in zoom-in duration-200">
             <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
               <Shield className="w-8 h-8 text-primary animate-pulse" />
             </div>
@@ -435,7 +436,7 @@ export default function Auth() {
             <button
               onClick={handleConfirmLogin}
               disabled={checkingLogin}
-              className="w-full py-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all font-bold shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full py-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all font-bold shadow-sm shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {checkingLogin ? (
                 <>

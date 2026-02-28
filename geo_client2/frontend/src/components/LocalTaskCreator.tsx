@@ -57,7 +57,7 @@ export function LocalTaskCreator({ onClose, onCreated }: LocalTaskCreatorProps) 
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-card border border-border rounded-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto shadow-2xl animate-in zoom-in-95 duration-200 scale-100">
+      <div className="bg-card border border-border rounded-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto shadow-md animate-in zoom-in-95 duration-200 scale-100">
         <div className="p-6 border-b border-border/50 flex items-center justify-between sticky top-0 bg-card/95 backdrop-blur z-10">
           <div>
             <h2 className="text-xl font-bold tracking-tight">创建本地搜索任务</h2>

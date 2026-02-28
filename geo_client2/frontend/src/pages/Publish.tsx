@@ -32,6 +32,7 @@ const SOCIAL_PLATFORMS: PlatformOption[] = [
   { id: 'csdn',        name: 'CSDN',   category: 'social_media' },
   { id: 'qie',         name: '企鹅号', category: 'social_media' },
   { id: 'baijiahao',   name: '百家号', category: 'social_media' },
+  { id: 'toutiao',     name: '头条号', category: 'social_media' },
   // { id: 'xiaohongshu', name: '小红书', category: 'social_media' },
 ];
 
@@ -154,6 +155,17 @@ export default function Publish() {
       }
     });
 
+    const unsubFailed = EventsOn('publish:failed', (data: any) => {
+      setPublishStates(prev => ({
+        ...prev,
+        [data.platform]: {
+          status: 'failed',
+          message: data.error || '发布失败',
+        },
+      }));
+      toast.error(`${getPlatformName(data.platform)} 发布失败：${data.error}`);
+    });
+
     const unsubAllDone = EventsOn('publish:all_done', () => {
       setIsPublishing(false);
       toast.success('所有平台发布任务已完成');
@@ -164,6 +176,7 @@ export default function Publish() {
       unsubProgress();
       unsubManual();
       unsubCompleted();
+      unsubFailed();
       unsubAllDone();
     };
   }, []);
@@ -552,7 +565,7 @@ export default function Publish() {
       </div>
 
       {/* 底部悬浮操作栏 */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-background border-t border-border shadow-lg z-50">
+      <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-background border-t border-border shadow-sm z-50">
         <div className="max-w-[1200px] mx-auto px-5 py-5 flex items-center gap-4">
           {!isPublishing ? (
             <button

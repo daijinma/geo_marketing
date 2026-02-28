@@ -47,7 +47,12 @@ func (d *YuanbaoProvider) CheckLoginStatus() (bool, error) {
 	defer d.Close()
 
 	page := browser.MustPage(d.GetLoginUrl())
-	page.MustWaitLoad()
+	defer page.Close()
+
+	if err := page.WaitLoad(); err != nil {
+		d.logger.Warn("[CheckLoginStatus] Yuanbao: WaitLoad failed: " + err.Error())
+	}
+	rod.Try(func() { _ = page.Timeout(5 * time.Second).WaitStable(1 * time.Second) })
 	time.Sleep(5 * time.Second)
 
 	// Strategy 1: Check Cookies

@@ -255,12 +255,19 @@ func (r *LongTaskRunner) processPlatform(platform string) {
 		}
 
 		resumeCh := make(chan struct{}, 1)
+		platformTaskID := fmt.Sprintf("%s-%s-%d", r.state.TaskID, platform, time.Now().UnixNano())
+
+		if fp, ok := pub.(*FlowPublisher); ok {
+			fp.jobTaskID = platformTaskID
+		}
+		r.manager.RegisterResumeChannel(platformTaskID, resumeCh)
 
 		platformEmit := func(event string, data interface{}) {
 			r.emit(event, data)
 		}
 
 		err = pub.Publish(r.ctx, r.state.Article, resumeCh, platformEmit, r.aiConfig)
+		r.manager.UnregisterResumeChannel(platformTaskID)
 		pub.Close()
 
 		if err == nil || err == errAlreadyEmitted {

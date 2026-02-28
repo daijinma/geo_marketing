@@ -7,6 +7,8 @@ import (
 
 	"geo_client2/backend/config"
 	"geo_client2/backend/logger"
+
+	"github.com/go-rod/rod"
 )
 
 // SocialProvider provides basic login support for social media platforms.
@@ -38,7 +40,11 @@ func (p *SocialProvider) CheckLoginStatus() (bool, error) {
 
 	page := browser.MustPage(homeURL)
 	defer page.Close()
-	page.MustWaitLoad()
+
+	if err := page.WaitLoad(); err != nil {
+		p.logger.Warn(fmt.Sprintf("[CheckLoginStatus] %s: WaitLoad failed: %s", p.platform, err.Error()))
+	}
+	rod.Try(func() { _ = page.Timeout(5 * time.Second).WaitStable(1 * time.Second) })
 	time.Sleep(2 * time.Second)
 
 	hasLogin, _, _ := page.HasR("a, button, div, span", "登录|注册|登录/注册")

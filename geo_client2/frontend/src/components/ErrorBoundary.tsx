@@ -41,7 +41,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-          <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-6">
+          <div className="max-w-md w-full bg-white shadow-sm rounded-lg p-6">
             <h2 className="text-xl font-bold text-red-600 mb-4">出错了</h2>
             <p className="text-gray-700 mb-4">
               应用程序遇到了一个错误。错误已被记录，请稍后重试。

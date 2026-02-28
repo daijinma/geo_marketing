@@ -70,6 +70,12 @@ var Platforms = map[string]PlatformConfig{
 		HomeURL:  "https://baijiahao.baidu.com",
 		Category: "social_media",
 	},
+	"toutiao": {
+		Name:     "头条号",
+		LoginURL: "https://mp.toutiao.com/profile_v4/index",
+		HomeURL:  "https://mp.toutiao.com/profile_v4/index",
+		Category: "social_media",
+	},
 }
 
 func GetLoginURL(platform string) string {

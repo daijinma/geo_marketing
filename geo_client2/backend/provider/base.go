@@ -149,7 +149,7 @@ func (b *BaseProvider) StartLogin() (func(), error) {
 	}
 
 	page := browser.MustPage(b.loginURL)
-	page.MustWaitLoad()
+	_ = page.WaitLoad()
 
 	cleanup := func() {
 		if b.browser != nil {
@@ -214,6 +214,8 @@ func (f *Factory) GetProvider(platform string, headless bool, timeout int, accou
 		return NewQieProvider(headless, timeout, accountID), nil
 	case "baijiahao":
 		return NewBaijiahaoProvider(headless, timeout, accountID), nil
+	case "toutiao":
+		return NewToutiaoProvider(headless, timeout, accountID), nil
 	default:
 		return nil, fmt.Errorf("unsupported platform: %s", platform)
 	}

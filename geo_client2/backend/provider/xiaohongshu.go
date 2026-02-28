@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"geo_client2/backend/logger"
+
+	"github.com/go-rod/rod"
 )
 
 // XiaohongshuProvider implements Xiaohongshu search.
@@ -38,7 +40,11 @@ func (p *XiaohongshuProvider) CheckLoginStatus() (bool, error) {
 
 	page := browser.MustPage("https://www.xiaohongshu.com/")
 	defer page.Close()
-	page.MustWaitLoad()
+
+	if err := page.WaitLoad(); err != nil {
+		p.logger.Warn("[CheckLoginStatus] Xiaohongshu: WaitLoad failed: " + err.Error())
+	}
+	rod.Try(func() { _ = page.Timeout(5 * time.Second).WaitStable(1 * time.Second) })
 	time.Sleep(3 * time.Second)
 
 	// Strategy 1: Check Cookies
@@ -125,7 +131,7 @@ func (p *XiaohongshuProvider) Search(ctx context.Context, keyword, prompt string
 	}
 
 	page := browser.MustPage("https://www.xiaohongshu.com/")
-	page.MustWaitLoad()
+	_ = page.WaitLoad()
 
 	return &SearchResult{
 		Queries:   []string{keyword},

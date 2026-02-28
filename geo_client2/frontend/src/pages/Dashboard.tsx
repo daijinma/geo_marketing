@@ -20,7 +20,7 @@ export default function Dashboard() {
         const result = await wailsAPI.task.getStats();
         if (result) {
           setStats({
-            queue: (result as any).running || 0,
+            queue: (result as any).pending || 0,
             running: (result as any).running || 0,
             completed: (result as any).completed || 0,
             failed: (result as any).failed || 0,
@@ -51,7 +51,7 @@ export default function Dashboard() {
       </div>
       
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
-        <div className="p-6 bg-card border border-border/50 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 group">
+        <div className="p-6 bg-card border border-border/50 rounded-xl shadow-sm hover:shadow-sm transition-all duration-200 group">
           <div className="flex flex-col h-full justify-between space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-muted-foreground">账户总数</span>
@@ -68,7 +68,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="p-6 bg-card border border-border/50 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 group">
+        <div className="p-6 bg-card border border-border/50 rounded-xl shadow-sm hover:shadow-sm transition-all duration-200 group">
           <div className="flex flex-col h-full justify-between space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-muted-foreground">待执行</span>
@@ -85,7 +85,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="p-6 bg-card border border-border/50 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 group">
+        <div className="p-6 bg-card border border-border/50 rounded-xl shadow-sm hover:shadow-sm transition-all duration-200 group">
           <div className="flex flex-col h-full justify-between space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-muted-foreground">执行中</span>
@@ -102,7 +102,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="p-6 bg-card border border-border/50 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 group">
+        <div className="p-6 bg-card border border-border/50 rounded-xl shadow-sm hover:shadow-sm transition-all duration-200 group">
           <div className="flex flex-col h-full justify-between space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-muted-foreground">已完成</span>
@@ -119,7 +119,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="p-6 bg-card border border-border/50 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 group">
+        <div className="p-6 bg-card border border-border/50 rounded-xl shadow-sm hover:shadow-sm transition-all duration-200 group">
           <div className="flex flex-col h-full justify-between space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-muted-foreground">失败</span>

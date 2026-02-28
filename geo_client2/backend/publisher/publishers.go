@@ -249,7 +249,7 @@ func executeDecision(page *rod.Page, decision *aiassist.Decision) error {
 		if err := el.Input(decision.Value); err == nil {
 			return nil
 		}
-		_, err = el.Eval(`(el, value) => { el.innerText = value; el.dispatchEvent(new Event('input', { bubbles: true })); }`, decision.Value)
+		_, err = el.Eval(`(v) => { this.innerText = v; this.dispatchEvent(new Event('input', { bubbles: true })); }`, decision.Value)
 		if err != nil {
 			return fmt.Errorf("fallback contenteditable input failed: %w", err)
 		}
@@ -289,7 +289,7 @@ func executeCachedDecision(page *rod.Page, decision CachedDecision) error {
 		if err := el.Input(decision.Value); err == nil {
 			return nil
 		}
-		_, err = el.Eval(`(el, value) => { el.innerText = value; el.dispatchEvent(new Event('input', { bubbles: true })); }`, decision.Value)
+		_, err = el.Eval(`(v) => { this.innerText = v; this.dispatchEvent(new Event('input', { bubbles: true })); }`, decision.Value)
 		if err != nil {
 			return fmt.Errorf("fallback contenteditable input failed: %w", err)
 		}
@@ -527,6 +527,7 @@ var popupConfirmPolicies = map[string]PopupConfirmPolicy{
 	"csdn":      defaultPopupConfirmPolicy,
 	"qie":       defaultPopupConfirmPolicy,
 	"baijiahao": defaultPopupConfirmPolicy,
+	"toutiao":   defaultPopupConfirmPolicy,
 }
 
 func getPopupConfirmPolicy(platform string) PopupConfirmPolicy {

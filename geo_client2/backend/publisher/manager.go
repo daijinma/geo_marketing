@@ -49,19 +49,35 @@ type publishJob struct {
 
 // Manager manages concurrent publish jobs.
 type Manager struct {
-	mu      sync.Mutex
-	jobs    map[string]*publishJob // taskID -> job
-	logger  *logger.Logger
-	factory *provider.Factory
+	mu             sync.Mutex
+	jobs           map[string]*publishJob
+	resumeRegistry map[string]chan struct{}
+	logger         *logger.Logger
+	factory        *provider.Factory
 }
 
 // NewManager creates a new publish manager.
 func NewManager(factory *provider.Factory) *Manager {
 	return &Manager{
-		jobs:    make(map[string]*publishJob),
-		logger:  logger.GetLogger(),
-		factory: factory,
+		jobs:           make(map[string]*publishJob),
+		resumeRegistry: make(map[string]chan struct{}),
+		logger:         logger.GetLogger(),
+		factory:        factory,
 	}
+}
+
+// RegisterResumeChannel registers an external resume channel (e.g. longtask per-platform) keyed by taskID.
+func (m *Manager) RegisterResumeChannel(taskID string, ch chan struct{}) {
+	m.mu.Lock()
+	m.resumeRegistry[taskID] = ch
+	m.mu.Unlock()
+}
+
+// UnregisterResumeChannel removes a previously registered resume channel.
+func (m *Manager) UnregisterResumeChannel(taskID string) {
+	m.mu.Lock()
+	delete(m.resumeRegistry, taskID)
+	m.mu.Unlock()
 }
 
 // StartPublish starts publishing an article to multiple platforms concurrently.
@@ -112,6 +128,10 @@ func (m *Manager) StartPublish(
 				return
 			}
 			defer pub.Close()
+
+			if fp, ok := pub.(*FlowPublisher); ok {
+				fp.jobTaskID = tid
+			}
 
 			emit("publish:progress", map[string]string{"platform": p, "message": "检查登录状态..."})
 			loggedIn, err := pub.CheckLoginStatus()
@@ -187,18 +207,25 @@ func (m *Manager) StartPublish(
 // ResumePublish signals a waiting job to continue after manual intervention.
 func (m *Manager) ResumePublish(taskID string) error {
 	m.mu.Lock()
-	job, ok := m.jobs[taskID]
+	job, inJobs := m.jobs[taskID]
+	ch, inRegistry := m.resumeRegistry[taskID]
 	m.mu.Unlock()
 
-	if !ok {
-		return fmt.Errorf("publish job not found: %s", taskID)
+	if inJobs {
+		select {
+		case job.resume <- struct{}{}:
+		default:
+		}
+		return nil
 	}
-
-	select {
-	case job.resume <- struct{}{}:
-	default:
+	if inRegistry {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+		return nil
 	}
-	return nil
+	return fmt.Errorf("publish job not found: %s", taskID)
 }
 
 // CancelPublish cancels a running publish job.

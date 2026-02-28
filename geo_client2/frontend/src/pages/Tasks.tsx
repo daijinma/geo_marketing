@@ -288,7 +288,7 @@ export default function Tasks() {
           ) : (
             <div className="space-y-4 p-5">
               {publishTasks.slice(0, 50).map((t) => (
-                <div key={t.task_id} className="relative group bg-card border border-border/50 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden">
+                <div key={t.task_id} className="relative group bg-card border border-border/50 rounded-xl shadow-sm hover:shadow-sm transition-all duration-200 overflow-hidden">
                   <div className="p-5">
                     <div className="flex items-center justify-between gap-6">
                       <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -405,7 +405,7 @@ export default function Tasks() {
                 <div className="text-xs text-muted-foreground mt-0.5">双击标题可重命名；详情里可查看搜索记录</div>
               </div>
               {tasks.map((task) => (
-            <div key={task.id} className="relative group bg-card border border-border/50 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden">
+            <div key={task.id} className="relative group bg-card border border-border/50 rounded-xl shadow-sm hover:shadow-sm transition-all duration-200 overflow-hidden">
               {deletingTaskId === task.id && (
                 <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10 backdrop-blur-sm">
                   <div className="flex items-center gap-2 text-muted-foreground">
@@ -571,7 +571,7 @@ export default function Tasks() {
 
       {deleteConfirmationId && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-background border border-border rounded-xl shadow-lg max-w-sm w-full overflow-hidden">
+          <div className="bg-background border border-border rounded-xl shadow-sm max-w-sm w-full overflow-hidden">
             <div className="p-6 space-y-4">
                 <div className="space-y-2 text-center">
                     <h3 className="text-lg font-semibold">确认删除任务?</h3>
@@ -600,7 +600,7 @@ export default function Tasks() {
 
       {publishDeleteConfirmationId && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-background border border-border rounded-xl shadow-lg max-w-sm w-full overflow-hidden">
+          <div className="bg-background border border-border rounded-xl shadow-sm max-w-sm w-full overflow-hidden">
             <div className="p-6 space-y-4">
               <div className="space-y-2 text-center">
                 <h3 className="text-lg font-semibold">确认删除任务?</h3>

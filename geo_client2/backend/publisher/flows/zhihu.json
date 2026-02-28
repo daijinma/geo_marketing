@@ -10,15 +10,15 @@
       "action": "fill",
       "selector": "textarea[placeholder*=\"\u8bf7\u8f93\u5165\u6807\u9898\"]",
       "value": "{{title}}",
-      "mode": "value"
+      "mode": "react"
     },
     {
       "id": "fill_content",
       "action": "fill",
       "selector": "div.public-DraftEditor-content[contenteditable=\"true\"][role=\"textbox\"]",
       "value": "{{content}}",
-      "mode": "innerText",
-      "clickFirst": true
+      "mode": "clipboard",
+      "clickFirst": false
     },
     {"id": "wait_before_publish", "action": "wait", "ms": 20000},
     {"id": "click_publish", "action": "click_r", "selector": "button", "regex": "\u53d1\u5e03"},

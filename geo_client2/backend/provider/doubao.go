@@ -45,7 +45,12 @@ func (d *DoubaoProvider) CheckLoginStatus() (bool, error) {
 	defer d.Close()
 
 	page := browser.MustPage(d.GetLoginUrl())
-	page.MustWaitLoad()
+	defer page.Close()
+
+	if err := page.WaitLoad(); err != nil {
+		d.logger.Warn("[CheckLoginStatus] Doubao: WaitLoad failed: " + err.Error())
+	}
+	rod.Try(func() { _ = page.Timeout(5 * time.Second).WaitStable(1 * time.Second) })
 	time.Sleep(5 * time.Second)
 
 	// Strategy 1: Check Cookies
@@ -766,7 +771,9 @@ func (d *DoubaoProvider) Search(ctx context.Context, keyword, prompt string) (*S
 
 	// 导航到豆包首页
 	page.MustNavigate(homeURL)
-	page.MustWaitLoad()
+	if err := page.WaitLoad(); err != nil {
+		d.logger.WarnWithContext(ctx, "[DOUBAO-RPA] WaitLoad failed", map[string]interface{}{"error": err.Error()}, nil)
+	}
 
 	d.logger.InfoWithContext(ctx, "[DOUBAO-RPA] Waiting for page stability (3s)...", nil, nil)
 	rod.Try(func() {

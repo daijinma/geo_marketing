@@ -67,42 +67,46 @@ func (p *CsdnPublisher) Publish(
 		return p.runAIAssist(ctx, article, resume, emit, aiConfig)
 	}
 
-	// Step 3: Fill title
 	emit("publish:progress", map[string]string{"platform": "csdn", "message": "填写标题..."})
 	titleEl, err := page.Element(`textarea[placeholder*="请输入文章标题"]`)
 	if err != nil {
 		log.Info("[CSDN] title textarea not found: " + err.Error())
 		return p.runAIAssist(ctx, article, resume, emit, aiConfig)
 	}
-	if err := titleEl.SelectAllText(); err == nil {
-		titleEl.MustInput("")
-	}
-	if err := titleEl.Input(article.Title); err != nil {
-		_, evalErr := titleEl.Eval(
-			`(el, value) => { el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); }`,
-			article.Title,
-		)
-		if evalErr != nil {
-			log.Info("[CSDN] title input failed: " + evalErr.Error())
-			return p.runAIAssist(ctx, article, resume, emit, aiConfig)
+	_, titleErr := titleEl.Eval(`(v) => {
+		const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');
+		if (setter && setter.set) {
+			setter.set.call(this, v);
+		} else {
+			this.value = v;
 		}
+		this.dispatchEvent(new Event('input',  { bubbles: true }));
+		this.dispatchEvent(new Event('change', { bubbles: true }));
+	}`, article.Title)
+	if titleErr != nil {
+		log.Info("[CSDN] title fill failed: " + titleErr.Error())
+		return p.runAIAssist(ctx, article, resume, emit, aiConfig)
 	}
 	log.Info("[CSDN] title filled: " + article.Title)
 
-	// Step 4: Fill content in new iframe editor
 	emit("publish:progress", map[string]string{"platform": "csdn", "message": "填写正文..."})
 
 	contentResult, err := page.Eval(`(html) => {
 		try {
-			// New editor uses iframe with contenteditable body
 			const iframe = document.querySelector('main iframe');
-			if (iframe && iframe.contentDocument && iframe.contentDocument.body) {
-				iframe.contentDocument.body.innerHTML = html;
-				// Trigger input event
-				iframe.contentDocument.body.dispatchEvent(new Event('input', { bubbles: true }));
-				return { success: true, method: 'new_iframe', length: html.length };
+			if (!iframe || !iframe.contentDocument || !iframe.contentDocument.body) {
+				return { success: false, error: 'iframe not found' };
 			}
-			return { success: false, error: 'iframe not found' };
+			const body = iframe.contentDocument.body;
+			const doc  = iframe.contentDocument;
+			body.innerHTML = html;
+			const evtOpts = { bubbles: true, cancelable: true };
+			body.dispatchEvent(new Event('input',   evtOpts));
+			body.dispatchEvent(new Event('keyup',   evtOpts));
+			body.dispatchEvent(new Event('keydown', evtOpts));
+			doc.dispatchEvent(new Event('input',    evtOpts));
+			doc.dispatchEvent(new Event('selectionchange', { bubbles: false }));
+			return { success: true, method: 'iframe_html', length: html.length };
 		} catch (e) {
 			return { success: false, error: e.message };
 		}
@@ -111,31 +115,29 @@ func (p *CsdnPublisher) Publish(
 		log.Info("[CSDN] content eval failed: " + err.Error())
 		return p.runAIAssist(ctx, article, resume, emit, aiConfig)
 	}
-	if contentResult.Value.Get("success").Bool() {
-		log.Info("[CSDN] content inserted via " + contentResult.Value.Get("method").Str() + ", length=" + contentResult.Value.Get("length").String())
-	} else {
+	if !contentResult.Value.Get("success").Bool() {
 		log.Info("[CSDN] content insertion failed: " + contentResult.Value.Get("error").Str())
 		return p.runAIAssist(ctx, article, resume, emit, aiConfig)
 	}
+	log.Info("[CSDN] content inserted length=" + contentResult.Value.Get("length").String())
 
-	// Trigger word count by simulating typing in iframe
 	iframeEl, err := page.Timeout(5 * time.Second).Element(`main iframe`)
 	if err != nil {
 		log.Info("[CSDN] iframe not found for word count trigger: " + err.Error())
 	} else {
-		frame, err := iframeEl.Frame()
-		if err != nil {
-			log.Info("[CSDN] iframe frame error: " + err.Error())
+		frame, frameErr := iframeEl.Frame()
+		if frameErr != nil {
+			log.Info("[CSDN] iframe frame error: " + frameErr.Error())
 		} else {
-			bodyEl, err := frame.Timeout(5 * time.Second).Element("body")
-			if err != nil {
-				log.Info("[CSDN] iframe body not found: " + err.Error())
+			bodyEl, bodyErr := frame.Timeout(5 * time.Second).Element("body")
+			if bodyErr != nil {
+				log.Info("[CSDN] iframe body not found: " + bodyErr.Error())
 			} else {
-				if err := bodyEl.Click(proto.InputMouseButtonLeft, 1); err == nil {
-					if err := bodyEl.Type(input.Space); err == nil {
+				if clickErr := bodyEl.Click(proto.InputMouseButtonLeft, 1); clickErr == nil {
+					if typeErr := bodyEl.Type(input.Space); typeErr == nil {
 						time.Sleep(100 * time.Millisecond)
 						bodyEl.Type(input.Backspace)
-						log.Info("[CSDN] triggered word count via simulated typing")
+						log.Info("[CSDN] word count triggered via typing")
 					}
 				}
 			}
@@ -181,14 +183,27 @@ func (p *CsdnPublisher) Publish(
 		firstLevelTag, err = page.ElementR("div, span", "学习和成长")
 	}
 	if err != nil {
-		log.Info("[CSDN] first level tag not found: " + err.Error())
-		return p.runAIAssist(ctx, article, resume, emit, aiConfig)
+		log.Info("[CSDN] first level tag '学习和成长' not found, picking first available tab")
+		fallbackRes, fbErr := page.Eval(`() => {
+			const selectors = ['[class*="tabs__item"]', '[class*="tab-item"]', '.category-item'];
+			for (const sel of selectors) {
+				const els = document.querySelectorAll(sel);
+				if (els.length > 0) { els[0].click(); return { clicked: true, text: els[0].textContent.trim() }; }
+			}
+			return { clicked: false };
+		}`)
+		if fbErr != nil || !fallbackRes.Value.Get("clicked").Bool() {
+			log.Info("[CSDN] first level tag fallback failed, continuing")
+		} else {
+			log.Info("[CSDN] first level tag fallback clicked: " + fallbackRes.Value.Get("text").Str())
+		}
+	} else {
+		if err := firstLevelTag.Click(proto.InputMouseButtonLeft, 1); err != nil {
+			log.Info("[CSDN] click first level tag failed: " + err.Error())
+		} else {
+			log.Info("[CSDN] first level tag '学习和成长' clicked")
+		}
 	}
-	if err := firstLevelTag.Click(proto.InputMouseButtonLeft, 1); err != nil {
-		log.Info("[CSDN] click first level tag failed: " + err.Error())
-		return p.runAIAssist(ctx, article, resume, emit, aiConfig)
-	}
-	log.Info("[CSDN] first level tag '学习和成长' clicked")
 
 	select {
 	case <-ctx.Done():
@@ -198,24 +213,52 @@ func (p *CsdnPublisher) Publish(
 
 	emit("publish:progress", map[string]string{"platform": "csdn", "message": "选择二级标签..."})
 	secondLevelTags := []string{"职场和发展", "学习方法"}
+	clickedSubtags := 0
 	for _, tagName := range secondLevelTags {
 		tag, err := page.Timeout(3*time.Second).ElementR(`[class*="tag"], .tag-item, .sub-tag`, tagName)
 		if err != nil {
 			tag, err = page.ElementR("span, div, label", tagName)
 		}
 		if err != nil {
-			log.Info("[CSDN] tag '" + tagName + "' not found: " + err.Error())
+			log.Info("[CSDN] subtag '" + tagName + "' not found, skipping")
 			continue
 		}
 		if err := tag.Click(proto.InputMouseButtonLeft, 1); err != nil {
-			log.Info("[CSDN] click tag '" + tagName + "' failed: " + err.Error())
+			log.Info("[CSDN] click subtag '" + tagName + "' failed: " + err.Error())
 		} else {
-			log.Info("[CSDN] tag '" + tagName + "' clicked")
+			log.Info("[CSDN] subtag '" + tagName + "' clicked")
+			clickedSubtags++
 		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-time.After(500 * time.Millisecond):
+		}
+	}
+	if clickedSubtags == 0 {
+		log.Info("[CSDN] no named subtags found, falling back to first available subtag")
+		firstSubtag, fbErr := page.Eval(`() => {
+			const selectors = [
+				'[class*="sub-tag"]',
+				'[class*="subtag"]',
+				'[class*="child-tag"]',
+				'[class*="tag-item"]',
+				'.mark-list li',
+				'.tag-list li',
+			];
+			for (const sel of selectors) {
+				const els = Array.from(document.querySelectorAll(sel));
+				if (els.length > 0) {
+					els[0].click();
+					return { clicked: true, selector: sel, text: els[0].textContent.trim() };
+				}
+			}
+			return { clicked: false };
+		}`)
+		if fbErr == nil && firstSubtag.Value.Get("clicked").Bool() {
+			log.Info("[CSDN] fallback subtag clicked: " + firstSubtag.Value.Get("text").Str())
+		} else {
+			log.Info("[CSDN] fallback subtag also not found, continuing without subtag")
 		}
 	}
 

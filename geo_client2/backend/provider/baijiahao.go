@@ -7,6 +7,8 @@ import (
 
 	"geo_client2/backend/config"
 	"geo_client2/backend/logger"
+
+	"github.com/go-rod/rod"
 )
 
 type BaijiahaoProvider struct {
@@ -36,8 +38,13 @@ func (p *BaijiahaoProvider) CheckLoginStatus() (bool, error) {
 
 	page := browser.MustPage(homeURL)
 	defer page.Close()
-	page.MustWaitLoad()
-	page.MustWaitIdle()
+
+	// Use error-handling versions to avoid panic on context destruction
+	if err := page.WaitLoad(); err != nil {
+		p.logger.Warn("[CheckLoginStatus] baijiahao: WaitLoad failed: " + err.Error())
+		// Continue anyway - page might still be usable
+	}
+	rod.Try(func() { _ = page.Timeout(5 * time.Second).WaitStable(1 * time.Second) })
 	time.Sleep(2 * time.Second)
 
 	hasPublishBtn, _, _ := page.HasR("button, a, div", "发布|写文章|创作")

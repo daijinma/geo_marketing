@@ -160,7 +160,7 @@ export default function Logs() {
               <ChevronDown className="w-3 h-3" />
             </button>
             {showExportMenu && (
-              <div className="absolute right-0 mt-2 w-40 bg-popover text-popover-foreground border border-border rounded-md shadow-xl z-50 overflow-hidden">
+              <div className="absolute right-0 mt-2 w-40 bg-popover text-popover-foreground border border-border rounded-md shadow-sm z-50 overflow-hidden">
                 <button
                   onClick={() => handleExport('today')}
                   className="w-full text-left px-4 py-2 text-xs hover:bg-accent transition-colors"
@@ -186,7 +186,7 @@ export default function Logs() {
               <Trash2 className="w-4 h-4" />
             </button>
             {showDeleteMenu && (
-              <div className="absolute right-0 mt-2 w-40 bg-popover text-popover-foreground border border-border rounded-md shadow-xl z-50 overflow-hidden">
+              <div className="absolute right-0 mt-2 w-40 bg-popover text-popover-foreground border border-border rounded-md shadow-sm z-50 overflow-hidden">
                 <button
                   onClick={handleDeleteAll}
                   className="w-full text-left px-4 py-2 text-xs hover:bg-destructive hover:text-destructive-foreground transition-colors"

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "platform": "toutiao",
+  "steps": [
+    {"id": "open", "action": "navigate", "url": "https://mp.toutiao.com/profile_v4/graphic/publish"},
+    {"id": "wait_load", "action": "wait_load"},
+    {"id": "wait_idle", "action": "wait_idle"},
+    {
+      "id": "fill_title",
+      "action": "fill",
+      "selector": "textarea[placeholder*=\"请输入文章标题\"]",
+      "value": "{{title}}",
+      "mode": "react"
+    },
+    {
+      "id": "fill_content",
+      "action": "fill",
+      "selector": "div.ProseMirror[contenteditable=\"true\"]",
+      "value": "{{content}}",
+      "mode": "clipboard",
+      "clickFirst": false
+    },
+    {"id": "wait_before_publish", "action": "wait", "ms": 3000},
+    {"id": "click_publish", "action": "click_r", "selector": "button", "regex": "预览并发布"},
+    {"id": "wait_after_click", "action": "wait", "ms": 2000},
+    {
+      "id": "wait_redirect",
+      "action": "wait_url_not",
+      "url": "https://mp.toutiao.com/profile_v4/graphic/publish",
+      "timeoutMs": 15000,
+      "optional": true
+    },
+    {"id": "post_wait", "action": "wait", "ms": 3000}
+  ]
+}

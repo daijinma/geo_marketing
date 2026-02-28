@@ -151,11 +151,12 @@ func (r *TaskRepository) GetAll(limit, offset int, filters *TaskFilters) ([]map[
 
 // GetStats retrieves task statistics.
 func (r *TaskRepository) GetStats() (map[string]interface{}, error) {
-	var total, running, completed, failed, localCount, serverCount, localSearchCount, serverSyncCount int
+	var total, pending, running, completed, failed, localCount, serverCount, localSearchCount, serverSyncCount int
 	err := r.db.QueryRow(`
 		SELECT 
 			COUNT(*) as total,
-			SUM(CASE WHEN status = 'running' OR status = 'pending' THEN 1 ELSE 0 END) as running,
+			SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+			SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END) as running,
 			SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
 			SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
 			SUM(CASE WHEN source = 'local' THEN 1 ELSE 0 END) as local_count,
@@ -163,13 +164,14 @@ func (r *TaskRepository) GetStats() (map[string]interface{}, error) {
 			SUM(CASE WHEN task_type = 'local_search' THEN 1 ELSE 0 END) as local_search_count,
 			SUM(CASE WHEN task_type = 'server_sync' THEN 1 ELSE 0 END) as server_sync_count
 		FROM tasks
-	`).Scan(&total, &running, &completed, &failed, &localCount, &serverCount, &localSearchCount, &serverSyncCount)
+	`).Scan(&total, &pending, &running, &completed, &failed, &localCount, &serverCount, &localSearchCount, &serverSyncCount)
 	if err != nil {
 		return nil, err
 	}
 
 	return map[string]interface{}{
 		"total":     total,
+		"pending":   pending,
 		"running":   running,
 		"completed": completed,
 		"failed":    failed,

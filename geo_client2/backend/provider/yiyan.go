@@ -45,7 +45,12 @@ func (d *YiyanProvider) CheckLoginStatus() (bool, error) {
 	defer d.Close()
 
 	page := browser.MustPage(d.GetLoginUrl())
-	page.MustWaitLoad()
+	defer page.Close()
+
+	if err := page.WaitLoad(); err != nil {
+		d.logger.Warn("[CheckLoginStatus] Yiyan: WaitLoad failed: " + err.Error())
+	}
+	rod.Try(func() { _ = page.Timeout(5 * time.Second).WaitStable(1 * time.Second) })
 	time.Sleep(5 * time.Second)
 
 	// Strategy 1: Check Cookies
@@ -402,7 +407,9 @@ func (d *YiyanProvider) Search(ctx context.Context, keyword, prompt string) (*Se
 
 	// Navigate Home
 	page.MustNavigate(homeURL)
-	page.MustWaitLoad()
+	if err := page.WaitLoad(); err != nil {
+		d.logger.WarnWithContext(ctx, "[YIYAN-RPA] WaitLoad failed", map[string]interface{}{"error": err.Error()}, nil)
+	}
 
 	d.logger.InfoWithContext(ctx, "[YIYAN-RPA] Waiting for page stability...", nil, nil)
 	rod.Try(func() {

@@ -43,7 +43,12 @@ func (d *DeepSeekProvider) CheckLoginStatus() (bool, error) {
 
 	homeURL := config.GetHomeURL("deepseek")
 	page := browser.MustPage(homeURL)
-	page.MustWaitLoad()
+	defer page.Close()
+
+	if err := page.WaitLoad(); err != nil {
+		d.logger.Warn("[CheckLoginStatus] DeepSeek: WaitLoad failed: " + err.Error())
+	}
+	rod.Try(func() { _ = page.Timeout(5 * time.Second).WaitStable(1 * time.Second) })
 	time.Sleep(5 * time.Second)
 
 	// Strategy 1: Check Cookies (highest priority)
@@ -663,7 +668,9 @@ func (d *DeepSeekProvider) Search(ctx context.Context, keyword, prompt string) (
 	}()
 
 	page.MustNavigate(homeURL)
-	page.MustWaitLoad()
+	if err := page.WaitLoad(); err != nil {
+		d.logger.WarnWithContext(ctx, "[DEEPSEEK-RPA] WaitLoad failed", map[string]interface{}{"error": err.Error()}, nil)
+	}
 
 	d.logger.InfoWithContext(ctx, "[DEEPSEEK-RPA] Waiting for page stability (3s)...", nil, nil)
 	rod.Try(func() {
