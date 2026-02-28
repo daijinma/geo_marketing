@@ -99,6 +99,10 @@ func (p *ZhihuPublisher) Publish(
 		return p.runAIAssist(ctx, article, resume, emit, aiConfig)
 	}
 
+	if confirmed, popupErr := autoConfirmPlatformPopups(ctx, page, "zhihu", true, 6, 700*time.Millisecond); popupErr == nil && confirmed > 0 {
+		emit("publish:progress", map[string]string{"platform": "zhihu", "message": "检测到发布弹窗，已自动确认"})
+	}
+
 	log.Info("[Zhihu] publish button clicked, waiting for page redirect...")
 	emit("publish:progress", map[string]string{"platform": "zhihu", "message": "已点击发布，等待页面跳转..."})
 
@@ -107,6 +111,10 @@ func (p *ZhihuPublisher) Publish(
 	articleURL := ""
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
+		if confirmed, popupErr := autoConfirmPlatformPopups(ctx, page, "zhihu", true, 1, 300*time.Millisecond); popupErr == nil && confirmed > 0 {
+			emit("publish:progress", map[string]string{"platform": "zhihu", "message": "发布后弹窗已自动确认，继续检测结果..."})
+		}
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()

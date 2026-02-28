@@ -36,6 +36,11 @@ func NewPublisher(platform string, factory *provider.Factory, accountID string) 
 		logger:    logger.GetLogger(),
 	}
 
+	// Prefer config-driven flow when available for this platform.
+	if _, err := LoadPublishFlow(platform); err == nil {
+		return &FlowPublisher{BasePublisher: base}, nil
+	}
+
 	switch platform {
 	case "zhihu":
 		return &ZhihuPublisher{BasePublisher: base}, nil
@@ -506,30 +511,98 @@ func buildEnhancedDOM(obs *EnhancedObservation) string {
 	return sb.String()
 }
 
-// --- 企鹅号 ---
-
-type QiePublisher struct{ *BasePublisher }
-
-func (p *QiePublisher) Publish(ctx context.Context, article Article, resume <-chan struct{}, emit EventEmitter, aiConfig AIPublishConfig) error {
-	log := p.logger
-
-	emit("publish:progress", map[string]string{"platform": "qie", "message": "正在打开企鹅号编辑器..."})
-	log.Info("[Qie] Starting publish: " + article.Title)
-
-	return p.runAIAssist(ctx, article, resume, emit, aiConfig)
+type PopupConfirmPolicy struct {
+	ConfirmPattern string
+	ExcludePattern string
 }
 
-// --- 百家号 ---
+var defaultPopupConfirmPolicy = PopupConfirmPolicy{
+	ConfirmPattern: `确定|确认|继续|我知道了|完成|提交`,
+	ExcludePattern: `取消|关闭|返回`,
+}
 
-type BaijiaPublisher struct{ *BasePublisher }
+var popupConfirmPolicies = map[string]PopupConfirmPolicy{
+	"zhihu":     defaultPopupConfirmPolicy,
+	"sohu":      defaultPopupConfirmPolicy,
+	"csdn":      defaultPopupConfirmPolicy,
+	"qie":       defaultPopupConfirmPolicy,
+	"baijiahao": defaultPopupConfirmPolicy,
+}
 
-func (p *BaijiaPublisher) Publish(ctx context.Context, article Article, resume <-chan struct{}, emit EventEmitter, aiConfig AIPublishConfig) error {
-	log := p.logger
+func getPopupConfirmPolicy(platform string) PopupConfirmPolicy {
+	if policy, ok := popupConfirmPolicies[platform]; ok {
+		return policy
+	}
+	return defaultPopupConfirmPolicy
+}
 
-	emit("publish:progress", map[string]string{"platform": "baijiahao", "message": "正在打开百家号编辑器..."})
-	log.Info("[Baijiahao] Starting publish: " + article.Title)
+// clickVisibleConfirmButton clicks a visible confirm-style button on popup/dialog.
+// It returns whether clicked and the matched button text.
+func clickVisibleConfirmButton(page *rod.Page, confirmPattern, excludePattern string, preferDialog bool) (bool, string, error) {
+	res, err := page.Eval(`(confirmPattern, excludePattern, preferDialog) => {
+		const isVisible = (el) => {
+			if (!el) return false;
+			const style = window.getComputedStyle(el);
+			if (!style || style.visibility === 'hidden' || style.display === 'none') return false;
+			const rect = el.getBoundingClientRect();
+			return rect.width > 0 && rect.height > 0;
+		};
+		const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
+		const includeRe = new RegExp(confirmPattern);
+		const excludeRe = excludePattern ? new RegExp(excludePattern) : null;
 
-	return p.runAIAssist(ctx, article, resume, emit, aiConfig)
+		let roots = [document.body];
+		if (preferDialog) {
+			const popupRoots = Array.from(document.querySelectorAll('[role="dialog"], .modal, .dialog, .ant-modal, .cheetah-modal-wrap')).filter(isVisible);
+			if (popupRoots.length > 0) {
+				roots = popupRoots;
+			}
+		}
+
+		for (const root of roots) {
+			const candidates = Array.from(root.querySelectorAll('button, [role="button"], a, span, label')).filter(isVisible);
+			for (const el of candidates) {
+				const text = norm(el.innerText || el.textContent || el.getAttribute('aria-label') || '');
+				if (!text) continue;
+				if (excludeRe && excludeRe.test(text)) continue;
+				if (!includeRe.test(text)) continue;
+				const clickable = el.closest('button, [role="button"], a, label, span') || el;
+				clickable.click();
+				return { clicked: true, text };
+			}
+		}
+
+		return { clicked: false, text: '' };
+	}`, confirmPattern, excludePattern, preferDialog)
+	if err != nil {
+		return false, "", err
+	}
+	return res.Value.Get("clicked").Bool(), res.Value.Get("text").String(), nil
+}
+
+func autoConfirmPopupButtons(ctx context.Context, page *rod.Page, confirmPattern, excludePattern string, preferDialog bool, maxRounds int, interval time.Duration) (int, error) {
+	count := 0
+	for i := 0; i < maxRounds; i++ {
+		clicked, _, err := clickVisibleConfirmButton(page, confirmPattern, excludePattern, preferDialog)
+		if err != nil {
+			return count, err
+		}
+		if !clicked {
+			break
+		}
+		count++
+		select {
+		case <-ctx.Done():
+			return count, ctx.Err()
+		case <-time.After(interval):
+		}
+	}
+	return count, nil
+}
+
+func autoConfirmPlatformPopups(ctx context.Context, page *rod.Page, platform string, preferDialog bool, maxRounds int, interval time.Duration) (int, error) {
+	policy := getPopupConfirmPolicy(platform)
+	return autoConfirmPopupButtons(ctx, page, policy.ConfirmPattern, policy.ExcludePattern, preferDialog, maxRounds, interval)
 }
 
 // --- 小红书 ---
