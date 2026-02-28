@@ -201,11 +201,42 @@ export default function Logs() {
 
       <pre 
         ref={scrollRef}
-        className="flex-1 p-4 overflow-auto text-[13px] leading-relaxed selection:bg-primary/20 bg-muted/30 text-foreground/90 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
+        className="flex-1 p-2 overflow-auto text-[13px] leading-relaxed selection:bg-primary/20 bg-muted/30 text-foreground/90 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent font-mono"
       >
-        {logContent || (
+        {!logContent ? (
           <div className="h-full flex items-center justify-center text-muted-foreground italic">
             等待日志输出...
+          </div>
+        ) : (
+          <div className="flex flex-col">
+            {logContent.split('\n').map((line, index) => {
+              if (!line.trim() && index === logContent.split('\n').length - 1) return null;
+              
+              let levelClass = '';
+              let hasLevel = false;
+              
+              if (line.includes('INFO')) { levelClass = 'text-blue-500 dark:text-blue-400'; hasLevel = true; }
+              else if (line.includes('ERROR')) { levelClass = 'text-red-500 dark:text-red-400 font-medium'; hasLevel = true; }
+              else if (line.includes('WARN')) { levelClass = 'text-yellow-600 dark:text-yellow-500 font-medium'; hasLevel = true; }
+              else if (line.includes('DEBUG')) { levelClass = 'text-slate-500 dark:text-slate-400'; hasLevel = true; }
+              
+              return (
+                <div key={index} className="hover:bg-muted/50 px-2 py-0.5 rounded transition-colors break-all whitespace-pre-wrap">
+                  {hasLevel ? (
+                    <span>
+                      {line.split(/(INFO|ERROR|WARN|DEBUG)/).map((part, i) => {
+                        if (['INFO', 'ERROR', 'WARN', 'DEBUG'].includes(part)) {
+                          return <span key={i} className={levelClass}>{part}</span>;
+                        }
+                        return <span key={i} className="opacity-90">{part}</span>;
+                      })}
+                    </span>
+                  ) : (
+                    <span className="opacity-90">{line}</span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </pre>

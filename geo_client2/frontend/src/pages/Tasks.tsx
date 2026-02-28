@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { LocalTaskCreator } from '@/components/LocalTaskCreator';
 import { LocalTaskDetail } from '@/components/LocalTaskDetail';
 import { PublishTaskDetailModal } from '@/components/PublishTaskDetailModal';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { wailsAPI } from '@/utils/wails-api';
 
 interface Task {
@@ -44,7 +45,9 @@ export default function Tasks() {
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [selectedPublishTaskId, setSelectedPublishTaskId] = useState<string | null>(null);
   const [showCreator, setShowCreator] = useState(false);
-  const [statusFilter, setStatusFilter] = useState('all');
+  
+  const initialStatus = (location.state as any)?.status || 'all';
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [deletingTaskId, setDeletingTaskId] = useState<number | null>(null);
   const [deleteConfirmationId, setDeleteConfirmationId] = useState<number | null>(null);
   const [publishDeleteConfirmationId, setPublishDeleteConfirmationId] = useState<string | null>(null);
@@ -53,13 +56,25 @@ export default function Tasks() {
   const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
   const editInputRef = useRef<HTMLInputElement>(null);
+  
+  const [searchLimit, setSearchLimit] = useState(50);
+  const [hasMoreSearch, setHasMoreSearch] = useState(false);
+  const [publishLimit, setPublishLimit] = useState(50);
+  const [hasMorePublish, setHasMorePublish] = useState(false);
 
   useEffect(() => {
     const state = location.state as any;
     if (state) {
       if (state.tab === 'publish') {
         setActiveTab('publish');
+      } else if (state.tab === 'search') {
+        setActiveTab('search');
       }
+      
+      if (state.status) {
+        setStatusFilter(state.status);
+      }
+      
       if (state.taskId) {
         setSelectedPublishTaskId(state.taskId);
         window.history.replaceState({}, document.title);
@@ -73,7 +88,7 @@ export default function Tasks() {
     try {
       const [searchRes, publishRes] = await Promise.all([
         wailsAPI.task.getAllTasks({
-          limit: 100,
+          limit: searchLimit,
           offset: 0,
           status: statusFilter !== 'all' ? statusFilter : undefined,
         }),
@@ -81,7 +96,9 @@ export default function Tasks() {
       ]);
 
       if (searchRes?.success && (searchRes as any).tasks) {
-        setTasks((searchRes as any).tasks as Task[]);
+        const newTasks = (searchRes as any).tasks as Task[];
+        setTasks(newTasks);
+        setHasMoreSearch(newTasks.length >= searchLimit);
       }
 
       if (publishRes?.success && (publishRes as any).tasks) {
@@ -90,6 +107,7 @@ export default function Tasks() {
           ? list
           : list.filter(t => t.status === statusFilter);
         setPublishTasks(filtered);
+        setHasMorePublish(filtered.length > publishLimit);
       }
     } catch (error: any) {
       toast.error('加载任务失败', { description: error.message });
@@ -97,6 +115,10 @@ export default function Tasks() {
       if (!silent) setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadTasks();
+  }, [searchLimit]);
 
   useEffect(() => {
     loadTasks();
@@ -284,18 +306,19 @@ export default function Tasks() {
           </button>
         </div>
 
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="h-10 w-[180px] rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 cursor-pointer"
-        >
-          <option value="all">全部状态</option>
-          <option value="pending">待执行</option>
-          <option value="running">运行中</option>
-          <option value="completed">已完成</option>
-          <option value="failed">失败</option>
-          <option value="partial_completed">部分完成</option>
-        </select>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[180px] bg-background">
+            <SelectValue placeholder="全部状态" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">全部状态</SelectItem>
+            <SelectItem value="pending">待执行</SelectItem>
+            <SelectItem value="running">运行中</SelectItem>
+            <SelectItem value="completed">已完成</SelectItem>
+            <SelectItem value="failed">失败</SelectItem>
+            <SelectItem value="partial_completed">部分完成</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {activeTab === 'publish' ? (
@@ -304,7 +327,7 @@ export default function Tasks() {
             <div className="px-5 py-10 text-sm text-muted-foreground">暂无发文任务</div>
           ) : (
             <div className="space-y-4 p-5">
-              {publishTasks.slice(0, 50).map((t) => (
+              {publishTasks.slice(0, publishLimit).map((t) => (
                 <div key={t.task_id} className="relative group bg-card border border-border/50 rounded-xl shadow-sm hover:shadow-sm transition-all duration-200 overflow-hidden">
                   <div className="p-5">
                     <div className="flex items-center justify-between gap-6">
@@ -398,6 +421,17 @@ export default function Tasks() {
                   </div>
                 </div>
               ))}
+              
+              {hasMorePublish && (
+                <div className="pt-4 pb-2 flex justify-center">
+                  <button
+                    onClick={() => setPublishLimit(prev => prev + 50)}
+                    className="px-4 py-2 text-sm text-muted-foreground hover:text-primary transition-colors bg-secondary/50 rounded-lg hover:bg-secondary"
+                  >
+                    加载更多
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -564,6 +598,17 @@ export default function Tasks() {
               </div>
             </div>
               ))}
+              
+              {hasMoreSearch && (
+                <div className="pt-4 pb-2 flex justify-center">
+                  <button
+                    onClick={() => setSearchLimit(prev => prev + 50)}
+                    className="px-4 py-2 text-sm text-muted-foreground hover:text-primary transition-colors bg-secondary/50 rounded-lg hover:bg-secondary"
+                  >
+                    加载更多
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </>
