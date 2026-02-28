@@ -1,17 +1,43 @@
-import { useState } from 'react';
-import { Play, Loader2, Combine } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Play, Loader2, Combine, CheckSquare, Square } from 'lucide-react';
 import { toast } from 'sonner';
 import { wailsAPI } from '@/utils/wails-api';
 import { MergedTaskViewer } from '@/components/MergedTaskViewer';
 
+interface SearchTask {
+  id: number;
+  keywords: string;
+  platforms: string;
+  status: string;
+  created_at: string;
+}
+
 export default function Search() {
+  const navigate = useNavigate();
   const [keywords, setKeywords] = useState('');
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['deepseek']);
   const [queryCount, setQueryCount] = useState(1);
   const [isSearching, setIsSearching] = useState(false);
-  const [mergeTaskIds, setMergeTaskIds] = useState('');
+  
+  const [recentTasks, setRecentTasks] = useState<SearchTask[]>([]);
+  const [selectedMergeIds, setSelectedMergeIds] = useState<number[]>([]);
   const [showMergedViewer, setShowMergedViewer] = useState(false);
-  const [currentMergedIds, setCurrentMergedIds] = useState<number[]>([]);
+
+  useEffect(() => {
+    loadRecentTasks();
+  }, []);
+
+  const loadRecentTasks = async () => {
+    try {
+      const res = await wailsAPI.task.getAllTasks({ limit: 50, status: 'completed' });
+      if (res.success && res.tasks) {
+        setRecentTasks(res.tasks as SearchTask[]);
+      }
+    } catch (error) {
+      console.error('Failed to load recent tasks', error);
+    }
+  };
 
   const handleSearch = async () => {
     if (!keywords.trim()) {
@@ -36,6 +62,7 @@ export default function Search() {
       if (result.success) {
         toast.success('搜索任务已创建', { description: `任务ID: ${result.taskId}` });
         setKeywords('');
+        navigate('/tasks');
       }
     } catch (error: any) {
       toast.error('创建任务失败', { description: error.message });
@@ -44,18 +71,17 @@ export default function Search() {
     }
   };
 
+  const toggleMergeSelection = (id: number) => {
+    setSelectedMergeIds(prev => 
+      prev.includes(id) ? prev.filter(taskId => taskId !== id) : [...prev, id]
+    );
+  };
+
   const handleMergeQuery = () => {
-    const ids = mergeTaskIds
-      .split(',')
-      .map(id => parseInt(id.trim()))
-      .filter(id => !isNaN(id) && id > 0);
-    
-    if (ids.length === 0) {
-      toast.error('请输入有效的任务ID');
+    if (selectedMergeIds.length === 0) {
+      toast.error('请至少选择一个已完成的任务');
       return;
     }
-
-    setCurrentMergedIds(ids);
     setShowMergedViewer(true);
   };
 
@@ -162,21 +188,11 @@ export default function Search() {
           </div>
         </div>
 
-        <div className="bg-card border border-border/50 rounded-xl shadow-sm p-6 space-y-6 opacity-90 hover:opacity-100 transition-opacity">
-          <div className="flex items-center gap-2">
-            <Combine className="w-5 h-5 text-muted-foreground" />
-            <h2 className="text-lg font-semibold">结果合并工具</h2>
-          </div>
-          
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1 space-y-2">
-              <input
-                type="text"
-                value={mergeTaskIds}
-                onChange={(e) => setMergeTaskIds(e.target.value)}
-                placeholder="输入任务ID，用逗号分隔（例如: 1, 2, 3）"
-                className="w-full px-4 py-2.5 border border-input rounded-lg bg-background/50 focus:bg-background focus:ring-2 focus:ring-secondary focus:border-secondary transition-all outline-none"
-              />
+        <div className="bg-card border border-border/50 rounded-xl shadow-sm p-6 space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Combine className="w-5 h-5 text-muted-foreground" />
+              <h2 className="text-lg font-semibold">结果合并工具</h2>
             </div>
             <button
               onClick={handleMergeQuery}
@@ -186,12 +202,55 @@ export default function Search() {
               合并查看
             </button>
           </div>
+          
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">请选择要合并分析的已完成任务：</p>
+            {recentTasks.length === 0 ? (
+              <div className="text-center py-8 text-sm text-muted-foreground border border-dashed rounded-lg">
+                暂无已完成的搜索任务
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin">
+                {recentTasks.map(task => {
+                  const isSelected = selectedMergeIds.includes(task.id);
+                  const platforms = task.platforms ? JSON.parse(task.platforms) : [];
+                  const platformStr = Array.isArray(platforms) ? platforms.join(', ') : task.platforms;
+                  return (
+                    <div
+                      key={task.id}
+                      onClick={() => toggleMergeSelection(task.id)}
+                      className={`
+                        p-3 rounded-lg border cursor-pointer flex items-start gap-3 transition-colors
+                        ${isSelected ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50 hover:bg-accent'}
+                      `}
+                    >
+                      <div className="mt-0.5">
+                        {isSelected ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5 text-muted-foreground" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-medium truncate">任务 ID: {task.id}</span>
+                          <span className="text-xs text-muted-foreground">{new Date(task.created_at).toLocaleString()}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate" title={task.keywords}>
+                          {task.keywords.replace(/\n/g, ' ')}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          平台: {platformStr}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {showMergedViewer && (
         <MergedTaskViewer
-          taskIds={currentMergedIds}
+          taskIds={selectedMergeIds}
           onClose={() => setShowMergedViewer(false)}
         />
       )}

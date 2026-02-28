@@ -318,7 +318,7 @@ export default function Auth() {
           </div>
         )}
 
-        <div className="flex-1 min-h-[60px] max-h-[160px] overflow-y-auto custom-scrollbar">
+        <div className="flex-1 min-h-[60px] max-h-[250px] overflow-y-auto scrollbar-thin">
           {accountsByPlatform[platform.id as PlatformKey]?.length === 0 ? (
             <div className="h-full flex items-center justify-center p-4 text-center text-muted-foreground text-xs italic">
               暂无账号

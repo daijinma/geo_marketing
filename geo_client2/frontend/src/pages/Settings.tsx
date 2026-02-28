@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { wailsAPI } from '@/utils/wails-api';
+import { toast } from 'sonner';
 
 export default function Settings() {
   const [headless, setHeadless] = useState(true);
@@ -50,8 +51,10 @@ export default function Settings() {
   const handleSaveAIPublishConfig = async () => {
     try {
       await wailsAPI.aiPublish.setConfig(aiBaseURL.trim(), aiApiKey.trim());
+      toast.success('AI 发布辅助配置保存成功');
     } catch (error) {
       console.error('Save AI publish config failed', error);
+      toast.error('AI 发布辅助配置保存失败');
     }
   };
 

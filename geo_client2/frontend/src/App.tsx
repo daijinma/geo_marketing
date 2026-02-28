@@ -9,8 +9,6 @@ import Tasks from './pages/Tasks';
 import Logs from './pages/Logs';
 import Settings from './pages/Settings';
 import Publish from './pages/Publish';
-import PublishTasks from './pages/PublishTasks';
-import PublishTaskDetail from './pages/PublishTaskDetail';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { EventsOn } from './wailsjs/runtime/runtime';
 import { logger } from './utils/logger';
@@ -139,8 +137,6 @@ function App() {
             <Route path="search" element={<Search />} />
             <Route path="auth" element={<Auth />} />
             <Route path="publish" element={<Publish />} />
-            <Route path="publish-tasks" element={<PublishTasks />} />
-            <Route path="publish-tasks/:taskId" element={<PublishTaskDetail />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="logs" element={<Logs />} />
             <Route path="settings" element={<Settings />} />

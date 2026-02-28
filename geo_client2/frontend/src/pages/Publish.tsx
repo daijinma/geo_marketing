@@ -59,6 +59,28 @@ export default function Publish() {
   const [publishStates, setPublishStates] = useState<Record<string, PlatformPublishState>>({});
   const [isPublishing, setIsPublishing] = useState(false);
 
+  useEffect(() => {
+    const draftTitle = localStorage.getItem('publish_draft_title');
+    const draftContent = localStorage.getItem('publish_draft_content');
+    const draftCover = localStorage.getItem('publish_draft_cover');
+
+    if (draftTitle) setTitle(draftTitle);
+    if (draftContent) setContent(draftContent);
+    if (draftCover) setCoverImage(draftCover);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('publish_draft_title', title);
+  }, [title]);
+
+  useEffect(() => {
+    localStorage.setItem('publish_draft_content', content);
+  }, [content]);
+
+  useEffect(() => {
+    localStorage.setItem('publish_draft_cover', coverImage);
+  }, [coverImage]);
+
   // 加载所有社交媒体平台的账号
   useEffect(() => {
     SOCIAL_PLATFORMS.forEach(p => {
@@ -245,10 +267,18 @@ export default function Publish() {
         cover_image: coverImage.trim() || undefined,
       });
       const taskId = (res as any)?.taskId;
+
+      setTitle('');
+      setContent('');
+      setCoverImage('');
+      localStorage.removeItem('publish_draft_title');
+      localStorage.removeItem('publish_draft_content');
+      localStorage.removeItem('publish_draft_cover');
+
       if (taskId) {
         toast.success('发文任务已创建', { description: `任务ID: ${taskId}` });
         setIsPublishing(false);
-        navigate(`/publish-tasks/${taskId}`);
+        navigate('/tasks', { state: { tab: 'publish', taskId: taskId } });
       } else {
         toast.success('发文任务已创建');
         setIsPublishing(false);
@@ -277,6 +307,12 @@ export default function Publish() {
     setPublishStates({});
     setIsPublishing(false);
     setSelectedPlatforms([]);
+    setTitle('');
+    setContent('');
+    setCoverImage('');
+    localStorage.removeItem('publish_draft_title');
+    localStorage.removeItem('publish_draft_content');
+    localStorage.removeItem('publish_draft_cover');
   };
 
   const allDone =

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { RefreshCw, ChevronDown, ChevronRight, Play, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { LocalTaskCreator } from '@/components/LocalTaskCreator';
@@ -32,10 +32,14 @@ interface PublishLongTask {
 
 export default function Tasks() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [publishTasks, setPublishTasks] = useState<PublishLongTask[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'publish' | 'search'>('search');
+  
+  const initialTab = (location.state as any)?.tab === 'publish' ? 'publish' : 'search';
+  const [activeTab, setActiveTab] = useState<'publish' | 'search'>(initialTab);
+  
   const [expandedTask, setExpandedTask] = useState<number | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [selectedPublishTaskId, setSelectedPublishTaskId] = useState<string | null>(null);
@@ -49,6 +53,19 @@ export default function Tasks() {
   const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
   const editInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const state = location.state as any;
+    if (state) {
+      if (state.tab === 'publish') {
+        setActiveTab('publish');
+      }
+      if (state.taskId) {
+        setSelectedPublishTaskId(state.taskId);
+        window.history.replaceState({}, document.title);
+      }
+    }
+  }, [location.state]);
 
   const loadTasks = async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
@@ -101,7 +118,7 @@ export default function Tasks() {
     try {
       await wailsAPI.longTask.restart(taskId);
       toast.success('任务已重新开始');
-      navigate(`/publish-tasks/${taskId}`);
+      setSelectedPublishTaskId(taskId);
       loadTasks();
     } catch (error: any) {
       toast.error('重试失败', { description: error.message });
