@@ -71,6 +71,25 @@ func (r *LongTaskRepository) SetCompleted(taskID, status string) error {
 	return err
 }
 
+// ResetForRerun resets a long task record to a runnable state while keeping the same task_id.
+func (r *LongTaskRepository) ResetForRerun(taskID, status, articleJSON, platformsJSON, accountIDsJSON string, totalPlatforms int) error {
+	_, err := r.db.Exec(`
+		UPDATE long_tasks
+		SET status = ?,
+			article_json = ?,
+			platforms_json = ?,
+			account_ids_json = ?,
+			platform_states_json = NULL,
+			current_index = 0,
+			total_platforms = ?,
+			started_at = NULL,
+			completed_at = NULL,
+			updated_at = datetime('now', 'localtime')
+		WHERE task_id = ?
+	`, status, articleJSON, platformsJSON, accountIDsJSON, totalPlatforms, taskID)
+	return err
+}
+
 func (r *LongTaskRepository) GetByTaskID(taskID string) (*LongTaskRecord, error) {
 	row := r.db.QueryRow(`
 		SELECT id, task_id, status, article_json, platforms_json, account_ids_json, 

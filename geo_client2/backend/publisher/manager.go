@@ -113,6 +113,26 @@ func (m *Manager) StartPublish(
 			}
 			defer pub.Close()
 
+			emit("publish:progress", map[string]string{"platform": p, "message": "检查登录状态..."})
+			loggedIn, err := pub.CheckLoginStatus()
+			if err != nil {
+				emit("publish:completed", map[string]interface{}{
+					"platform": p,
+					"success":  false,
+					"error":    fmt.Sprintf("检查登录状态失败: %v", err),
+				})
+				return
+			}
+
+			if !loggedIn {
+				emit("publish:completed", map[string]interface{}{
+					"platform": p,
+					"success":  false,
+					"error":    "登录已过期，请先重新登录后再发布",
+				})
+				return
+			}
+
 			if err := pub.Publish(jobCtx, article, j.resume, emit, aiConfig); err != nil {
 				if err == errAlreadyEmitted {
 					// Publisher handled its own publish:completed event; nothing to do.

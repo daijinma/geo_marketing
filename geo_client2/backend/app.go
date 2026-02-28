@@ -972,6 +972,176 @@ func (a *App) ListLongTasks() (map[string]interface{}, error) {
 	return map[string]interface{}{"success": true, "tasks": states}, nil
 }
 
+func (a *App) ListLongTaskRecords() (map[string]interface{}, error) {
+	if a.longTaskManager == nil {
+		return nil, fmt.Errorf("long task manager not initialized")
+	}
+	repo := a.longTaskManager.GetRepo()
+	if repo == nil {
+		return nil, fmt.Errorf("long task repository not initialized")
+	}
+
+	recs, err := repo.GetAll()
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]map[string]interface{}, 0, len(recs))
+	for _, rec := range recs {
+		items = append(items, longTaskRecordToDTO(rec))
+	}
+
+	return map[string]interface{}{"success": true, "tasks": items}, nil
+}
+
+func (a *App) GetLongTaskRecord(taskID string) (map[string]interface{}, error) {
+	if a.longTaskManager == nil {
+		return nil, fmt.Errorf("long task manager not initialized")
+	}
+	repo := a.longTaskManager.GetRepo()
+	if repo == nil {
+		return nil, fmt.Errorf("long task repository not initialized")
+	}
+
+	rec, err := repo.GetByTaskID(taskID)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{"success": true, "task": longTaskRecordToDTO(rec)}, nil
+}
+
+func (a *App) RerunLongTask(taskID string) (map[string]interface{}, error) {
+	// Backwards compatible alias: rerun means restart the same task_id.
+	return a.RestartLongTask(taskID)
+}
+
+func (a *App) RestartLongTask(taskID string) (map[string]interface{}, error) {
+	if a.longTaskManager == nil {
+		return nil, fmt.Errorf("long task manager not initialized")
+	}
+	repo := a.longTaskManager.GetRepo()
+	if repo == nil {
+		return nil, fmt.Errorf("long task repository not initialized")
+	}
+
+	// If a runner is already in memory, prevent restarting while running.
+	if t := a.longTaskManager.GetTask(taskID); t != nil {
+		st := t.GetState().Status
+		if st == publisher.LongTaskStatusRunning {
+			return nil, fmt.Errorf("task is running: %s", taskID)
+		}
+		// Drop the old runner to avoid multiple goroutines.
+		a.longTaskManager.DropTask(taskID)
+	}
+
+	rec, err := repo.GetByTaskID(taskID)
+	if err != nil {
+		return nil, err
+	}
+
+	var platforms []string
+	if err := json.Unmarshal([]byte(rec.PlatformsJSON), &platforms); err != nil {
+		return nil, fmt.Errorf("invalid platforms JSON: %w", err)
+	}
+	var accountIDs map[string]string
+	if err := json.Unmarshal([]byte(rec.AccountIDsJSON), &accountIDs); err != nil {
+		return nil, fmt.Errorf("invalid accountIDs JSON: %w", err)
+	}
+	var article publisher.Article
+	if err := json.Unmarshal([]byte(rec.ArticleJSON), &article); err != nil {
+		return nil, fmt.Errorf("invalid article JSON: %w", err)
+	}
+
+	// Reset persisted record for rerun.
+	if err := repo.ResetForRerun(rec.TaskID, "pending", rec.ArticleJSON, rec.PlatformsJSON, rec.AccountIDsJSON, len(platforms)); err != nil {
+		return nil, err
+	}
+
+	emit := func(event string, data interface{}) {
+		runtime.EventsEmit(a.ctx, event, data)
+	}
+
+	aiEnabled := true
+	if a.settingsSvc != nil {
+		value, err := a.settingsSvc.Get("ai_publish_assist")
+		if err == nil && value == "false" {
+			aiEnabled = false
+		}
+	}
+	baseURL, _ := a.settingsSvc.Get("ai_publish_base_url")
+	apiKey, _ := a.settingsSvc.Get("ai_publish_api_key")
+
+	config := publisher.LongTaskConfig{
+		TaskID:                rec.TaskID,
+		ExistingRecord:        true,
+		Platforms:             platforms,
+		AccountIDs:            accountIDs,
+		Article:               article,
+		AIConfig:              publisher.AIPublishConfig{Enabled: aiEnabled, BaseURL: baseURL, APIKey: apiKey},
+		MaxRetriesPerPlatform: 2,
+		DelayBetweenPlatforms: 3 * time.Second,
+		Repo:                  repo,
+	}
+
+	runner := a.longTaskManager.CreateTask(emit, config)
+	if err := runner.Start(a.ctx); err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{"success": true, "taskId": runner.GetState().TaskID}, nil
+}
+
+func longTaskRecordToDTO(rec *repositories.LongTaskRecord) map[string]interface{} {
+	var article publisher.Article
+	_ = json.Unmarshal([]byte(rec.ArticleJSON), &article)
+
+	var platforms []string
+	_ = json.Unmarshal([]byte(rec.PlatformsJSON), &platforms)
+
+	var accountIDs map[string]string
+	_ = json.Unmarshal([]byte(rec.AccountIDsJSON), &accountIDs)
+
+	var platformStates interface{}
+	if rec.PlatformStatesJSON.Valid && rec.PlatformStatesJSON.String != "" {
+		var v interface{}
+		if err := json.Unmarshal([]byte(rec.PlatformStatesJSON.String), &v); err == nil {
+			platformStates = v
+		}
+	}
+
+	var startedAt interface{} = nil
+	if rec.StartedAt.Valid {
+		startedAt = rec.StartedAt.Time.Format(time.RFC3339)
+	}
+	var completedAt interface{} = nil
+	if rec.CompletedAt.Valid {
+		completedAt = rec.CompletedAt.Time.Format(time.RFC3339)
+	}
+
+	return map[string]interface{}{
+		"id":              rec.ID,
+		"task_id":         rec.TaskID,
+		"status":          rec.Status,
+		"article":         article,
+		"platforms":       platforms,
+		"account_ids":     accountIDs,
+		"platform_states": platformStates,
+		"current_index":   rec.CurrentIndex,
+		"total_platforms": rec.TotalPlatforms,
+		"created_at":      rec.CreatedAt.Format(time.RFC3339),
+		"updated_at":      rec.UpdatedAt.Format(time.RFC3339),
+		"started_at":      startedAt,
+		"completed_at":    completedAt,
+		"platform_states_raw": func() interface{} {
+			if rec.PlatformStatesJSON.Valid {
+				return rec.PlatformStatesJSON.String
+			}
+			return nil
+		}(),
+	}
+}
+
 func (a *App) RemoveLongTask(taskID string) error {
 	if a.longTaskManager == nil {
 		return fmt.Errorf("long task manager not initialized")

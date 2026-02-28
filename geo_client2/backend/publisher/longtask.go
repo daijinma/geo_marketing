@@ -60,9 +60,12 @@ type LongTaskRunner struct {
 	resumeChan chan struct{}
 	isPaused   bool
 	repo       *repositories.LongTaskRepository
+	skipCreate bool
 }
 
 type LongTaskConfig struct {
+	TaskID                string
+	ExistingRecord        bool
 	Platforms             []string
 	AccountIDs            map[string]string
 	Article               Article
@@ -73,7 +76,10 @@ type LongTaskConfig struct {
 }
 
 func NewLongTaskRunner(manager *Manager, emit EventEmitter, config LongTaskConfig) *LongTaskRunner {
-	taskID := fmt.Sprintf("longtask-%d", time.Now().UnixNano())
+	taskID := config.TaskID
+	if taskID == "" {
+		taskID = fmt.Sprintf("longtask-%d", time.Now().UnixNano())
+	}
 
 	platformStates := make(map[string]*PlatformTaskState)
 	for _, p := range config.Platforms {
@@ -109,9 +115,12 @@ func NewLongTaskRunner(manager *Manager, emit EventEmitter, config LongTaskConfi
 		pauseChan:  make(chan struct{}),
 		resumeChan: make(chan struct{}),
 		repo:       config.Repo,
+		skipCreate: config.ExistingRecord,
 	}
 
-	runner.persistCreate()
+	if !runner.skipCreate {
+		runner.persistCreate()
+	}
 
 	return runner
 }
@@ -229,6 +238,20 @@ func (r *LongTaskRunner) processPlatform(platform string) {
 		if err != nil {
 			lastErr = err
 			continue
+		}
+
+		r.emit("publish:progress", map[string]string{"platform": platform, "message": "检查登录状态..."})
+		loggedIn, loginErr := pub.CheckLoginStatus()
+		if loginErr != nil {
+			lastErr = fmt.Errorf("检查登录状态失败: %w", loginErr)
+			pub.Close()
+			break
+		}
+		if !loggedIn {
+			lastErr = fmt.Errorf("平台 %s 登录已过期，请先重新登录后再发布", platform)
+			r.emit("publish:progress", map[string]string{"platform": platform, "message": "登录已过期，请重新登录"})
+			pub.Close()
+			break
 		}
 
 		resumeCh := make(chan struct{}, 1)
@@ -474,6 +497,17 @@ func (m *LongTaskManager) RemoveTask(taskID string) {
 
 	if m.repo != nil {
 		_ = m.repo.Delete(taskID)
+	}
+}
+
+// DropTask stops a task runner and removes it from memory without deleting the DB record.
+func (m *LongTaskManager) DropTask(taskID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if task, ok := m.tasks[taskID]; ok {
+		task.Cancel()
+		delete(m.tasks, taskID)
 	}
 }
 
