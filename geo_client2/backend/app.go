@@ -20,6 +20,7 @@ import (
 	"geo_client2/backend/logger"
 	"geo_client2/backend/provider"
 	"geo_client2/backend/publisher"
+	"geo_client2/backend/scrape"
 	"geo_client2/backend/search"
 	"geo_client2/backend/settings"
 	"geo_client2/backend/task"
@@ -759,6 +760,57 @@ func (a *App) SaveExcelFile(filename string, base64Content string) (map[string]i
 		"success": true,
 		"path":    filepath,
 	}, nil
+}
+
+// Scrape Flow Bundle methods
+func (a *App) GetFlowBundles() (map[string]interface{}, error) {
+	bundles, active, err := scrape.ListBundles()
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{
+		"success":       true,
+		"bundles":       bundles,
+		"activeVersion": active,
+	}, nil
+}
+
+func (a *App) ImportFlowBundle(base64Content string) (map[string]interface{}, error) {
+	version, err := scrape.ImportBundle(base64Content)
+	if err != nil {
+		return map[string]interface{}{"success": false, "error": err.Error()}, nil
+	}
+	return map[string]interface{}{"success": true, "version": version}, nil
+}
+
+func (a *App) ExportFlowBundle(version string) (map[string]interface{}, error) {
+	content, err := scrape.ExportBundle(version)
+	if err != nil {
+		return map[string]interface{}{"success": false, "error": err.Error()}, nil
+	}
+	return map[string]interface{}{"success": true, "content": content}, nil
+}
+
+func (a *App) ExportActiveFlowBundle() (map[string]interface{}, error) {
+	version, content, err := scrape.ExportActiveBundle()
+	if err != nil {
+		return map[string]interface{}{"success": false, "error": err.Error()}, nil
+	}
+	return map[string]interface{}{"success": true, "version": version, "content": content}, nil
+}
+
+func (a *App) SwitchFlowBundle(version string) (map[string]interface{}, error) {
+	if err := scrape.SwitchBundle(version); err != nil {
+		return map[string]interface{}{"success": false, "error": err.Error()}, nil
+	}
+	return map[string]interface{}{"success": true}, nil
+}
+
+func (a *App) DeleteFlowBundle(version string) (map[string]interface{}, error) {
+	if err := scrape.DeleteBundle(version); err != nil {
+		return map[string]interface{}{"success": false, "error": err.Error()}, nil
+	}
+	return map[string]interface{}{"success": true}, nil
 }
 
 func (a *App) ExportLogs(timeRange string) (map[string]interface{}, error) {
