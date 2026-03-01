@@ -77,6 +77,14 @@ interface WailsApp {
   // AI Publish Assist
   SetAIPublishConfig(baseURL: string, apiKey: string): Promise<void>;
 
+  // Scrape Flow Bundles
+  GetFlowBundles(): Promise<{ success: boolean; bundles: FlowBundle[]; activeVersion: string }>;
+  ImportFlowBundle(base64Content: string): Promise<{ success: boolean; version?: string; error?: string }>;
+  ExportFlowBundle(version: string): Promise<{ success: boolean; content?: string; error?: string }>;
+  ExportActiveFlowBundle(): Promise<{ success: boolean; version?: string; content?: string; error?: string }>;
+  SwitchFlowBundle(version: string): Promise<{ success: boolean; error?: string }>;
+  DeleteFlowBundle(version: string): Promise<{ success: boolean; error?: string }>;
+
   // Logs
   GetLogs(limit: number, offset: number, filtersJSON: string): Promise<{ success: boolean; logs: LogEntry[]; total: number }>;
   AddLog(level: string, source: string, message: string, detailsJSON: string, sessionID: string, correlationID: string, component: string, userAction: string, performanceMS: number | null, taskID: number | null): Promise<void>;
@@ -451,14 +459,53 @@ export const wailsAPI = {
       return app.RemoveLongTask(taskID);
     },
   },
-  aiPublish: {
+    aiPublish: {
     setConfig: async (baseURL: string, apiKey: string) => {
       const app = getApp();
       if (!app) throw new Error('Wails backend not available');
       return app.SetAIPublishConfig(baseURL, apiKey);
     },
   },
+  scrapeFlow: {
+    list: async () => {
+      const app = getApp();
+      if (!app) return { success: false, bundles: [], activeVersion: '' };
+      return app.GetFlowBundles();
+    },
+    import: async (base64Content: string) => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.ImportFlowBundle(base64Content);
+    },
+    export: async (version: string) => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.ExportFlowBundle(version);
+    },
+    exportActive: async () => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.ExportActiveFlowBundle();
+    },
+    switch: async (version: string) => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.SwitchFlowBundle(version);
+    },
+    delete: async (version: string) => {
+      const app = getApp();
+      if (!app) throw new Error('Wails backend not available');
+      return app.DeleteFlowBundle(version);
+    },
+  },
 };
+
+export interface FlowBundle {
+  version: string; // Timestamp like '20231027_102030'
+  active: boolean;
+  size: number;
+  uploaded_at: string;
+}
 
 // Export types
 export type { Account, LogEntry };

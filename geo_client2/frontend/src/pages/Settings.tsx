@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { wailsAPI } from '@/utils/wails-api';
 import { toast } from 'sonner';
+import { ScrapeFlowManager } from '@/components/ScrapeFlowManager';
 
 export default function Settings() {
   const [headless, setHeadless] = useState(true);
@@ -139,6 +140,12 @@ export default function Settings() {
               </div>
             </div>
           </div>
+        </div>
+
+        <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
+            <div className="p-6">
+                <ScrapeFlowManager />
+            </div>
         </div>
 
         <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
