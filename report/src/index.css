@@ -1,0 +1,169 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Professional Palette: Navy/Slate/White/Light Gray */
+    --background: 210 40% 98%; /* Slate 50-ish */
+    --foreground: 222 47% 11%; /* Slate 900 */
+    
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    
+    --primary: 222 47% 11%; /* Slate 900 - Dark Navy */
+    --primary-foreground: 210 40% 98%;
+    
+    --secondary: 210 40% 96.1%; /* Slate 100 */
+    --secondary-foreground: 222 47% 11%;
+    
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215 16% 47%; /* Slate 500 */
+    
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222 47% 11%;
+    
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214 32% 91%; /* Slate 200 */
+    --input: 214 32% 91%;
+    --ring: 222 47% 11%;
+    
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    font-family: "Inter", system-ui, sans-serif; /* Clean sans for body */
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: "Georgia", "Times New Roman", serif; /* Professional serif for headings */
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased selection:bg-primary/10 selection:text-primary;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+.report-prose {
+  @apply max-w-[65ch] mx-auto text-foreground/90; /* Optimal line length */
+}
+
+.report-prose p {
+  @apply mb-6 leading-7 text-[16px] text-foreground/80 font-normal;
+}
+
+.report-prose h3 {
+  @apply mt-10 mb-4 text-2xl font-serif font-medium tracking-tight text-foreground border-b border-border/50 pb-2;
+}
+
+.report-prose h4 {
+  @apply mt-8 mb-3 text-lg font-sans font-semibold tracking-tight text-foreground/90 uppercase text-xs tracking-wider text-muted-foreground;
+}
+
+.report-prose strong {
+  @apply font-semibold text-foreground;
+}
+
+.report-prose ul {
+  @apply my-6 list-disc pl-6 space-y-2 text-foreground/80 marker:text-muted-foreground;
+}
+
+.report-prose ol {
+  @apply my-6 list-decimal pl-6 space-y-2 text-foreground/80 marker:font-medium marker:text-muted-foreground;
+}
+
+.report-prose li {
+  @apply leading-7 pl-1;
+}
+
+.report-prose blockquote {
+  @apply mt-8 mb-8 border-l-2 border-primary pl-6 italic text-lg text-foreground/80 font-serif;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground/20 rounded-full hover:bg-muted-foreground/40 transition-colors;
+}
+
+/* Print Styles */
+@media print {
+  @page {
+    margin: 2cm;
+    size: auto;
+  }
+
+  body {
+    @apply bg-white text-black;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+  
+  /* Hide sidebar/nav elements */
+  nav, aside, header, footer {
+    display: none !important;
+  }
+
+  a {
+    text-decoration: none !important;
+    color: black !important;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  section, 
+  .report-prose p, 
+  .report-prose h3,
+  figure,
+  table,
+  tr,
+  td,
+  th {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  
+  img {
+    max-width: 100% !important;
+    height: auto !important;
+    page-break-inside: avoid;
+  }
+
+  .min-h-screen {
+    min-height: auto !important;
+  }
+  
+  /* Reset max-width for print */
+  .report-prose {
+    max-w: none !important;
+  }
+}
