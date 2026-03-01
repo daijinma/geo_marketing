@@ -353,7 +353,7 @@ btn.Click(proto.InputMouseButtonLeft, 1)
 ### 2. 搜狐号 (Sohu)
 
 **Home URL**: `https://mp.sohu.com`
-**Editor URL**: `https://mp.sohu.com/mpfe/v4/contentManagement/news/addarticle?contentStatus=1`
+**Editor URL**: `https://mp.sohu.com/mpfe/v4/contentManagement/news/addarticle`
 
 **Editor Type**: Quill.js (rich text editor)
 
