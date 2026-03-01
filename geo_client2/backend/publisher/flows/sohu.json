@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "platform": "sohu",
   "steps": [
-    {"id": "open", "action": "navigate", "url": "https://mp.sohu.com/v2/article-edit"},
+    {"id": "open", "action": "navigate", "url": "https://mp.sohu.com/mpfe/v4/contentManagement/news/addarticle"},
     {"id": "wait_load", "action": "wait_load"},
     {"id": "wait_idle", "action": "wait_idle"},
     {

@@ -21,8 +21,10 @@
       "clickFirst": false
     },
     {"id": "wait_before_publish", "action": "wait", "ms": 3000},
-    {"id": "click_publish", "action": "click_r", "selector": "button", "regex": "预览并发布"},
+    {"id": "click_publish", "action": "click_r", "selector": "button", "regex": "^(发布|预览并发布)$"},
     {"id": "wait_after_click", "action": "wait", "ms": 2000},
+    {"id": "click_publish_confirm", "action": "click_r", "selector": "button", "regex": "确认发布", "optional": true, "timeoutMs": 5000},
+    {"id": "wait_after_confirm", "action": "wait", "ms": 2000},
     {
       "id": "wait_redirect",
       "action": "wait_url_not",

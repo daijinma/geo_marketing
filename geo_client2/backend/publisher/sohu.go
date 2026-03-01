@@ -44,7 +44,7 @@ func (p *SohuPublisher) Publish(
 	defer cleanup()
 	defer base.Close()
 
-	page := browser.MustPage("https://mp.sohu.com")
+	page := browser.MustPage("https://mp.sohu.com/mpfe/v4/contentManagement/news/addarticle")
 	defer page.Close()
 	page.MustWaitLoad()
 	page.MustWaitIdle()
@@ -72,7 +72,7 @@ func (p *SohuPublisher) Publish(
 		case <-time.After(500 * time.Millisecond):
 		}
 		info := page.MustInfo()
-		if info != nil && info.URL != "" && info.URL != "https://mp.sohu.com" && info.URL != "https://mp.sohu.com/" {
+		if info != nil && info.URL != "" && info.URL != "https://mp.sohu.com/mpfe/v4/contentManagement/news/addarticle" {
 			publishPageURL = info.URL
 			log.Info("[Sohu] redirected to publish page: " + publishPageURL)
 			break

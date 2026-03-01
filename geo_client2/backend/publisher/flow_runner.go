@@ -206,7 +206,8 @@ func (r *FlowRunner) doStep(stepCtx context.Context, ctx context.Context, page *
 		_, err := page.Timeout(to).Element(step.Selector)
 		return err
 	case "click":
-		el, err := r.findElement(page, step)
+		p := page.Context(stepCtx)
+		el, err := r.findElement(p, step)
 		if err != nil {
 			return err
 		}
@@ -220,13 +221,15 @@ func (r *FlowRunner) doStep(stepCtx context.Context, ctx context.Context, page *
 			return fmt.Errorf("compile regex: %w", err)
 		}
 		_ = re
-		el, err := page.ElementR(step.Selector, step.Regex)
+		p := page.Context(stepCtx)
+		el, err := p.ElementR(step.Selector, step.Regex)
 		if err != nil {
 			return err
 		}
 		return el.Click(proto.InputMouseButtonLeft, 1)
 	case "fill":
-		el, err := r.findElement(page, step)
+		p := page.Context(stepCtx)
+		el, err := r.findElement(p, step)
 		if err != nil {
 			return err
 		}
@@ -242,7 +245,8 @@ func (r *FlowRunner) doStep(stepCtx context.Context, ctx context.Context, page *
 		if step.Selector == "" {
 			return fmt.Errorf("missing selector")
 		}
-		iframeEl, err := page.Element(step.Frame)
+		p := page.Context(stepCtx)
+		iframeEl, err := p.Element(step.Frame)
 		if err != nil {
 			return fmt.Errorf("find iframe: %w", err)
 		}
@@ -268,7 +272,8 @@ func (r *FlowRunner) doStep(stepCtx context.Context, ctx context.Context, page *
 		for _, a := range step.Args {
 			args = append(args, r.interp(a, article))
 		}
-		_, err := page.Eval(script, args...)
+		p := page.Context(stepCtx)
+		_, err := p.Eval(script, args...)
 		return err
 	case "set_files":
 		if step.Selector == "" {
@@ -281,7 +286,8 @@ func (r *FlowRunner) doStep(stepCtx context.Context, ctx context.Context, page *
 		for _, f := range step.Files {
 			files = append(files, r.interp(f, article))
 		}
-		el, err := page.Element(step.Selector)
+		p := page.Context(stepCtx)
+		el, err := p.Element(step.Selector)
 		if err != nil {
 			return err
 		}
