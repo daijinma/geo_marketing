@@ -11,6 +11,7 @@ import (
 
 	"geo_client2/backend/config"
 	"geo_client2/backend/logger"
+	"geo_client2/backend/scrape"
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/input"
@@ -144,6 +145,21 @@ func (d *YiyanProvider) CheckLoginStatus() (bool, error) {
 
 // Search performs a search with full network interception and citation extraction.
 func (d *YiyanProvider) Search(ctx context.Context, keyword, prompt string) (*SearchResult, error) {
+	if flow, version, err := scrape.LoadScrapeFlow("yiyan"); err == nil && flow != nil {
+		d.logger.InfoWithContext(ctx, "[YIYAN-RPA] Loaded scrape flow", map[string]interface{}{"version": version}, nil)
+		browser, cleanup, err := d.LaunchBrowser(true)
+		if err == nil {
+			defer cleanup()
+			page := browser.MustPage("")
+			defer page.Close()
+			runner := scrape.NewRunner(d.logger, "yiyan")
+			vars := map[string]string{"keyword": keyword, "prompt": prompt}
+			if runErr := runner.Run(ctx, page, flow, vars); runErr == nil {
+				res := runner.Result()
+				return &SearchResult{Queries: res.Queries, Citations: convertCitations(res.Citations), FullText: res.FullText}, nil
+			}
+		}
+	}
 	d.logger.InfoWithContext(ctx, "[YIYAN-RPA] ========== SEARCH START (Fetch Injection Mode) ==========", map[string]interface{}{
 		"keyword":  keyword,
 		"prompt":   prompt,

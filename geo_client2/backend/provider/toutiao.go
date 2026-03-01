@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"geo_client2/backend/logger"
+	"geo_client2/backend/scrape"
 
 	"github.com/go-rod/rod"
 )
@@ -79,5 +80,20 @@ func (p *ToutiaoProvider) CheckLoginStatus() (bool, error) {
 }
 
 func (p *ToutiaoProvider) Search(ctx context.Context, keyword, prompt string) (*SearchResult, error) {
+	if flow, version, err := scrape.LoadScrapeFlow("toutiao"); err == nil && flow != nil {
+		p.logger.InfoWithContext(ctx, "[TOUTIAO-RPA] Loaded scrape flow", map[string]interface{}{"version": version}, nil)
+		browser, cleanup, err := p.LaunchBrowser(true)
+		if err == nil {
+			defer cleanup()
+			page := browser.MustPage("")
+			defer page.Close()
+			runner := scrape.NewRunner(p.logger, "toutiao")
+			vars := map[string]string{"keyword": keyword, "prompt": prompt}
+			if runErr := runner.Run(ctx, page, flow, vars); runErr == nil {
+				res := runner.Result()
+				return &SearchResult{Queries: res.Queries, Citations: convertCitations(res.Citations), FullText: res.FullText}, nil
+			}
+		}
+	}
 	return nil, fmt.Errorf("search not supported for platform toutiao")
 }

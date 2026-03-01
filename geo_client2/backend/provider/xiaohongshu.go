@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"geo_client2/backend/logger"
+	"geo_client2/backend/scrape"
 
 	"github.com/go-rod/rod"
 )
@@ -125,6 +126,21 @@ func (p *XiaohongshuProvider) CheckLoginStatus() (bool, error) {
 }
 
 func (p *XiaohongshuProvider) Search(ctx context.Context, keyword, prompt string) (*SearchResult, error) {
+	if flow, version, err := scrape.LoadScrapeFlow("xiaohongshu"); err == nil && flow != nil {
+		p.logger.InfoWithContext(ctx, "[XHS-RPA] Loaded scrape flow", map[string]interface{}{"version": version}, nil)
+		browser, cleanup, err := p.LaunchBrowser(true)
+		if err == nil {
+			defer cleanup()
+			page := browser.MustPage("")
+			defer page.Close()
+			runner := scrape.NewRunner(p.logger, "xiaohongshu")
+			vars := map[string]string{"keyword": keyword, "prompt": prompt}
+			if runErr := runner.Run(ctx, page, flow, vars); runErr == nil {
+				res := runner.Result()
+				return &SearchResult{Queries: res.Queries, Citations: convertCitations(res.Citations), FullText: res.FullText}, nil
+			}
+		}
+	}
 	browser, _, err := p.LaunchBrowser(false)
 	if err != nil {
 		return nil, err

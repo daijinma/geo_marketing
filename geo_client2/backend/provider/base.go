@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"geo_client2/backend/config"
+	"geo_client2/backend/scrape"
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
@@ -29,6 +30,25 @@ type Citation struct {
 	QueryIndexes []int  `json:"query_indexes"`
 	Query        string `json:"query"`      // 根据 QueryIndexes[0] 从 Queries 数组中获取的查询词
 	CiteIndex    int    `json:"cite_index"` // 引用序号，用于排序
+}
+
+func convertCitations(in []scrape.FlowCitation) []Citation {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]Citation, 0, len(in))
+	for _, c := range in {
+		out = append(out, Citation{
+			URL:          c.URL,
+			Domain:       c.Domain,
+			Title:        c.Title,
+			Snippet:      c.Snippet,
+			QueryIndexes: c.QueryIndexes,
+			Query:        c.Query,
+			CiteIndex:    c.CiteIndex,
+		})
+	}
+	return out
 }
 
 // Provider interface for search providers.
