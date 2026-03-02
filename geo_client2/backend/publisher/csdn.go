@@ -296,13 +296,39 @@ func (p *CsdnPublisher) Publish(
 	// Step 8: Click publish button
 	emit("publish:progress", map[string]string{"platform": "csdn", "message": "点击发布博客..."})
 	publishBtn, err := page.Timeout(5*time.Second).ElementR("button", "发布博客")
-	if err != nil {
+	if err == nil {
+		if clickErr := publishBtn.Click(proto.InputMouseButtonLeft, 1); clickErr != nil {
+			log.Info("[CSDN] click publish button failed: " + clickErr.Error())
+			err = clickErr
+		}
+	} else {
 		log.Info("[CSDN] publish button not found: " + err.Error())
-		return p.runAIAssist(ctx, article, resume, emit, aiConfig)
 	}
-	if err := publishBtn.Click(proto.InputMouseButtonLeft, 1); err != nil {
-		log.Info("[CSDN] click publish button failed: " + err.Error())
-		return p.runAIAssist(ctx, article, resume, emit, aiConfig)
+
+	if err != nil {
+		publishResult, evalErr := page.Eval(`() => {
+			const box = document.querySelector('.btn-box');
+			if (!box) return { success: false, reason: 'btn_box_not_found' };
+			const buttons = Array.from(box.querySelectorAll('button'));
+			const target = buttons.find((btn) => {
+				const text = (btn.innerText || btn.textContent || '').replace(/\s+/g, ' ').trim();
+				return /发布博客/.test(text) && !/草稿|定时/.test(text);
+			});
+			if (!target) return { success: false, reason: 'publish_button_not_found' };
+			target.scrollIntoView({ block: 'center', inline: 'center' });
+			target.click();
+			return { success: true, reason: 'btn_box_click' };
+		}`)
+		if evalErr != nil {
+			log.Info("[CSDN] publish button eval failed: " + evalErr.Error())
+			return p.runAIAssist(ctx, article, resume, emit, aiConfig)
+		}
+		if publishResult != nil && publishResult.Value.Get("success").Bool() {
+			log.Info("[CSDN] publish button clicked via btn-box selector")
+		} else {
+			log.Info("[CSDN] publish button not found in btn-box")
+			return p.runAIAssist(ctx, article, resume, emit, aiConfig)
+		}
 	}
 
 	if confirmed, popupErr := autoConfirmPlatformPopups(ctx, page, "csdn", true, 6, 700*time.Millisecond); popupErr == nil && confirmed > 0 {

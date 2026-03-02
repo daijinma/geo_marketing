@@ -3,15 +3,25 @@ import { Switch } from '@/components/ui/switch';
 import { wailsAPI } from '@/utils/wails-api';
 import { toast } from 'sonner';
 import { ScrapeFlowManager } from '@/components/ScrapeFlowManager';
+import pkg from '../../package.json';
 
 export default function Settings() {
   const [headless, setHeadless] = useState(true);
   const [aiPublishEnabled, setAIPublishEnabled] = useState(true);
   const [aiBaseURL, setAIBaseURL] = useState('');
   const [aiApiKey, setAIApiKey] = useState('');
+  const [buildTime, setBuildTime] = useState<string>('');
 
   useEffect(() => {
     loadSettings();
+  }, []);
+
+  useEffect(() => {
+    wailsAPI.version.get().then(info => {
+      if (info.buildTime && info.buildTime !== 'unknown') {
+        setBuildTime(info.buildTime);
+      }
+    });
   }, []);
 
   const loadSettings = async () => {
@@ -154,7 +164,12 @@ export default function Settings() {
             </div>
             <div className="p-6 pt-0">
                 <div className="text-sm text-muted-foreground">
-                    <p>当前版本: v0.1.0</p>
+                    <p>
+                      当前版本: v{pkg.version}
+                      {buildTime && (
+                        <span className="ml-1 opacity-70">({buildTime})</span>
+                      )}
+                    </p>
                     <p>Powered by Wails + React</p>
                 </div>
             </div>

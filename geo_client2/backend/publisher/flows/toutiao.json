@@ -32,6 +32,6 @@
       "timeoutMs": 15000,
       "optional": true
     },
-    {"id": "post_wait", "action": "wait", "ms": 3000}
+    {"id": "post_wait", "action": "wait", "ms": 5000}
   ]
 }

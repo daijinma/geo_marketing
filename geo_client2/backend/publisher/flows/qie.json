@@ -98,9 +98,41 @@
       "script": "() => {\n  const isVisible = (el) => {\n    if (!el) return false;\n    const style = window.getComputedStyle(el);\n    if (!style || style.visibility === 'hidden' || style.display === 'none') return false;\n    const rect = el.getBoundingClientRect();\n    return rect.width > 0 && rect.height > 0;\n  };\n  const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim();\n  const candidates = Array.from(document.querySelectorAll('button, [role=\"button\"], a')).filter(isVisible);\n  for (const el of candidates) {\n    const text = norm(el.innerText || el.textContent || el.getAttribute('aria-label') || '');\n    if (text === '发布') { el.click(); return { success: true }; }\n  }\n  const fallback = candidates.find(el => {\n    const text = norm(el.innerText || el.textContent || '');\n    return text.includes('发布') && !text.includes('草稿') && !text.includes('定时');\n  });\n  if (fallback) { fallback.click(); return { success: true }; }\n  return { success: false };\n}"
     },
     {
+      "id": "wait_confirm_modal",
+      "action": "wait",
+      "ms": 1500,
+      "optional": true
+    },
+    {
       "id": "wait_after_publish",
       "action": "wait",
       "ms": 5000
+    },
+    {
+      "id": "click_publish_confirm",
+      "action": "click_r",
+      "selector": "button, [role=\"button\"], a",
+      "regex": "确认发布|确定发布|完成发布|提交发布|确认|发布",
+      "optional": true,
+      "timeoutMs": 8000
+    },
+    {
+      "id": "click_publish_confirm_fallback",
+      "action": "eval",
+      "optional": true,
+      "script": "() => { const isVisible = (el) => { if (!el) return false; const style = window.getComputedStyle(el); if (!style || style.visibility === 'hidden' || style.display === 'none') return false; const rect = el.getBoundingClientRect(); return rect.width > 0 && rect.height > 0; }; const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim(); const modal = document.querySelector('[role=\"dialog\"], .modal, .dialog'); const scope = modal || document; const candidates = Array.from(scope.querySelectorAll('button, [role=\"button\"]')).filter(isVisible); const btn = candidates.find(el => /确定|确认|提交|发布/.test(norm(el.textContent || '')) && !/取消|返回|关闭|草稿/.test(norm(el.textContent || ''))); if (btn) { btn.click(); return { success: true }; } return { success: false }; }"
+    },
+    {
+      "id": "wait_after_publish_confirm",
+      "action": "wait",
+      "ms": 2000,
+      "optional": true
+    },
+    {
+      "id": "close_success_modal",
+      "action": "eval",
+      "optional": true,
+      "script": "() => { const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim(); const isVisible = (el) => { if (!el) return false; const style = window.getComputedStyle(el); if (!style || style.visibility === 'hidden' || style.display === 'none') return false; const rect = el.getBoundingClientRect(); return rect.width > 0 && rect.height > 0; }; const modal = document.querySelector('[role=\"dialog\"], .modal, .dialog'); const scope = modal || document; const text = norm(scope.textContent || ''); if (!/发布成功|已发布|发布完成/.test(text)) return { skipped: true }; const btns = Array.from(scope.querySelectorAll('button, [role=\"button\"], a')).filter(isVisible); const btn = btns.find(el => /完成|关闭|返回|知道了/.test(norm(el.textContent || ''))); if (btn) { btn.click(); return { success: true }; } return { success: false }; }"
     },
     {
       "id": "manual_publish_confirm",
@@ -112,6 +144,7 @@
       "id": "wait_redirect",
       "action": "wait_url_change",
       "timeoutMs": 20000
-    }
+    },
+    {"id": "post_wait", "action": "wait", "ms": 5000}
   ]
 }

@@ -16,8 +16,8 @@ export default function Sidebar() {
     { path: '/', icon: LayoutDashboard, label: '首页' },
     { path: '/search', icon: Search, label: '大模型搜索' },
     { path: '/auth', icon: Shield, label: '授权列表' },
-    { path: '/publish', icon: Send, label: '一键发文' },
-    { path: '/tasks', icon: ListTodo, label: '任务列表' },
+    { path: '/publish', icon: Send, label: '发文任务' },
+    { path: '/tasks', icon: ListTodo, label: '搜索任务' },
     { path: '/logs', icon: FileText, label: '系统控制台' },
   ];
 

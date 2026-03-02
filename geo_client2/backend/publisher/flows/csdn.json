@@ -22,7 +22,7 @@
     {
       "id": "fill_content",
       "action": "eval",
-      "script": "(html) => { try { const iframe = document.querySelector('main iframe'); if (iframe && iframe.contentDocument && iframe.contentDocument.body) { iframe.contentDocument.body.innerHTML = html; iframe.contentDocument.body.dispatchEvent(new Event('input', { bubbles: true })); return { success: true, method: 'new_iframe', length: html.length }; } return { success: false, error: 'iframe not found' }; } catch (e) { return { success: false, error: e.message }; } }",
+      "script": "(html) => { try { const iframe = document.querySelector('main iframe'); if (iframe && iframe.contentDocument && iframe.contentDocument.body) { const body = iframe.contentDocument.body; body.focus(); body.innerHTML = html; body.dispatchEvent(new Event('input', { bubbles: true })); try { body.dispatchEvent(new InputEvent('input', { bubbles: true, data: html, inputType: 'insertFromPaste' })); } catch (e) { body.dispatchEvent(new Event('input', { bubbles: true })); } body.dispatchEvent(new Event('change', { bubbles: true })); return { success: true, method: 'new_iframe', length: html.length }; } return { success: false, error: 'iframe not found' }; } catch (e) { return { success: false, error: e.message }; } }",
       "args": ["{{content}}"]
     },
     {
@@ -34,6 +34,12 @@
       "mode": "input",
       "clickFirst": true,
       "optional": true
+    },
+    {
+      "id": "trigger_editor_key",
+      "action": "eval",
+      "optional": true,
+      "script": "() => { const iframe = document.querySelector('main iframe'); if (!iframe || !iframe.contentDocument || !iframe.contentDocument.body) return { success: false }; const body = iframe.contentDocument.body; body.focus(); const ev = new KeyboardEvent('keydown', { bubbles: true, key: ' ', code: 'Space' }); body.dispatchEvent(ev); body.dispatchEvent(new Event('blur', { bubbles: true })); return { success: true }; }"
     },
     {"id": "wait_after_content", "action": "wait", "ms": 1000},
     {
@@ -52,13 +58,30 @@
     {
       "id": "select_tags",
       "action": "eval",
-      "script": "() => { const firstTag = document.querySelector('[class*=\"tabs__item\"][title=\"学习和成长\"], [class*=\"tab-item\"][title=\"学习和成长\"]') || Array.from(document.querySelectorAll('div, span')).find(el => el.textContent.trim() === '学习和成长'); if (firstTag) firstTag.click(); return !!firstTag; }"
+      "script": "() => { const names = ['学习和成长']; const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim(); const findByName = (name) => document.querySelector('[class*=\"tabs__item\"][title=\"' + name + '\"]') || document.querySelector('[class*=\"tab-item\"][title=\"' + name + '\"]') || Array.from(document.querySelectorAll('div, span, li, button, a')).find(el => norm(el.textContent) === name); for (const name of names) { const el = findByName(name); if (el) { el.click(); return { picked: name, fallback: false }; } } const candidates = Array.from(document.querySelectorAll('[class*=\"tabs__item\"], [class*=\"tab-item\"], .tag-tabs *, .tag-modal *')).filter(el => norm(el.textContent).length > 0); if (candidates[0]) { candidates[0].click(); return { picked: norm(candidates[0].textContent), fallback: true }; } return { picked: null, fallback: true }; }"
     },
     {"id": "wait_subtags", "action": "wait", "ms": 2000},
     {
       "id": "select_subtags",
       "action": "eval",
-      "script": "() => { const names = ['职场和发展', '学习方法']; let clicked = 0; for (const name of names) { const el = document.querySelector('[class*=\"tag\"][title=\"' + name + '\"], .tag-item[title=\"' + name + '\"]') || Array.from(document.querySelectorAll('span, div, label')).find(e => e.textContent.trim() === name); if (el) { el.click(); clicked++; } } return clicked; }"
+      "script": "() => { const names = ['职场和发展', '学习方法']; const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim(); let clicked = 0; for (const name of names) { const el = document.querySelector('[class*=\"tag\"][title=\"' + name + '\"]') || document.querySelector('.tag-item[title=\"' + name + '\"]') || Array.from(document.querySelectorAll('span, div, label, a, li')).find(e => norm(e.textContent) === name); if (el) { el.click(); clicked++; } }
+  if (clicked === 0) {
+    const candidates = Array.from(document.querySelectorAll('[class*=\"tag\"], .tag-item, .tag-modal span, .tag-modal div')).filter(el => norm(el.textContent).length > 0);
+    if (candidates[0]) { candidates[0].click(); clicked = 1; }
+  }
+  return clicked; }"
+    },
+    {
+      "id": "verify_tags_selected",
+      "action": "eval",
+      "optional": true,
+      "script": "() => { const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim(); const selected = Array.from(document.querySelectorAll('[class*=\"active\"], [class*=\"selected\"], [class*=\"checked\"]')).map(el => norm(el.textContent)).filter(Boolean); if (selected.length > 0) return { ok: true, selected }; const candidates = Array.from(document.querySelectorAll('[class*=\"tag\"], .tag-item, .tag-modal span, .tag-modal div')).filter(el => norm(el.textContent).length > 0); if (candidates[0]) { candidates[0].click(); return { ok: false, fallback: true, picked: norm(candidates[0].textContent) }; } return { ok: false, fallback: true, picked: null }; }"
+    },
+    {
+      "id": "retry_tags_if_none",
+      "action": "eval",
+      "optional": true,
+      "script": "() => { const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim(); const selected = Array.from(document.querySelectorAll('[class*=\"active\"], [class*=\"selected\"], [class*=\"checked\"]')).map(el => norm(el.textContent)).filter(Boolean); if (selected.length > 0) return { ok: true, selected }; const main = ['学习和成长']; const sub = ['职场和发展', '学习方法']; const findByName = (name) => document.querySelector('[class*=\"tabs__item\"][title=\"' + name + '\"]') || document.querySelector('[class*=\"tab-item\"][title=\"' + name + '\"]') || Array.from(document.querySelectorAll('div, span, li, button, a')).find(el => norm(el.textContent) === name); for (const name of main) { const el = findByName(name); if (el) { el.click(); break; } } let clicked = 0; for (const name of sub) { const el = document.querySelector('[class*=\"tag\"][title=\"' + name + '\"]') || document.querySelector('.tag-item[title=\"' + name + '\"]') || Array.from(document.querySelectorAll('span, div, label, a, li')).find(e => norm(e.textContent) === name); if (el) { el.click(); clicked++; } } if (clicked === 0) { const candidates = Array.from(document.querySelectorAll('[class*=\"tag\"], .tag-item, .tag-modal span, .tag-modal div')).filter(el => norm(el.textContent).length > 0); if (candidates[0]) { candidates[0].click(); clicked = 1; } } return { ok: clicked > 0 }; }"
     },
     {"id": "wait_after_tags", "action": "wait", "ms": 1000},
     {
@@ -69,7 +92,28 @@
       "optional": true,
       "timeoutMs": 3000
     },
-    {"id": "wait_ai_summary", "action": "wait", "ms": 3000, "optional": true},
+    {"id": "wait_ai_summary", "action": "wait", "ms": 10000, "optional": true},
+    {
+      "id": "wait_summary_filled",
+      "action": "eval",
+      "optional": true,
+      "script": "() => new Promise(resolve => { const deadline = Date.now() + 12000; const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim(); const check = () => { const textarea = document.querySelector('textarea[placeholder*=\"摘要\"], textarea[placeholder*=\"文章摘要\"]'); if (textarea && textarea.value && textarea.value.trim().length > 0) return resolve({ ok: true, method: 'textarea' }); const editable = Array.from(document.querySelectorAll('[contenteditable=\"true\"]')).find(el => { const ph = norm(el.getAttribute('placeholder') || el.getAttribute('data-placeholder') || ''); return ph.includes('摘要') || ph.includes('文章摘要'); }); if (editable && norm(editable.textContent).length > 0) return resolve({ ok: true, method: 'contenteditable' }); if (Date.now() > deadline) return resolve({ ok: false }); setTimeout(check, 500); }; check(); })"
+    },
+    {
+      "id": "ensure_summary_present",
+      "action": "eval",
+      "optional": true,
+      "script": "() => { const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim(); const textarea = document.querySelector('textarea[placeholder*=\"摘要\"], textarea[placeholder*=\"文章摘要\"]'); if (textarea && textarea.value && textarea.value.trim().length > 0) return { ok: true, already: true }; const editable = Array.from(document.querySelectorAll('[contenteditable=\"true\"]')).find(el => { const ph = norm(el.getAttribute('placeholder') || el.getAttribute('data-placeholder') || ''); return ph.includes('摘要') || ph.includes('文章摘要'); }); if (editable && norm(editable.textContent).length > 0) return { ok: true, already: true }; const btn = Array.from(document.querySelectorAll('button, [role=\"button\"], a, span')).find(el => /AI提取摘要|生成摘要|重新生成/.test(norm(el.textContent || ''))); if (btn) { btn.click(); return { ok: false, clicked: true }; } return { ok: false, clicked: false }; }"
+    },
+    {
+      "id": "retry_ai_summary",
+      "action": "click_r",
+      "selector": "*",
+      "regex": "AI提取摘要|生成摘要|重新生成",
+      "optional": true,
+      "timeoutMs": 3000
+    },
+    {"id": "wait_ai_summary_retry", "action": "wait", "ms": 8000, "optional": true},
     {
       "id": "click_publish",
       "action": "click_r",
@@ -82,6 +126,6 @@
       "timeoutMs": 15000,
       "optional": true
     },
-    {"id": "post_wait", "action": "wait", "ms": 3000}
+    {"id": "post_wait", "action": "wait", "ms": 5000}
   ]
 }

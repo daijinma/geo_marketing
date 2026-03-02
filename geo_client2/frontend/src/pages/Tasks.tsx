@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { RefreshCw, ChevronDown, ChevronRight, Play, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { LocalTaskCreator } from '@/components/LocalTaskCreator';
 import { LocalTaskDetail } from '@/components/LocalTaskDetail';
-import { PublishTaskDetailModal } from '@/components/PublishTaskDetailModal';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { wailsAPI } from '@/utils/wails-api';
 
@@ -22,63 +21,32 @@ interface Task {
   created_at: string;
 }
 
-interface PublishLongTask {
-  task_id: string;
-  status: string;
-  article?: { title: string; content: string; cover_image?: string };
-  platforms?: string[];
-  created_at?: string;
-  updated_at?: string;
-}
-
 export default function Tasks() {
-  const navigate = useNavigate();
   const location = useLocation();
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [publishTasks, setPublishTasks] = useState<PublishLongTask[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  const initialTab = (location.state as any)?.tab === 'publish' ? 'publish' : 'search';
-  const [activeTab, setActiveTab] = useState<'publish' | 'search'>(initialTab);
-  
+
   const [expandedTask, setExpandedTask] = useState<number | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
-  const [selectedPublishTaskId, setSelectedPublishTaskId] = useState<string | null>(null);
   const [showCreator, setShowCreator] = useState(false);
-  
+
   const initialStatus = (location.state as any)?.status || 'all';
   const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [deletingTaskId, setDeletingTaskId] = useState<number | null>(null);
   const [deleteConfirmationId, setDeleteConfirmationId] = useState<number | null>(null);
-  const [publishDeleteConfirmationId, setPublishDeleteConfirmationId] = useState<string | null>(null);
   const refreshInterval = useRef<ReturnType<typeof setInterval> | null>(null);
-  
+
   const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
   const editInputRef = useRef<HTMLInputElement>(null);
-  
+
   const [searchLimit, setSearchLimit] = useState(50);
   const [hasMoreSearch, setHasMoreSearch] = useState(false);
-  const [publishLimit, setPublishLimit] = useState(50);
-  const [hasMorePublish, setHasMorePublish] = useState(false);
 
   useEffect(() => {
     const state = location.state as any;
-    if (state) {
-      if (state.tab === 'publish') {
-        setActiveTab('publish');
-      } else if (state.tab === 'search') {
-        setActiveTab('search');
-      }
-      
-      if (state.status) {
-        setStatusFilter(state.status);
-      }
-      
-      if (state.taskId) {
-        setSelectedPublishTaskId(state.taskId);
-        window.history.replaceState({}, document.title);
-      }
+    if (state?.status) {
+      setStatusFilter(state.status);
     }
   }, [location.state]);
 
@@ -86,28 +54,16 @@ export default function Tasks() {
     const silent = opts?.silent === true;
     if (!silent) setLoading(true);
     try {
-      const [searchRes, publishRes] = await Promise.all([
-        wailsAPI.task.getAllTasks({
-          limit: searchLimit,
-          offset: 0,
-          status: statusFilter !== 'all' ? statusFilter : undefined,
-        }),
-        wailsAPI.longTask.listRecords(),
-      ]);
+      const searchRes = await wailsAPI.task.getAllTasks({
+        limit: searchLimit,
+        offset: 0,
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+      });
 
       if (searchRes?.success && (searchRes as any).tasks) {
         const newTasks = (searchRes as any).tasks as Task[];
         setTasks(newTasks);
         setHasMoreSearch(newTasks.length >= searchLimit);
-      }
-
-      if (publishRes?.success && (publishRes as any).tasks) {
-        const list = ((publishRes as any).tasks as PublishLongTask[]) || [];
-        const filtered = statusFilter === 'all'
-          ? list
-          : list.filter(t => t.status === statusFilter);
-        setPublishTasks(filtered);
-        setHasMorePublish(filtered.length > publishLimit);
       }
     } catch (error: any) {
       toast.error('加载任务失败', { description: error.message });
@@ -118,71 +74,20 @@ export default function Tasks() {
 
   useEffect(() => {
     loadTasks();
-  }, [searchLimit]);
+  }, [searchLimit, statusFilter]);
 
   useEffect(() => {
-    loadTasks();
-
-    // Poll every 5s to keep publish task status in sync
     refreshInterval.current = setInterval(() => loadTasks({ silent: true }), 5000);
-    
+
     const unlisten = wailsAPI.search.onTaskUpdated(() => {
       loadTasks({ silent: true });
     });
-    
+
     return () => {
       if (refreshInterval.current) clearInterval(refreshInterval.current);
       if (typeof unlisten === 'function') unlisten();
     };
   }, [statusFilter]);
-
-  const handlePublishRerun = async (taskId: string) => {
-    try {
-      await wailsAPI.longTask.restart(taskId);
-      toast.success('任务已重新开始');
-      setSelectedPublishTaskId(taskId);
-      loadTasks();
-    } catch (error: any) {
-      toast.error('重试失败', { description: error.message });
-    }
-  };
-
-  const handlePublishCancel = async (taskId: string) => {
-    try {
-      await wailsAPI.longTask.cancel(taskId);
-      toast.success('任务已取消');
-      loadTasks();
-    } catch (error: any) {
-      toast.error('取消任务失败', { description: error.message });
-    }
-  };
-
-  const handlePublishContinue = async (taskId: string) => {
-    try {
-      await wailsAPI.longTask.resume(taskId);
-      toast.success('任务已继续执行');
-      loadTasks();
-    } catch (error: any) {
-      toast.error('继续任务失败', { description: error.message });
-    }
-  };
-
-  const handlePublishDelete = async (taskId: string) => {
-    try {
-      await wailsAPI.longTask.remove(taskId);
-      toast.success('发文任务已删除');
-      loadTasks();
-    } catch (error: any) {
-      toast.error('删除失败', { description: error.message });
-    }
-  };
-
-  const confirmPublishDelete = async () => {
-    if (!publishDeleteConfirmationId) return;
-    const taskId = publishDeleteConfirmationId;
-    setPublishDeleteConfirmationId(null);
-    await handlePublishDelete(taskId);
-  };
 
   const handleCancel = async (taskId: number) => {
     try {
@@ -223,7 +128,7 @@ export default function Tasks() {
     const taskId = deleteConfirmationId;
     setDeleteConfirmationId(null);
     setDeletingTaskId(taskId);
-    
+
     try {
       await wailsAPI.task.deleteTask(taskId);
       toast.success('任务已删除');
@@ -245,7 +150,7 @@ export default function Tasks() {
 
   const handleSaveName = async () => {
     if (editingTaskId === null) return;
-    
+
     try {
       await wailsAPI.task.updateName(editingTaskId, editValue);
       toast.success('任务名称已更新');
@@ -265,47 +170,24 @@ export default function Tasks() {
     }
   };
 
-  const tabBtnBase = 'h-9 px-3 rounded-lg text-sm font-medium transition-colors';
-  const tabBtnActive = 'bg-secondary text-secondary-foreground';
-  const tabBtnInactive = 'text-muted-foreground hover:bg-accent hover:text-accent-foreground';
-
   return (
     <div className="p-8 space-y-8 max-w-6xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">任务列表</h2>
-          <p className="text-muted-foreground mt-1">管理和监控您的所有任务（搜索 / 发文）</p>
+          <h2 className="text-3xl font-bold tracking-tight">搜索任务</h2>
+          <p className="text-muted-foreground mt-1">管理和监控您的搜索任务</p>
         </div>
-        {activeTab === 'search' && (
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setShowCreator(true)}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 shadow-sm transition-all font-medium text-sm"
-            >
-              创建搜索任务
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowCreator(true)}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 shadow-sm transition-all font-medium text-sm"
+          >
+            创建任务
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setActiveTab('publish')}
-            className={`${tabBtnBase} ${activeTab === 'publish' ? tabBtnActive : tabBtnInactive}`}
-          >
-            发文任务
-            <span className="ml-2 text-xs font-semibold text-muted-foreground">{publishTasks.length}</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('search')}
-            className={`${tabBtnBase} ${activeTab === 'search' ? tabBtnActive : tabBtnInactive}`}
-          >
-            搜索任务
-            <span className="ml-2 text-xs font-semibold text-muted-foreground">{tasks.length}</span>
-          </button>
-        </div>
-
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[180px] bg-background">
             <SelectValue placeholder="全部状态" />
@@ -321,141 +203,25 @@ export default function Tasks() {
         </Select>
       </div>
 
-      {activeTab === 'publish' ? (
-        <div className="bg-card border border-border/50 rounded-xl shadow-sm overflow-hidden">
-          {publishTasks.length === 0 ? (
-            <div className="px-5 py-10 text-sm text-muted-foreground">暂无发文任务</div>
-          ) : (
-            <div className="space-y-4 p-5">
-              {publishTasks.slice(0, publishLimit).map((t) => (
-                <div key={t.task_id} className="relative group bg-card border border-border/50 rounded-xl shadow-sm hover:shadow-sm transition-all duration-200 overflow-hidden">
-                  <div className="p-5">
-                    <div className="flex items-center justify-between gap-6">
-                      <div className="flex items-center gap-4 flex-1 min-w-0">
-                        <div className="flex flex-col min-w-0 space-y-1">
-                          <div className="flex items-center gap-3">
-                            <span
-                              className="font-semibold text-lg truncate cursor-pointer hover:text-primary transition-colors select-none"
-                              title={t.article?.title || t.task_id}
-                              onClick={() => setSelectedPublishTaskId(t.task_id)}
-                            >
-                              {t.article?.title || '（无标题）'}
-                            </span>
-
-                            <span
-                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors
-                                ${t.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                                  t.status === 'running' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                                  t.status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                                  t.status === 'paused' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                                  'bg-secondary text-secondary-foreground'}
-                              `}
-                            >
-                              {t.status === 'completed' ? '已完成' :
-                                t.status === 'running' ? '运行中' :
-                                t.status === 'failed' ? '失败' :
-                                t.status === 'paused' ? '已暂停' :
-                                t.status === 'pending' ? '等待中' :
-                                t.status === 'cancelled' ? '已取消' : t.status}
-                            </span>
-                          </div>
-
-                          <div className="text-xs text-muted-foreground flex items-center gap-2">
-                            <span className="font-mono">ID: {t.task_id}</span>
-                            {t.platforms?.length ? (
-                              <>
-                                <span>•</span>
-                                <span className="truncate">{t.platforms.join(', ')}</span>
-                              </>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                        {t.status === 'paused' && (
-                          <button
-                            onClick={() => handlePublishContinue(t.task_id)}
-                            className="h-9 px-3 text-sm font-medium border border-input rounded-lg hover:bg-accent hover:text-accent-foreground flex items-center gap-1.5 transition-colors"
-                          >
-                            <Play className="h-3.5 w-3.5" />
-                            继续
-                          </button>
-                        )}
-
-                        {t.status !== 'running' && t.status !== 'paused' && (
-                          <button
-                            onClick={() => handlePublishRerun(t.task_id)}
-                            className="h-9 px-3 text-sm font-medium border border-input rounded-lg hover:bg-accent hover:text-accent-foreground flex items-center gap-1.5 transition-colors"
-                          >
-                            <Play className="h-3.5 w-3.5" />
-                            重试
-                          </button>
-                        )}
-
-                        <button
-                          onClick={() => setSelectedPublishTaskId(t.task_id)}
-                          className="h-9 px-4 text-sm font-medium bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
-                        >
-                          详情
-                        </button>
-
-                        {t.status === 'running' ? (
-                          <button
-                            onClick={() => handlePublishCancel(t.task_id)}
-                            className="h-9 px-3 text-sm font-medium border border-destructive/20 text-destructive bg-destructive/5 rounded-lg hover:bg-destructive hover:text-destructive-foreground transition-colors"
-                          >
-                            取消
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => setPublishDeleteConfirmationId(t.task_id)}
-                            className="h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                            title="删除任务"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              
-              {hasMorePublish && (
-                <div className="pt-4 pb-2 flex justify-center">
-                  <button
-                    onClick={() => setPublishLimit(prev => prev + 50)}
-                    className="px-4 py-2 text-sm text-muted-foreground hover:text-primary transition-colors bg-secondary/50 rounded-lg hover:bg-secondary"
-                  >
-                    加载更多
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+      {loading && tasks.length === 0 ? (
+        <div className="text-center py-20 text-muted-foreground animate-pulse">加载中...</div>
+      ) : tasks.length === 0 ? (
+        <div className="text-center py-20 border-2 border-dashed border-border/50 rounded-xl bg-card/30">
+          <p className="text-muted-foreground text-lg mb-2">暂无任务</p>
+          <button
+            onClick={() => setShowCreator(true)}
+            className="text-primary hover:underline font-medium"
+          >
+            立即创建第一个任务
+          </button>
         </div>
       ) : (
-        <>
-          {loading && tasks.length === 0 ? (
-            <div className="text-center py-20 text-muted-foreground animate-pulse">加载中...</div>
-          ) : tasks.length === 0 ? (
-            <div className="text-center py-20 border-2 border-dashed border-border/50 rounded-xl bg-card/30">
-              <p className="text-muted-foreground text-lg mb-2">暂无任务</p>
-              <button
-                onClick={() => setShowCreator(true)}
-                className="text-primary hover:underline font-medium"
-              >
-                立即创建第一个任务
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="px-1">
-                <div className="font-semibold">搜索任务</div>
-                <div className="text-xs text-muted-foreground mt-0.5">双击标题可重命名；详情里可查看搜索记录</div>
-              </div>
-              {tasks.map((task) => (
+        <div className="space-y-4">
+          <div className="px-1">
+            <div className="font-semibold">搜索任务</div>
+            <div className="text-xs text-muted-foreground mt-0.5">双击标题可重命名；详情里可查看搜索记录</div>
+          </div>
+          {tasks.map((task) => (
             <div key={task.id} className="relative group bg-card border border-border/50 rounded-xl shadow-sm hover:shadow-sm transition-all duration-200 overflow-hidden">
               {deletingTaskId === task.id && (
                 <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10 backdrop-blur-sm">
@@ -465,65 +231,65 @@ export default function Tasks() {
                   </div>
                 </div>
               )}
-              
+
               <div className="p-5">
                 <div className="flex items-center justify-between gap-6">
                   <div className="flex items-center gap-4 flex-1 min-w-0">
-                    <button 
-                        className="h-8 w-8 shrink-0 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-                        onClick={() => setExpandedTask(expandedTask === task.id ? null : task.id)}
+                    <button
+                      className="h-8 w-8 shrink-0 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                      onClick={() => setExpandedTask(expandedTask === task.id ? null : task.id)}
                     >
-                        {expandedTask === task.id ? (
-                            <ChevronDown className="h-4 w-4" />
-                        ) : (
-                            <ChevronRight className="h-4 w-4" />
-                        )}
+                      {expandedTask === task.id ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
                     </button>
-                    
+
                     <div className="flex flex-col min-w-0 space-y-1">
-                        <div className="flex items-center gap-3">
-                             {editingTaskId === task.id ? (
-                                <input
-                                    ref={editInputRef}
-                                    type="text"
-                                    value={editValue}
-                                    onChange={(e) => setEditValue(e.target.value)}
-                                    onBlur={handleSaveName}
-                                    onKeyDown={handleKeyDown}
-                                    className="h-6 py-0 px-2 text-sm w-[240px] border border-primary rounded bg-background focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                    onClick={(e) => e.stopPropagation()}
-                                />
-                            ) : (
-                                <span 
-                                    onDoubleClick={() => handleDoubleClick(task)}
-                                    className="font-semibold text-lg truncate cursor-text hover:text-primary transition-colors select-none"
-                                    title={task.name || `任务 #${task.id}`}
-                                >
-                                    {task.name || `任务 #${task.id}`}
-                                </span>
-                            )}
-                            
-                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors
-                                ${task.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                                  task.status === 'running' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                                  task.status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                                  task.status === 'partial_completed' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                                  'bg-secondary text-secondary-foreground'
-                                }`
-                            }>
-                                {task.status === 'partial_completed' ? '部分完成' : 
-                                 task.status === 'completed' ? '已完成' :
-                                 task.status === 'running' ? '运行中' :
-                                 task.status === 'failed' ? '失败' :
-                                 task.status === 'pending' ? '等待中' :
-                                 task.status === 'cancelled' ? '已取消' : task.status}
-                            </span>
-                        </div>
-                        <div className="text-xs text-muted-foreground flex items-center gap-2">
-                            <span className="font-mono">ID: {task.id}</span>
-                            <span>•</span>
-                            <span>{new Date(task.created_at).toLocaleString()}</span>
-                        </div>
+                      <div className="flex items-center gap-3">
+                        {editingTaskId === task.id ? (
+                          <input
+                            ref={editInputRef}
+                            type="text"
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onBlur={handleSaveName}
+                            onKeyDown={handleKeyDown}
+                            className="h-6 py-0 px-2 text-sm w-[240px] border border-primary rounded bg-background focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        ) : (
+                          <span
+                            onDoubleClick={() => handleDoubleClick(task)}
+                            className="font-semibold text-lg truncate cursor-text hover:text-primary transition-colors select-none"
+                            title={task.name || `任务 #${task.id}`}
+                          >
+                            {task.name || `任务 #${task.id}`}
+                          </span>
+                        )}
+
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors
+                          ${task.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                            task.status === 'running' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                            task.status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                            task.status === 'partial_completed' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                            'bg-secondary text-secondary-foreground'
+                          }`
+                        }>
+                          {task.status === 'partial_completed' ? '部分完成' :
+                            task.status === 'completed' ? '已完成' :
+                            task.status === 'running' ? '运行中' :
+                            task.status === 'failed' ? '失败' :
+                            task.status === 'pending' ? '等待中' :
+                            task.status === 'cancelled' ? '已取消' : task.status}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground flex items-center gap-2">
+                        <span className="font-mono">ID: {task.id}</span>
+                        <span>•</span>
+                        <span>{new Date(task.created_at).toLocaleString()}</span>
+                      </div>
                     </div>
                   </div>
 
@@ -531,7 +297,7 @@ export default function Tasks() {
                     {task.status !== 'running' && (
                       <>
                         {task.status === 'partial_completed' && (
-                          <button 
+                          <button
                             onClick={() => handleContinue(task.id)}
                             className="h-9 px-3 text-sm font-medium border border-input rounded-lg hover:bg-accent hover:text-accent-foreground flex items-center gap-1.5 transition-colors"
                           >
@@ -539,25 +305,25 @@ export default function Tasks() {
                             继续
                           </button>
                         )}
-                        <button 
-                            onClick={() => handleRetry(task.id)}
-                            className="h-9 px-3 text-sm font-medium border border-input rounded-lg hover:bg-accent hover:text-accent-foreground flex items-center gap-1.5 transition-colors"
+                        <button
+                          onClick={() => handleRetry(task.id)}
+                          className="h-9 px-3 text-sm font-medium border border-input rounded-lg hover:bg-accent hover:text-accent-foreground flex items-center gap-1.5 transition-colors"
                         >
-                            <Play className="h-3.5 w-3.5" />
-                            重试
+                          <Play className="h-3.5 w-3.5" />
+                          重试
                         </button>
                       </>
                     )}
-                    
-                    <button 
-                        onClick={() => setSelectedTaskId(task.id)}
-                        className="h-9 px-4 text-sm font-medium bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
+
+                    <button
+                      onClick={() => setSelectedTaskId(task.id)}
+                      className="h-9 px-4 text-sm font-medium bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
                     >
-                        详情
+                      详情
                     </button>
 
                     {task.status === 'running' ? (
-                      <button 
+                      <button
                         onClick={() => handleCancel(task.id)}
                         className="h-9 px-3 text-sm font-medium border border-destructive/20 text-destructive bg-destructive/5 rounded-lg hover:bg-destructive hover:text-destructive-foreground transition-colors"
                       >
@@ -578,43 +344,41 @@ export default function Tasks() {
                 {expandedTask === task.id && (
                   <div className="mt-5 pt-5 border-t border-border/50 grid grid-cols-1 md:grid-cols-2 gap-6 text-sm animate-in slide-in-from-top-2 duration-200">
                     <div>
-                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">关键词</span>
-                        <div className="font-mono bg-secondary/50 p-3 rounded-lg text-xs overflow-x-auto border border-border/50">
-                            {task.keywords}
-                        </div>
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">关键词</span>
+                      <div className="font-mono bg-secondary/50 p-3 rounded-lg text-xs overflow-x-auto border border-border/50">
+                        {task.keywords}
+                      </div>
                     </div>
                     <div className="space-y-3">
-                        <div>
-                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1">目标平台</span>
-                            <div className="font-medium">{task.platforms}</div>
-                        </div>
-                        <div>
-                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1">查询设置</span>
-                            <div className="font-medium">深度: {task.query_count} 轮</div>
-                        </div>
+                      <div>
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1">目标平台</span>
+                        <div className="font-medium">{task.platforms}</div>
+                      </div>
+                      <div>
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1">查询设置</span>
+                        <div className="font-medium">深度: {task.query_count} 轮</div>
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
             </div>
-              ))}
-              
-              {hasMoreSearch && (
-                <div className="pt-4 pb-2 flex justify-center">
-                  <button
-                    onClick={() => setSearchLimit(prev => prev + 50)}
-                    className="px-4 py-2 text-sm text-muted-foreground hover:text-primary transition-colors bg-secondary/50 rounded-lg hover:bg-secondary"
-                  >
-                    加载更多
-                  </button>
-                </div>
-              )}
+          ))}
+
+          {hasMoreSearch && (
+            <div className="pt-4 pb-2 flex justify-center">
+              <button
+                onClick={() => setSearchLimit(prev => prev + 50)}
+                className="px-4 py-2 text-sm text-muted-foreground hover:text-primary transition-colors bg-secondary/50 rounded-lg hover:bg-secondary"
+              >
+                加载更多
+              </button>
             </div>
           )}
-        </>
+        </div>
       )}
 
-      {activeTab === 'search' && showCreator && (
+      {showCreator && (
         <LocalTaskCreator
           onClose={() => setShowCreator(false)}
           onCreated={() => {
@@ -624,7 +388,7 @@ export default function Tasks() {
         />
       )}
 
-      {activeTab === 'search' && selectedTaskId && (
+      {selectedTaskId && (
         <LocalTaskDetail
           taskId={selectedTaskId}
           onClose={() => setSelectedTaskId(null)}
@@ -635,50 +399,21 @@ export default function Tasks() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-background border border-border rounded-xl shadow-sm max-w-sm w-full overflow-hidden">
             <div className="p-6 space-y-4">
-                <div className="space-y-2 text-center">
-                    <h3 className="text-lg font-semibold">确认删除任务?</h3>
-                    <p className="text-muted-foreground text-sm">
-                        此操作将永久删除任务及其所有搜索记录，且无法恢复。
-                    </p>
-                </div>
-                <div className="flex justify-center gap-3 pt-2">
-                    <button 
-                        onClick={() => setDeleteConfirmationId(null)}
-                        className="px-4 py-2 border border-input rounded-lg hover:bg-accent font-medium text-sm transition-colors"
-                    >
-                        取消
-                    </button>
-                    <button 
-                        onClick={confirmDelete}
-                        className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 font-medium text-sm transition-colors"
-                    >
-                        确认删除
-                    </button>
-                </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {publishDeleteConfirmationId && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-background border border-border rounded-xl shadow-sm max-w-sm w-full overflow-hidden">
-            <div className="p-6 space-y-4">
               <div className="space-y-2 text-center">
                 <h3 className="text-lg font-semibold">确认删除任务?</h3>
                 <p className="text-muted-foreground text-sm">
-                  此操作将永久删除发文任务记录，且无法恢复。
+                  此操作将永久删除任务及其所有搜索记录，且无法恢复。
                 </p>
               </div>
               <div className="flex justify-center gap-3 pt-2">
                 <button
-                  onClick={() => setPublishDeleteConfirmationId(null)}
+                  onClick={() => setDeleteConfirmationId(null)}
                   className="px-4 py-2 border border-input rounded-lg hover:bg-accent font-medium text-sm transition-colors"
                 >
                   取消
                 </button>
                 <button
-                  onClick={confirmPublishDelete}
+                  onClick={confirmDelete}
                   className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 font-medium text-sm transition-colors"
                 >
                   确认删除
@@ -687,13 +422,6 @@ export default function Tasks() {
             </div>
           </div>
         </div>
-      )}
-
-      {selectedPublishTaskId && (
-        <PublishTaskDetailModal
-          taskId={selectedPublishTaskId}
-          onClose={() => setSelectedPublishTaskId(null)}
-        />
       )}
     </div>
   );

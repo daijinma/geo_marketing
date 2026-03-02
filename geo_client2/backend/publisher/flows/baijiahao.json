@@ -84,16 +84,59 @@
       "timeoutMs": 5000
     },
     {
+      "id": "confirm_cover_fallback",
+      "action": "eval",
+      "optional": true,
+      "script": "() => { const wrap = document.querySelector('.cheetah-modal-wrap'); if (!wrap) return { skipped: true }; const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim(); const isVisible = (el) => { if (!el) return false; const style = window.getComputedStyle(el); if (!style || style.visibility === 'hidden' || style.display === 'none') return false; const rect = el.getBoundingClientRect(); return rect.width > 0 && rect.height > 0; }; const btns = Array.from(wrap.querySelectorAll('button, [role=\"button\"]')).filter(isVisible); const ok = btns.find(b => /确定|完成|提交/.test(norm(b.textContent || ''))); if (ok) { ok.click(); return { success: true }; } return { success: false }; }"
+    },
+    {
+      "id": "wait_after_cover_confirm",
+      "action": "wait",
+      "ms": 1000,
+      "optional": true
+    },
+    {
+      "id": "choose_immediate_publish",
+      "action": "eval",
+      "optional": true,
+      "script": "() => { const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim(); const isVisible = (el) => { if (!el) return false; const style = window.getComputedStyle(el); if (!style || style.visibility === 'hidden' || style.display === 'none') return false; const rect = el.getBoundingClientRect(); return rect.width > 0 && rect.height > 0; }; const candidates = Array.from(document.querySelectorAll('label, button, span, div')).filter(isVisible); const immediate = candidates.find(el => /立即发布|立即发表|立即/.test(norm(el.textContent || ''))); if (immediate) { const clickable = immediate.closest('label, button, [role=\"button\"]') || immediate; clickable.click(); return { mode: 'immediate', clicked: true }; }
+  const labelFor = Array.from(document.querySelectorAll('label')).find(el => /立即发布|立即发表|立即/.test(norm(el.textContent || '')));
+  if (labelFor) { labelFor.click(); return { mode: 'immediate', clicked: true, via: 'label' }; }
+  const inputImmediate = Array.from(document.querySelectorAll('input[type=radio], input[type=checkbox]')).find(el => /now|immediate|publish_now/.test((el.value || '') + ' ' + (el.name || '')));
+  if (inputImmediate) { inputImmediate.click(); return { mode: 'immediate', clicked: true, via: 'input' }; }
+  const scheduled = candidates.find(el => /定时发布|预约发布|定时|预约/.test(norm(el.textContent || '')));
+  if (scheduled && scheduled.getAttribute('aria-checked') === 'true') { return { mode: 'scheduled', clicked: false }; }
+  return { mode: 'unknown', clicked: false }; }"
+    },
+    {
+      "id": "disable_schedule_toggle",
+      "action": "eval",
+      "optional": true,
+      "script": "() => { const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim(); const isVisible = (el) => { if (!el) return false; const style = window.getComputedStyle(el); if (!style || style.visibility === 'hidden' || style.display === 'none') return false; const rect = el.getBoundingClientRect(); return rect.width > 0 && rect.height > 0; }; const toggles = Array.from(document.querySelectorAll('label, button, span, div')).filter(isVisible).filter(el => /定时发布|预约发布|定时|预约/.test(norm(el.textContent || ''))); const active = toggles.find(el => el.getAttribute('aria-checked') === 'true' || el.classList.contains('active') || el.classList.contains('checked') || el.classList.contains('selected')); if (active) { const clickable = active.closest('label, button, [role=\"button\"]') || active; clickable.click(); return { disabled: true }; }
+  const scheduleInput = Array.from(document.querySelectorAll('input[type=checkbox], input[type=radio]')).find(el => /schedule|timed|预约|定时/.test((el.name || '') + ' ' + (el.value || '')) && (el.checked || el.getAttribute('aria-checked') === 'true'));
+  if (scheduleInput) { scheduleInput.click(); return { disabled: true, via: 'input' }; }
+  return { disabled: false }; }"
+    },
+    {
       "id": "click_publish",
       "action": "click_r",
       "selector": "button",
-      "regex": "发布",
+      "regex": "^(立即发布|立即发表|发布)$",
       "timeoutMs": 5000
+    },
+    {
+      "id": "click_publish_confirm",
+      "action": "click_r",
+      "selector": "button, [role=\"button\"]",
+      "regex": "确认发布|确定发布|确认|发布",
+      "optional": true,
+      "timeoutMs": 6000
     },
     {
       "id": "wait_redirect",
       "action": "wait_url_change",
       "timeoutMs": 20000
-    }
+    },
+    {"id": "post_wait", "action": "wait", "ms": 5000}
   ]
 }
