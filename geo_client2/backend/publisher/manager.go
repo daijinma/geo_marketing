@@ -14,7 +14,7 @@ import (
 type Article struct {
 	Title      string `json:"title"`
 	Content    string `json:"content"`
-	CoverImage string `json:"cover_image,omitempty"` // URL or base64 of cover image
+	CoverImage string `json:"cover_image,omitempty"`
 }
 
 // PublishResult represents the result of a publish operation for one platform.

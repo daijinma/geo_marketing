@@ -14,13 +14,18 @@
     },
     {
       "id": "fill_content",
-      "action": "fill",
-      "selector": "div.public-DraftEditor-content[contenteditable=\"true\"][role=\"textbox\"]",
-      "value": "{{content}}",
-      "mode": "clipboard",
-      "clickFirst": false
+      "action": "eval",
+      "checkSuccess": true,
+      "script": "(content) => {\n  const editor = document.querySelector('div.public-DraftEditor-content[contenteditable=\"true\"][role=\"textbox\"]');\n  if (!editor) return { success: false };\n  editor.focus();\n  const sel = window.getSelection();\n  if (sel) {\n    const range = document.createRange();\n    range.selectNodeContents(editor);\n    sel.removeAllRanges();\n    sel.addRange(range);\n  }\n  let inserted = false;\n  try { inserted = document.execCommand('insertHTML', false, content); } catch (e) {}\n  if (!inserted || !editor.textContent || editor.textContent.trim() === '') {\n    editor.innerHTML = content;\n    editor.dispatchEvent(new Event('input', { bubbles: true }));\n    editor.dispatchEvent(new Event('change', { bubbles: true }));\n  }\n  return { success: !!(editor.textContent && editor.textContent.trim() !== '') };\n}",
+      "args": ["{{content}}"]
     },
-    {"id": "wait_before_publish", "action": "wait", "ms": 20000},
+    {
+      "id": "fill_content_fallback",
+      "action": "needs_manual",
+      "optional": true,
+      "prompt": "未能自动填写知乎正文，请手动粘贴内容后点击继续"
+    },
+    {"id": "wait_before_publish", "action": "wait_selector", "selector": "button", "timeoutMs": 10000},
     {"id": "click_publish", "action": "click_r", "selector": "button", "regex": "\u53d1\u5e03"},
     {
       "id": "wait_redirect",

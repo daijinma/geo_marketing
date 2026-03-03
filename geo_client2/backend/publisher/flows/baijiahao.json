@@ -35,8 +35,15 @@
     {
       "id": "fill_content",
       "action": "eval",
+      "checkSuccess": true,
       "script": "(content) => {\n  const inst = window.UE_V2 && window.UE_V2.instants && window.UE_V2.instants.ueditorInstant0;\n  if (inst && typeof inst.execCommand === 'function') {\n    try { inst.execCommand('cleardoc'); } catch (e) {}\n    try {\n      inst.execCommand('insertHtml', content);\n      return { success: true };\n    } catch (e) {}\n  }\n  const iframe = document.querySelector('iframe');\n  if (iframe && iframe.contentDocument && iframe.contentDocument.body) {\n    const editor = iframe.contentDocument.body.querySelector('[contenteditable=\"true\"]');\n    if (editor) {\n      editor.innerHTML = content;\n      editor.dispatchEvent(new Event('input', { bubbles: true }));\n      editor.dispatchEvent(new Event('change', { bubbles: true }));\n      return { success: true };\n    }\n    iframe.contentDocument.body.innerHTML = content;\n    iframe.contentDocument.body.dispatchEvent(new Event('input', { bubbles: true }));\n    return { success: true };\n  }\n  return { success: false };\n}",
       "args": ["{{content}}"]
+    },
+    {
+      "id": "fill_content_fallback",
+      "action": "needs_manual",
+      "optional": true,
+      "prompt": "未能自动填写百家号正文，请手动粘贴内容后点击继续"
     },
     {
       "id": "wait_after_content",

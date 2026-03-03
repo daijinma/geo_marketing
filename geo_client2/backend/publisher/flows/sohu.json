@@ -24,6 +24,12 @@
       "args": ["{{content}}"]
     },
     {
+      "id": "fill_content_fallback",
+      "action": "needs_manual",
+      "optional": true,
+      "prompt": "未能自动填写搜狐正文，请手动粘贴内容后点击继续"
+    },
+    {
       "id": "click_abstract",
       "action": "click_r",
       "selector": "button",
@@ -38,8 +44,15 @@
     },
     {
       "id": "confirm_popups",
-      "action": "wait",
-      "ms": 2000
+      "action": "eval",
+      "optional": true,
+      "script": "() => { const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim(); const isVisible = (el) => { if (!el) return false; const style = window.getComputedStyle(el); if (!style || style.visibility === 'hidden' || style.display === 'none') return false; const rect = el.getBoundingClientRect(); return rect.width > 0 && rect.height > 0; }; const dialog = document.querySelector('[role=\"dialog\"], .modal, .dialog, .popup, .alert'); if (!dialog) return { skipped: true }; const btns = Array.from(dialog.querySelectorAll('button, [role=\"button\"], a')).filter(isVisible); const confirm = btns.find(b => /确定|确认|同意|知道了|继续|发布/.test(norm(b.textContent || ''))); if (confirm) { confirm.click(); return { success: true, text: norm(confirm.textContent) }; } return { skipped: true }; }"
+    },
+    {
+      "id": "confirm_popups_fallback",
+      "action": "needs_manual",
+      "optional": true,
+      "prompt": "搜狐发布时出现弹窗，请手动确认后点击继续"
     },
     {
       "id": "wait_after_publish",

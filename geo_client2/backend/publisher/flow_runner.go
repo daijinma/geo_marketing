@@ -85,8 +85,8 @@ func (r *FlowRunner) Run(ctx context.Context, page *rod.Page, flow *Flow, articl
 		}
 	}
 
-	info := page.MustInfo()
-	if info == nil {
+	info, infoErr := page.Info()
+	if infoErr != nil || info == nil {
 		return "", nil
 	}
 	r.log.InfoWithContext(ctx, fmt.Sprintf("[Flow] completed platform=%s url=%s", r.platform, info.URL), map[string]interface{}{
@@ -152,6 +152,10 @@ func (r *FlowRunner) interp(raw string, article Article) string {
 	return interpolateValue(raw, article, r.tempVars)
 }
 
+func (r *FlowRunner) interpScript(raw string, article Article) string {
+	return interpolateScript(raw, article, r.tempVars)
+}
+
 func (r *FlowRunner) handleStepFailure(ctx context.Context, page *rod.Page, step FlowStep, stepErr error) error {
 	if r.emit == nil || r.resume == nil {
 		return stepErr
@@ -182,7 +186,11 @@ func (r *FlowRunner) doStep(stepCtx context.Context, ctx context.Context, page *
 	case "wait_load":
 		return page.WaitLoad()
 	case "wait_idle":
-		rod.Try(func() { _ = page.Timeout(10 * time.Second).WaitStable(1 * time.Second) })
+		to := 10 * time.Second
+		if step.TimeoutMS > 0 {
+			to = time.Duration(step.TimeoutMS) * time.Millisecond
+		}
+		rod.Try(func() { _ = page.Timeout(to).WaitStable(1 * time.Second) })
 		return nil
 	case "wait":
 		d := time.Duration(step.MS) * time.Millisecond
@@ -263,18 +271,64 @@ func (r *FlowRunner) doStep(stepCtx context.Context, ctx context.Context, page *
 		}
 		val := r.interp(step.Value, article)
 		return r.fillElement(el, step.Mode, val)
+	case "wait_eval_true":
+		if strings.TrimSpace(step.Script) == "" {
+			return fmt.Errorf("missing script")
+		}
+		timeout := 15 * time.Second
+		if step.TimeoutMS > 0 {
+			timeout = time.Duration(step.TimeoutMS) * time.Millisecond
+		}
+		interval := 500 * time.Millisecond
+		if step.MS > 0 {
+			interval = time.Duration(step.MS) * time.Millisecond
+		}
+		deadline := time.Now().Add(timeout)
+		script := r.interpScript(step.Script, article)
+		for time.Now().Before(deadline) {
+			select {
+			case <-stepCtx.Done():
+				return stepCtx.Err()
+			default:
+			}
+			p := page.Context(stepCtx)
+			result, evalErr := p.Eval(script)
+			if evalErr == nil {
+				var ok bool
+				if unmarshalErr := result.Value.Unmarshal(&ok); unmarshalErr == nil && ok {
+					return nil
+				}
+			}
+			select {
+			case <-stepCtx.Done():
+				return stepCtx.Err()
+			case <-time.After(interval):
+			}
+		}
+		return fmt.Errorf("wait_eval_true timed out after %s", timeout)
 	case "eval":
 		if strings.TrimSpace(step.Script) == "" {
 			return fmt.Errorf("missing script")
 		}
-		script := r.interp(step.Script, article)
+		script := r.interpScript(step.Script, article)
 		args := make([]interface{}, 0, len(step.Args))
 		for _, a := range step.Args {
 			args = append(args, r.interp(a, article))
 		}
 		p := page.Context(stepCtx)
-		_, err := p.Eval(script, args...)
-		return err
+		result, err := p.Eval(script, args...)
+		if err != nil {
+			return err
+		}
+		if step.CheckSuccess {
+			var res struct {
+				Success bool `json:"success"`
+			}
+			if jsonErr := result.Value.Unmarshal(&res); jsonErr == nil && !res.Success {
+				return fmt.Errorf("eval script reported failure (success=false)")
+			}
+		}
+		return nil
 	case "set_files":
 		if step.Selector == "" {
 			return fmt.Errorf("missing selector")
@@ -306,8 +360,8 @@ func (r *FlowRunner) doStep(stepCtx context.Context, ctx context.Context, page *
 				return stepCtx.Err()
 			case <-time.After(500 * time.Millisecond):
 			}
-			info := page.MustInfo()
-			if info != nil && info.URL != "" && info.URL != step.URL {
+			info, infoErr := page.Info()
+			if infoErr == nil && info != nil && info.URL != "" && info.URL != step.URL {
 				return nil
 			}
 		}
@@ -318,7 +372,7 @@ func (r *FlowRunner) doStep(stepCtx context.Context, ctx context.Context, page *
 			deadline = time.Now().Add(time.Duration(step.TimeoutMS) * time.Millisecond)
 		}
 		startURL := ""
-		if info := page.MustInfo(); info != nil {
+		if info, infoErr := page.Info(); infoErr == nil && info != nil {
 			startURL = info.URL
 		}
 		for time.Now().Before(deadline) {
@@ -327,8 +381,8 @@ func (r *FlowRunner) doStep(stepCtx context.Context, ctx context.Context, page *
 				return stepCtx.Err()
 			case <-time.After(500 * time.Millisecond):
 			}
-			info := page.MustInfo()
-			if info != nil && info.URL != "" && info.URL != startURL {
+			info, infoErr := page.Info()
+			if infoErr == nil && info != nil && info.URL != "" && info.URL != startURL {
 				return nil
 			}
 		}

@@ -21,22 +21,23 @@ type Flow struct {
 }
 
 type FlowStep struct {
-	ID         string   `json:"id"`
-	Action     string   `json:"action"`
-	Optional   bool     `json:"optional,omitempty"`
-	TimeoutMS  int      `json:"timeoutMs,omitempty"`
-	URL        string   `json:"url,omitempty"`
-	MS         int      `json:"ms,omitempty"`
-	Selector   string   `json:"selector,omitempty"`
-	Regex      string   `json:"regex,omitempty"`
-	Value      string   `json:"value,omitempty"`
-	Script     string   `json:"script,omitempty"`
-	Args       []string `json:"args,omitempty"`
-	Files      []string `json:"files,omitempty"`
-	Mode       string   `json:"mode,omitempty"` // input|value|innerText|innerHTML
-	ClickFirst bool     `json:"clickFirst,omitempty"`
-	Frame      string   `json:"frameSelector,omitempty"`
-	Prompt     string   `json:"prompt,omitempty"` // shown to user for needs_manual action
+	ID           string   `json:"id"`
+	Action       string   `json:"action"`
+	Optional     bool     `json:"optional,omitempty"`
+	TimeoutMS    int      `json:"timeoutMs,omitempty"`
+	URL          string   `json:"url,omitempty"`
+	MS           int      `json:"ms,omitempty"`
+	Selector     string   `json:"selector,omitempty"`
+	Regex        string   `json:"regex,omitempty"`
+	Value        string   `json:"value,omitempty"`
+	Script       string   `json:"script,omitempty"`
+	Args         []string `json:"args,omitempty"`
+	Files        []string `json:"files,omitempty"`
+	Mode         string   `json:"mode,omitempty"` // input|value|innerText|innerHTML
+	ClickFirst   bool     `json:"clickFirst,omitempty"`
+	Frame        string   `json:"frameSelector,omitempty"`
+	Prompt       string   `json:"prompt,omitempty"`       // shown to user for needs_manual action
+	CheckSuccess bool     `json:"checkSuccess,omitempty"` // if true, eval must return {success:true} or error is raised
 }
 
 func flowOverridePath(platform string) (string, error) {
@@ -103,6 +104,16 @@ func interpolateValue(raw string, article Article, tempVars map[string]string) s
 	out := raw
 	out = strings.ReplaceAll(out, "{{title}}", article.Title)
 	out = strings.ReplaceAll(out, "{{content}}", article.Content)
+	out = strings.ReplaceAll(out, "{{cover_image}}", article.CoverImage)
+	for k, v := range tempVars {
+		out = strings.ReplaceAll(out, "{{"+k+"}}", v)
+	}
+	return out
+}
+
+func interpolateScript(raw string, article Article, tempVars map[string]string) string {
+	out := raw
+	out = strings.ReplaceAll(out, "{{title}}", article.Title)
 	out = strings.ReplaceAll(out, "{{cover_image}}", article.CoverImage)
 	for k, v := range tempVars {
 		out = strings.ReplaceAll(out, "{{"+k+"}}", v)
