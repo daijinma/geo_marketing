@@ -64,8 +64,8 @@ func (p *QieProvider) CheckLoginStatus() (bool, error) {
 		return false, nil
 	}
 
-	p.logger.Debug("[CheckLoginStatus] qie: no clear indicators, assuming logged in")
-	return true, nil
+	p.logger.Debug("[CheckLoginStatus] qie: no clear indicators, assuming not logged in")
+	return false, nil
 }
 
 func (p *QieProvider) Search(ctx context.Context, keyword, prompt string) (*SearchResult, error) {

@@ -64,8 +64,8 @@ func (p *ZhihuProvider) CheckLoginStatus() (bool, error) {
 		return false, nil
 	}
 
-	p.logger.Debug("[CheckLoginStatus] zhihu: no clear indicators, assuming logged in")
-	return true, nil
+	p.logger.Debug("[CheckLoginStatus] zhihu: no clear indicators, assuming not logged in")
+	return false, nil
 }
 
 func (p *ZhihuProvider) Search(ctx context.Context, keyword, prompt string) (*SearchResult, error) {

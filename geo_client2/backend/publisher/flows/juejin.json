@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "platform": "juejin",
+  "steps": [
+    {
+      "id": "open",
+      "action": "navigate",
+      "url": "https://juejin.cn/editor/drafts/new?v=2"
+    },
+    { "id": "wait_load", "action": "wait_load" },
+    { "id": "wait_idle", "action": "wait_idle" },
+    { "id": "wait_editor_init", "action": "wait", "ms": 3000 },
+    {
+      "id": "wait_title",
+      "action": "wait_selector",
+      "selector": "input.title-input",
+      "timeoutMs": 15000
+    },
+    {
+      "id": "fill_title",
+      "action": "fill",
+      "selector": "input.title-input",
+      "value": "{{title}}",
+      "mode": "input"
+    },
+    {
+      "id": "wait_codemirror",
+      "action": "wait_eval_true",
+      "timeoutMs": 15000,
+      "ms": 500,
+      "script": "() => { const cm = document.querySelector('.CodeMirror'); return !!(cm && cm.CodeMirror && typeof cm.CodeMirror.setValue === 'function'); }"
+    },
+    {
+      "id": "fill_content",
+      "action": "eval",
+      "optional": true,
+      "script": "(text) => { try { const cm = document.querySelector('.CodeMirror'); if (!cm || !cm.CodeMirror) return { success: false, error: 'CodeMirror not found' }; cm.CodeMirror.setValue(text); cm.CodeMirror.refresh(); return { success: true, length: text.length }; } catch(e) { return { success: false, error: e.message }; } }",
+      "args": ["{{content}}"]
+    },
+    { "id": "wait_after_content", "action": "wait", "ms": 1500 },
+    {
+      "id": "click_publish_btn",
+      "action": "eval",
+      "checkSuccess": true,
+      "script": "() => { const btn = Array.from(document.querySelectorAll('button.xitu-btn')).find(b => b.innerText.trim() === '\u53d1\u5e03'); if (btn) { btn.click(); return { success: true }; } return { success: false, error: 'publish button not found' }; }"
+    },
+    {
+      "id": "wait_publish_popup",
+      "action": "wait_selector",
+      "selector": ".publish-popup",
+      "timeoutMs": 8000
+    },
+    { "id": "wait_popup_ready", "action": "wait", "ms": 1000 },
+    {
+      "id": "select_category",
+      "action": "eval",
+      "optional": true,
+      "script": "() => { const popup = document.querySelector('.publish-popup'); if (!popup) return { success: false }; const preferred = ['\u540e\u7aef', '\u524d\u7aef', '\u4eba\u5de5\u667a\u80fd', '\u5f00\u53d1\u5de5\u5177', '\u4ee3\u7801\u4eba\u751f', '\u9605\u8bfb']; const items = Array.from(popup.querySelectorAll('.category-list .item')); for (const name of preferred) { const el = items.find(i => i.innerText.trim() === name); if (el) { el.click(); return { success: true, category: name }; } } if (items[0]) { items[0].click(); return { success: true, category: items[0].innerText.trim(), fallback: true }; } return { success: false }; }"
+    },
+    { "id": "wait_after_category", "action": "wait", "ms": 500 },
+    {
+      "id": "open_tag_dropdown",
+      "action": "eval",
+      "optional": true,
+      "script": "() => { const popup = document.querySelector('.publish-popup'); const input = popup ? popup.querySelector('.tag-input input.byte-select__input') : null; if (!input) return { success: false }; input.click(); input.focus(); return { success: true }; }"
+    },
+    { "id": "wait_tag_dropdown_open", "action": "wait", "ms": 800 },
+    {
+      "id": "select_first_tag",
+      "action": "eval",
+      "optional": true,
+      "script": "() => { const first = document.querySelector('.byte-select-option'); if (first) { first.click(); return { success: true, tag: first.innerText.trim() }; } return { success: false, error: 'no tag options found' }; }"
+    },
+    { "id": "wait_after_tag", "action": "wait", "ms": 500 },
+    {
+      "id": "click_confirm_publish",
+      "action": "eval",
+      "checkSuccess": true,
+      "script": "() => { const popup = document.querySelector('.publish-popup'); if (!popup) return { success: false }; const btn = Array.from(popup.querySelectorAll('button')).find(b => b.innerText.trim() === '\u786e\u5b9a\u5e76\u53d1\u5e03'); if (btn && !btn.disabled) { btn.click(); return { success: true }; } return { success: false, error: btn ? 'button disabled' : 'button not found' }; }"
+    },
+    {
+      "id": "wait_published",
+      "action": "wait_eval_true",
+      "timeoutMs": 20000,
+      "ms": 500,
+      "script": "() => { return location.href.includes('juejin.cn/published') || document.title.includes('\u53d1\u5e03\u6210\u529f'); }"
+    },
+    { "id": "post_wait", "action": "wait", "ms": 2000 }
+  ]
+}

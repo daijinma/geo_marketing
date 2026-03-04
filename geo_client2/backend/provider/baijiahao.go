@@ -66,8 +66,8 @@ func (p *BaijiahaoProvider) CheckLoginStatus() (bool, error) {
 		return false, nil
 	}
 
-	p.logger.Debug("[CheckLoginStatus] baijiahao: no clear indicators, assuming logged in")
-	return true, nil
+	p.logger.Debug("[CheckLoginStatus] baijiahao: no clear indicators, assuming not logged in")
+	return false, nil
 }
 
 func (p *BaijiahaoProvider) Search(ctx context.Context, keyword, prompt string) (*SearchResult, error) {

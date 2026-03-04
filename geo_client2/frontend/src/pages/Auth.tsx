@@ -23,7 +23,8 @@ import { toast } from 'sonner';
 
 type PlatformKey =
   | 'deepseek' | 'doubao' | 'yiyan' | 'yuanbao'
-  | 'xiaohongshu' | 'zhihu' | 'sohu' | 'csdn' | 'qie' | 'baijiahao' | 'toutiao';
+  | 'xiaohongshu' | 'zhihu' | 'sohu' | 'csdn' | 'qie' | 'baijiahao' | 'toutiao'
+  | 'cnblogs' | 'juejin';
 
 interface PlatformConfig {
   id: PlatformKey;
@@ -72,6 +73,8 @@ export default function Auth() {
     { id: 'qie',         name: '企鹅号',    category: 'social_media' },
     { id: 'baijiahao',   name: '百家号',    category: 'social_media' },
     { id: 'toutiao',     name: '头条号',    category: 'social_media' },
+    { id: 'cnblogs',     name: '博客园',    category: 'social_media' },
+    { id: 'juejin',      name: '稀土掘金',  category: 'social_media' },
     // { id: 'xiaohongshu', name: '小红书',    category: 'social_media' },
   ];
 

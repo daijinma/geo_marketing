@@ -64,8 +64,8 @@ func (p *SohuProvider) CheckLoginStatus() (bool, error) {
 		return false, nil
 	}
 
-	p.logger.Debug("[CheckLoginStatus] sohu: no clear indicators, assuming logged in")
-	return true, nil
+	p.logger.Debug("[CheckLoginStatus] sohu: no clear indicators, assuming not logged in")
+	return false, nil
 }
 
 func (p *SohuProvider) Search(ctx context.Context, keyword, prompt string) (*SearchResult, error) {

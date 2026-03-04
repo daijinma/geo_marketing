@@ -2,6 +2,7 @@ package publisher
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -9,6 +10,8 @@ import (
 	"geo_client2/backend/logger"
 	"geo_client2/backend/provider"
 )
+
+var errAlreadyEmitted = errors.New("error already emitted to frontend")
 
 // Article represents the content to be published.
 type Article struct {

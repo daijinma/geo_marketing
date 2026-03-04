@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "platform": "cnblogs",
+  "steps": [
+    {
+      "id": "open",
+      "action": "navigate",
+      "url": "https://i.cnblogs.com/posts/edit"
+    },
+    { "id": "wait_load", "action": "wait_load" },
+    { "id": "wait_idle", "action": "wait_idle" },
+    { "id": "wait_editor_init", "action": "wait", "ms": 3000 },
+    {
+      "id": "wait_title",
+      "action": "wait_selector",
+      "selector": "#post-title",
+      "timeoutMs": 15000
+    },
+    {
+      "id": "fill_title",
+      "action": "fill",
+      "selector": "#post-title",
+      "value": "{{title}}",
+      "mode": "react"
+    },
+    {
+      "id": "wait_tinymce",
+      "action": "wait_eval_true",
+      "timeoutMs": 15000,
+      "ms": 500,
+      "script": "() => { return typeof tinymce !== 'undefined' && tinymce.get('Editor_Edit_EditorBody') != null && tinymce.get('Editor_Edit_EditorBody').initialized === true; }"
+    },
+    {
+      "id": "fill_content",
+      "action": "eval",
+      "optional": true,
+      "script": "(html) => { try { const ed = tinymce.get('Editor_Edit_EditorBody'); if (!ed) return { success: false, error: 'tinymce editor not found' }; ed.setContent(html); ed.fire('change'); ed.fire('input'); return { success: true, length: html.length }; } catch(e) { return { success: false, error: e.message }; } }",
+      "args": ["{{content}}"]
+    },
+    {
+      "id": "fill_content_iframe_fallback",
+      "action": "eval",
+      "optional": true,
+      "script": "(html) => { try { const iframe = document.querySelector('#Editor_Edit_EditorBody_ifr'); if (!iframe || !iframe.contentDocument || !iframe.contentDocument.body) return { success: false, error: 'iframe not found' }; const body = iframe.contentDocument.body; body.innerHTML = html; body.dispatchEvent(new Event('input', { bubbles: true })); body.dispatchEvent(new Event('change', { bubbles: true })); return { success: true }; } catch(e) { return { success: false, error: e.message }; } }",
+      "args": ["{{content}}"]
+    },
+    { "id": "wait_after_content", "action": "wait", "ms": 1500 },
+    {
+      "id": "click_publish",
+      "action": "eval",
+      "checkSuccess": true,
+      "script": "() => { const btn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim() === '\u53d1\u5e03'); if (btn) { btn.click(); return { success: true }; } return { success: false, error: 'publish button not found' }; }"
+    },
+    {
+      "id": "wait_published",
+      "action": "wait_eval_true",
+      "timeoutMs": 20000,
+      "ms": 500,
+      "script": "() => { return location.href.includes('edit-done') || location.href.includes('isPublished=true'); }"
+    },
+    { "id": "post_wait", "action": "wait", "ms": 2000 }
+  ]
+}

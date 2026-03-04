@@ -76,6 +76,18 @@ var Platforms = map[string]PlatformConfig{
 		HomeURL:  "https://mp.toutiao.com/profile_v4/index",
 		Category: "social_media",
 	},
+	"cnblogs": {
+		Name:     "博客园",
+		LoginURL: "https://account.cnblogs.com/signin",
+		HomeURL:  "https://i.cnblogs.com/posts/edit",
+		Category: "social_media",
+	},
+	"juejin": {
+		Name:     "稀土掘金",
+		LoginURL: "https://juejin.cn/login",
+		HomeURL:  "https://juejin.cn/editor/drafts/new?v=2",
+		Category: "social_media",
+	},
 }
 
 func GetLoginURL(platform string) string {

@@ -12,6 +12,7 @@ import {
   Share2,
   Image,
   X,
+  Info,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { wailsAPI } from '@/utils/wails-api';
@@ -32,6 +33,8 @@ const SOCIAL_PLATFORMS: PlatformOption[] = [
   { id: 'qie',         name: '企鹅号', category: 'social_media' },
   { id: 'baijiahao',   name: '百家号', category: 'social_media' },
   { id: 'toutiao',     name: '头条号', category: 'social_media' },
+  { id: 'cnblogs',     name: '博客园', category: 'social_media' },
+  { id: 'juejin',      name: '稀土掘金', category: 'social_media' },
   // { id: 'xiaohongshu', name: '小红书', category: 'social_media' },
 ];
 
@@ -374,6 +377,8 @@ export function PublishTaskCreatorModal({ onClose, onCreated }: PublishTaskCreat
                       const platformAccounts = (accountsByPlatform as any)[p.id] || [];
                       const currentAccountId = selectedAccountIds[p.id] || '';
 
+                      const isCnblogs = p.id === 'cnblogs';
+
                       return (
                         <div
                           key={p.id}
@@ -396,6 +401,9 @@ export function PublishTaskCreatorModal({ onClose, onCreated }: PublishTaskCreat
                             <span className={`truncate text-sm font-medium ${selected ? 'text-primary' : 'text-foreground'}`}>
                               {p.name}
                             </span>
+                            {isCnblogs && !state && (
+                              <Info className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            )}
                             {state?.status === 'completed' && (
                               <span className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full" />
                             )}
@@ -405,7 +413,7 @@ export function PublishTaskCreatorModal({ onClose, onCreated }: PublishTaskCreat
                           </div>
 
                           {selected && (
-                            <div className="px-3 pb-2.5 pt-0">
+                            <div className="px-3 pb-2.5 pt-0 space-y-1.5">
                               <select
                                 value={currentAccountId}
                                 onChange={(e) => handleAccountChange(p.id, e.target.value)}
@@ -419,6 +427,14 @@ export function PublishTaskCreatorModal({ onClose, onCreated }: PublishTaskCreat
                                   </option>
                                 ))}
                               </select>
+                              {isCnblogs && (
+                                <div className="flex items-start gap-1.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded px-2 py-1.5">
+                                  <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0 mt-0.5" />
+                                  <p className="text-[10px] text-amber-700 dark:text-amber-300 leading-relaxed">
+                                    博客园需开通<span className="font-semibold">企业博客</span>才可发布，否则账号将被封禁
+                                  </p>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>

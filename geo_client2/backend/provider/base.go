@@ -236,6 +236,10 @@ func (f *Factory) GetProvider(platform string, headless bool, timeout int, accou
 		return NewBaijiahaoProvider(headless, timeout, accountID), nil
 	case "toutiao":
 		return NewToutiaoProvider(headless, timeout, accountID), nil
+	case "cnblogs":
+		return NewCnblogsProvider(headless, timeout, accountID), nil
+	case "juejin":
+		return NewJuejinProvider(headless, timeout, accountID), nil
 	default:
 		return nil, fmt.Errorf("unsupported platform: %s", platform)
 	}

@@ -73,8 +73,8 @@ func (p *CsdnProvider) CheckLoginStatus() (bool, error) {
 		return true, nil
 	}
 
-	p.logger.Debug("[CheckLoginStatus] csdn: no clear login indicators found, assuming logged in")
-	return true, nil
+	p.logger.Debug("[CheckLoginStatus] csdn: no clear login indicators found, assuming not logged in")
+	return false, nil
 }
 
 func (p *CsdnProvider) Search(ctx context.Context, keyword, prompt string) (*SearchResult, error) {

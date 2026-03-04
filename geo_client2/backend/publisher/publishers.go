@@ -42,20 +42,10 @@ func NewPublisher(platform string, factory *provider.Factory, accountID string) 
 	}
 
 	switch platform {
-	case "zhihu":
-		return &ZhihuPublisher{BasePublisher: base}, nil
-	case "sohu":
-		return &SohuPublisher{BasePublisher: base}, nil
-	case "csdn":
-		return &CsdnPublisher{BasePublisher: base}, nil
-	case "qie":
-		return &QiePublisher{BasePublisher: base}, nil
-	case "baijiahao":
-		return &BaijiaPublisher{BasePublisher: base}, nil
 	case "xiaohongshu":
 		return &XhsPublisher{BasePublisher: base}, nil
 	default:
-		return nil, fmt.Errorf("unsupported publish platform: %s", platform)
+		return nil, fmt.Errorf("unsupported publish platform: %s (no flow config found)", platform)
 	}
 }
 
